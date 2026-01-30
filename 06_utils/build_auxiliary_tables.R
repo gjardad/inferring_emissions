@@ -20,6 +20,8 @@
 
 tic("01_build_aux_tables")
 
+source(file.path(LOOCV_ROOT, "00_config", "load_packages.R"))
+
 log_step("Loading processed datasets...")
 load(paste0(proc_data,"/b2b_selected_sample.RData"))
 load(paste0(proc_data,"/annual_accounts_selected_sample_key_variables.RData"))
