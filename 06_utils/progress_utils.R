@@ -11,17 +11,14 @@
 #   /code/loocv/functions/progress_utils.R
 ###############################################################################
 
-source(file.path(LOOCV_CODE, "00_config.R"))
-
 if (!exists(".timers_env", inherits = FALSE)) {
   .timers_env <- new.env(parent = emptyenv())
   .timers_env$stack <- list()
 }
 
 log_step <- function(msg) {
-  line <- paste0("[", format(Sys.time(), "%Y-%m-%d %H:%M:%S"), "] ", msg)
-  message(line)
-  if (!is.null(LOG_FILE)) cat(line, "\n", file = LOG_FILE, append = TRUE)
+  timestamp <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+  message(paste0("[", timestamp, "] ", msg))
 }
 
 tic <- function(label = "timer") {
