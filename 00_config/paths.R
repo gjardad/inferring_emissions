@@ -20,7 +20,7 @@ DATA_PROC <- file.path(PROJECT_DIR, "data", "processed")
 OUTPUT    <- file.path(PROJECT_DIR, "output")
 
 CODE_DIR  <- file.path(PROJECT_DIR, "code")
-LOOCV_ROOT <- file.path(CODE_DIR, "loocv_pipeline")
+LOOCV_ROOT <- file.path(CODE_DIR, "inferring_emissions")
 
 # -----------------------
 # Pipeline-specific paths
