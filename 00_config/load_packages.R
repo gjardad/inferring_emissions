@@ -16,4 +16,5 @@ invisible(
     }
     library(pkg, character.only = TRUE)
   })
+  # add comment
 )
