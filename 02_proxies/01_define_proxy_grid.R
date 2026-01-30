@@ -63,3 +63,4 @@ proxy_grid <- proxy_grid %>%
     supplier_nace_filter
   ) %>%
   mutate(proxy_id = row_number())
+
