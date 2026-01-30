@@ -23,6 +23,13 @@ CODE_DIR  <- file.path(PROJECT_DIR, "code")
 LOOCV_ROOT <- file.path(CODE_DIR, "inferring_emissions")
 
 # -----------------------
+# Pipeline-specific paths
+# -----------------------
+PROXY_CACHE_DIR <- file.path(LOOCV_ROOT, "02_proxies", "cache")
+LOOCV_RESULTS   <- file.path(LOOCV_ROOT, "04_loocv", "results")
+FIG_DIR         <- file.path(LOOCV_ROOT, "05_analysis", "figures")
+
+# -----------------------
 # Backwards-compatible aliases (old scripts expect these)
 # -----------------------
 raw_data  <- DATA_RAW
@@ -31,10 +38,3 @@ proc_data <- DATA_PROC
 out_data  <- OUTPUT
 
 CACHE_DIR <- PROXY_CACHE_DIR   # if older code uses CACHE_DIR
-
-# -----------------------
-# Pipeline-specific paths
-# -----------------------
-PROXY_CACHE_DIR <- file.path(LOOCV_ROOT, "02_proxies", "cache")
-LOOCV_RESULTS   <- file.path(LOOCV_ROOT, "04_loocv", "results")
-FIG_DIR         <- file.path(LOOCV_ROOT, "05_analysis", "figures")
