@@ -15,7 +15,7 @@
 # ----------------------------
 # Setup
 # ----------------------------
-source("X:/Documents/JARDANG/carbon_policy_networks/code/loocv_pipeline/00_config/paths.R")
+source("X:/Documents/JARDANG/carbon_policy_networks/code/inferring_emissions/00_config/paths.R")
 
 # ----------------------------
 # Load utilities + builders
