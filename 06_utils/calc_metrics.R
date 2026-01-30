@@ -49,10 +49,10 @@ calc_metrics <- function(y, yhat, fp_threshold = 0) {
   }
   
   # -----------------------
-  # nRMSE (all observations)
+  # nRMSE
   # -----------------------
   rmse  <- sqrt(mean((y - yhat)^2))
-  nrmse <- rmse / mean(y)
+  nrmse <- rmse / sd(y)
   
   # ----------------------------------------
   # MAPD for emitters only (y > 0)
