@@ -9,9 +9,6 @@
 #   Returns a tibble: buyer_id, year, fuel_proxy
 ###############################################################################
 
-source(file.path(LOOCV_CODE, "00_config.R"))
-source(file.path(FUN_DIR, "progress_utils.R"))
-
 load_aux <- function() {
   list(
     aa_nace = readRDS(file.path(CACHE_DIR, "aux_aa_nace.rds")),
