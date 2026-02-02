@@ -1,0 +1,6 @@
+# ---- Cached artifacts ----
+cache/
+**/cache/*
+
+# ---- R serialized objects ----
+*.rds
