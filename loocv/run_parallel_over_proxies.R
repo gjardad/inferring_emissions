@@ -140,11 +140,7 @@ if (isTRUE(TEST_MODE)) {
 # =========================
 if (!dir.exists(cache_dir)) stop("cache_dir does not exist: ", cache_dir)
 
-<<<<<<< HEAD
 proxy_files <- list.files(cache_dir, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
-=======
-proxy_files <- list.files(cache_dir, pattern = "^proxy_.*\.rds$", full.names = TRUE)
->>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
 if (length(proxy_files) == 0) stop("No proxy .rds files found in: ", cache_dir)
 
 proxy_files <- proxy_files[seq.int(PROXY_START, min(length(proxy_files), PROXY_END))]
@@ -164,15 +160,9 @@ model_registry <- list(
   ppml_step2 = function(df_run, syt_run, proxy_tbl, proxy_name,
                        id_var, year_var, sector_var, y_var, revenue_var,
                        proxy_keys, proxy_var, coalesce_proxy_to_zero,
-<<<<<<< HEAD
                        partial_pooling,
                        step_tag, sample_tag, model_name, ...) {
 
-=======
-                       partial_pooling, ...) {
-
-    # Your existing LOFOCV PPML runner. Adjust args to match your function.
->>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
     out <- poissonPP_lofo(
       df = df_run,
       sector_year_totals = syt_run,
@@ -195,7 +185,6 @@ model_registry <- list(
     metrics <- build_metrics_table(
       out             = out,
       model_family    = "ppml",
-<<<<<<< HEAD
       partial_pooling = if (isTRUE(partial_pooling)) "yes" else "no",
       step_tag        = step_tag,
       sample_tag      = sample_tag,
@@ -205,9 +194,6 @@ model_registry <- list(
         n_obs_est   = nrow(df_run),
         n_firms_est = data.table::uniqueN(df_run[[id_var]])
       )
-=======
-      partial_pooling = if (isTRUE(partial_pooling)) "yes" else "no"
->>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
     )
 
     list(metrics = metrics, out = out)

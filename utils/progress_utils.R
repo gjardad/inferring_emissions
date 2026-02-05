@@ -1,4 +1,3 @@
-
 ###############################################################################
 # progress_utils.R
 #
@@ -46,4 +45,3 @@ progress_eta <- function(i, n, start_time, every = 50, prefix = "") {
                     " | ETA ", round(remaining/60, 2), " min"))
   }
 }
-
