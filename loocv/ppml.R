@@ -1,11 +1,20 @@
 ###############################################################################
+<<<<<<< HEAD
 # ppml.R
+=======
+# 03_models/ppml.R
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
 #
 # PURPOSE
 #   Leave-One-Firm-Out cross-validation (LOFOCV) for Poisson Pseudo–Maximum
 #   Likelihood (PPML) models used as single-equation baselines in the
 #   emissions-imputation exercise.
 #
+<<<<<<< HEAD
+=======
+# WHERE THIS FILE BELONGS
+#   loocv_pipeline/03_models/ppml.R
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
 #
 # DESIGN
 #   - Estimates ONE PPML specification per call (benchmark or with proxy)
@@ -15,6 +24,7 @@
 #   - Metrics computed via calc_metrics() and returned in a standardized
 #     out$metrics table compatible with build_metrics_table().
 #
+<<<<<<< HEAD
 # MODEL SPECIFICATION
 #   Benchmark PPML (no proxy):
 #     E[y_it | X_it] = exp( β*log(revenue_it) + year FE + sector effect )
@@ -46,6 +56,16 @@
 #                             p50_pred_nonemit, p90_pred_nonemit, ...
 #
 #   We map names robustly so downstream scripts do not break.
+=======
+# METRICS (via calc_metrics)
+#   - nRMSE = RMSE / sd(y) (computed on evaluation sample)
+#   - RMSE
+#   - MAPD_emitters
+#   - FPR_nonemitters (uses fp_threshold)
+#   - med_yhat_nonemit, p90_yhat_nonemit
+#   - R2_LOO
+#   - spearman
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
 ###############################################################################
 
 poissonPP_lofo <- function(df,
@@ -74,6 +94,7 @@ poissonPP_lofo <- function(df,
     library(mgcv)
   })
   
+<<<<<<< HEAD
   if (!exists("calc_metrics")) {
     stop("calc_metrics() not found in scope. Source utils/calc_metrics.R before calling poissonPP_lofo().")
   }
@@ -88,6 +109,8 @@ poissonPP_lofo <- function(df,
     default
   }
   
+=======
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
   DT <- as.data.table(df)
   
   # -----------------------
@@ -227,12 +250,26 @@ poissonPP_lofo <- function(df,
     # mapping test sector to the training reference sector.
     # ------------------------------------------------------------------
     if (!partial_pooling) {
+<<<<<<< HEAD
       train_sectors_present <- unique(as.character(train$sector__))
       ref_sector <- train_sectors_present[1]
       
       train_df$sector__ <- stats::relevel(train_df$sector__, ref = ref_sector)
       test_df$sector__  <- stats::relevel(test_df$sector__,  ref = ref_sector)
       
+=======
+      # sectors actually present in THIS training fold
+      train_sectors_present <- unique(as.character(train$sector__))
+      
+      # choose a reference sector that is guaranteed to be in training
+      ref_sector <- train_sectors_present[1]
+      
+      # make that sector the reference level in BOTH train and test
+      train_df$sector__ <- stats::relevel(train_df$sector__, ref = ref_sector)
+      test_df$sector__  <- stats::relevel(test_df$sector__,  ref = ref_sector)
+      
+      # map any test sectors not present in training to the reference
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
       test_sector_chr <- as.character(test_df$sector__)
       unseen_sector   <- !(test_sector_chr %in% train_sectors_present)
       
@@ -321,6 +358,7 @@ poissonPP_lofo <- function(df,
       variant = "raw",
       proxy   = proxy_tag,
       eval_dropped_singletons = eval_dropped_singletons,
+<<<<<<< HEAD
       
       nRMSE = getm(m_raw, c("nrmse_sd", "nRMSE", "nrmse_mean")),
       RMSE  = getm(m_raw, c("rmse", "RMSE")),
@@ -351,11 +389,25 @@ poissonPP_lofo <- function(df,
       FN = getm(m_raw, c("FN")),
       
       spearman = getm(m_raw, c("spearman"))
+=======
+      nRMSE = m_raw$nRMSE,
+      RMSE  = m_raw$RMSE,
+      MAPD_emitters   = m_raw$MAPD_emitters,
+      FPR_nonemitters = m_raw$FPR_nonemitters,
+      med_yhat_nonemit = m_raw$med_yhat_nonemit,
+      p90_yhat_nonemit = m_raw$p90_yhat_nonemit,
+      max_yhat_nonemit = m_raw$max_yhat_nonemit,
+      pctile_all_yhat_at_med_nonemit = m_raw$pctile_all_yhat_at_med_nonemit,
+      pctile_all_yhat_at_max_nonemit = m_raw$pctile_all_yhat_at_max_nonemit,
+      R2_LOO   = m_raw$R2_LOO,
+      spearman = m_raw$spearman
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
     ),
     data.table::data.table(
       variant = "calibrated",
       proxy   = proxy_tag,
       eval_dropped_singletons = eval_dropped_singletons,
+<<<<<<< HEAD
       
       nRMSE = getm(m_cal, c("nrmse_sd", "nRMSE", "nrmse_mean")),
       RMSE  = getm(m_cal, c("rmse", "RMSE")),
@@ -386,6 +438,21 @@ poissonPP_lofo <- function(df,
       spearman = getm(m_cal, c("spearman"))
     )
   ), fill = TRUE)
+=======
+      nRMSE = m_cal$nRMSE,
+      RMSE  = m_cal$RMSE,
+      MAPD_emitters   = m_cal$MAPD_emitters,
+      FPR_nonemitters = m_cal$FPR_nonemitters,
+      med_yhat_nonemit = m_cal$med_yhat_nonemit,
+      p90_yhat_nonemit = m_cal$p90_yhat_nonemit,
+      max_yhat_nonemit = m_cal$max_yhat_nonemit,
+      pctile_all_yhat_at_med_nonemit = m_cal$pctile_all_yhat_at_med_nonemit,
+      pctile_all_yhat_at_max_nonemit = m_cal$pctile_all_yhat_at_max_nonemit,
+      R2_LOO   = m_cal$R2_LOO,
+      spearman = m_cal$spearman
+    )
+  ))
+>>>>>>> 24e0491104e47a51e8dcad312848d52d91fcfc3f
   
   list(
     predictions     = P,

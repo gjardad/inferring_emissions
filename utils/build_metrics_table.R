@@ -111,4 +111,5 @@ build_metrics_table <- function(out,
   
   M <- M[, c(keep_ids, metric_cols), with = FALSE]
   M[]
+
 }
