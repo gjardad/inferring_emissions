@@ -16,9 +16,29 @@
 #   output_dir      : directory to write outputs
 ###############################################################################
 
+
+# ============== BEGIN SETTING UP PATHS ============= #
 suppressPackageStartupMessages({
   library(data.table)
 })
+
+# ========================
+# Define data paths ------
+# =========================
+
+if (tolower(Sys.info()[["user"]]) == "jardang") {
+  DATA_DIR <- "X:/Documents/JARDANG/data"
+} else {
+  stop("Define 'folder' for this user.")
+}
+
+PROC_DATA <- file.path(DATA_DIR, "data", "processed")
+RAW_DATA <- file.path(DATA_DIR, "data", "raw")
+INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
+
+# ===========================
+# Define paths for code -----
+# ===========================
 
 source_try <- function(dir, fname_no_ext) {
   f <- file.path(dir, paste0(fname_no_ext, ".R"))
@@ -30,6 +50,8 @@ repo_dir <- paste0(getwd(), "/inferring_emissions")
 utils_dir <- file.path(repo_dir, "utils")
 loocv_dir <- file.path(repo_dir, "loocv")
 
+#================== END SETTING UP PATHS ================ #
+
 source_try(utils_dir, "calc_metrics")
 source_try(utils_dir, "step1_metrics_threshold")
 source_try(loocv_dir, "hurdle_fast_prep_base_DT")
@@ -37,10 +59,24 @@ source_try(loocv_dir, "hurdle_fast_step1_ext")
 source_try(loocv_dir, "hurdle_fast_step2_int")
 source_try(loocv_dir, "hurdle_fast_evaluate_triples")
 
+if (tolower(Sys.info()[["user"]]) == "jardang") {
+  folder <- "X:/Documents/JARDANG"
+} else {
+  stop("Define 'folder' for this user.")
+}
+
+PROJECT_DIR <- file.path(folder, "carbon_policy_networks")
+proc_data   <- file.path(PROJECT_DIR, "data", "processed")
+
+load(file.path(proc_data, "loocv_training_sample.RData"))
+df_full <- as.data.table(loocv_training_sample)
+
 if (!exists("df_run")) stop("df_run not found in environment")
 if (!exists("syt_run")) stop("syt_run not found in environment")
 if (!exists("proxy_cache_dir")) stop("proxy_cache_dir not found in environment")
 if (!exists("output_dir")) stop("output_dir not found in environment")
+
+
 
 # --------------------------------------------------------------------------
 # Configurable parameters
