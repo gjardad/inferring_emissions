@@ -59,24 +59,10 @@ source_try(loocv_dir, "hurdle_fast_step1_ext")
 source_try(loocv_dir, "hurdle_fast_step2_int")
 source_try(loocv_dir, "hurdle_fast_evaluate_triples")
 
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  folder <- "X:/Documents/JARDANG"
-} else {
-  stop("Define 'folder' for this user.")
-}
-
-PROJECT_DIR <- file.path(folder, "carbon_policy_networks")
-proc_data   <- file.path(PROJECT_DIR, "data", "processed")
-
-load(file.path(proc_data, "loocv_training_sample.RData"))
-df_full <- as.data.table(loocv_training_sample)
-
 if (!exists("df_run")) stop("df_run not found in environment")
 if (!exists("syt_run")) stop("syt_run not found in environment")
 if (!exists("proxy_cache_dir")) stop("proxy_cache_dir not found in environment")
 if (!exists("output_dir")) stop("output_dir not found in environment")
-
-
 
 # --------------------------------------------------------------------------
 # Configurable parameters
