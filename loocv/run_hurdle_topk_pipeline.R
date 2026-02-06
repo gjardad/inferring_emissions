@@ -26,7 +26,7 @@ source_try <- function(dir, fname_no_ext) {
   source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
 }
 
-repo_dir <- getwd()
+repo_dir <- paste0(getwd(), "/inferring_emissions")
 utils_dir <- file.path(repo_dir, "utils")
 loocv_dir <- file.path(repo_dir, "loocv")
 
