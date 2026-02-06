@@ -1,3 +1,22 @@
+###############################################################################
+# run_hurdle_topk_pipeline.R
+#
+# PURPOSE
+#   Standalone pipeline that:
+#     1) builds base data
+#     2) precomputes step 1 (phat) and ranks (proxy, threshold) pairs
+#     3) precomputes step 2 (muhat) and ranks proxies
+#     4) evaluates hurdle model only on top-K step1 pairs x top-K step2 proxies
+#        and computes RMSE for each triple
+#
+# REQUIRED INPUTS (must exist in the environment before sourcing this script)
+#   df_run          : firm-year estimation sample
+#   syt_run         : sector-year totals (sector, year, E_total)
+#   proxy_cache_dir : directory with proxy_*.rds files
+#   output_dir      : directory to write outputs
+###############################################################################
+
+
 # ============== BEGIN SETTING UP PATHS ============= #
 suppressPackageStartupMessages({
   library(data.table)
@@ -32,38 +51,6 @@ utils_dir <- file.path(repo_dir, "utils")
 loocv_dir <- file.path(repo_dir, "loocv")
 
 #================== END SETTING UP PATHS ================ #
-
-###############################################################################
-# run_hurdle_topk_pipeline.R
-#
-# PURPOSE
-#   Standalone pipeline that:
-#     1) builds base data
-#     2) precomputes step 1 (phat) and ranks (proxy, threshold) pairs
-#     3) precomputes step 2 (muhat) and ranks proxies
-#     4) evaluates hurdle model only on top-K step1 pairs x top-K step2 proxies
-#        and computes RMSE for each triple
-#
-# REQUIRED INPUTS (must exist in the environment before sourcing this script)
-#   df_run          : firm-year estimation sample
-#   syt_run         : sector-year totals (sector, year, E_total)
-#   proxy_cache_dir : directory with proxy_*.rds files
-#   output_dir      : directory to write outputs
-###############################################################################
-
-suppressPackageStartupMessages({
-  library(data.table)
-})
-
-source_try <- function(dir, fname_no_ext) {
-  f <- file.path(dir, paste0(fname_no_ext, ".R"))
-  if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
-  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
-}
-
-repo_dir <- getwd()
-utils_dir <- file.path(repo_dir, "utils")
-loocv_dir <- file.path(repo_dir, "loocv")
 
 source_try(utils_dir, "calc_metrics")
 source_try(utils_dir, "step1_metrics_threshold")
