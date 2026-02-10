@@ -57,23 +57,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(Sys.info()[["user"]] =="JARDANG"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -82,9 +67,9 @@ library(dplyr) # even though dplyr is included in tidyverse, still need to load 
 
 # Import data ------
 
-load(paste0(proc_data,"/installation_year_emissions.RData"))
+load(paste0(PROC_DATA,"/installation_year_emissions.RData"))
 
-df_account <- read.csv(paste0(raw_data,"/EUTL/account.csv"))
+df_account <- read.csv(paste0(RAW_DATA,"/EUTL/account.csv"))
 
 # Clean data ------
 
@@ -114,4 +99,4 @@ df_account <- read.csv(paste0(raw_data,"/EUTL/account.csv"))
     filter(bvd_id != "")
 
 # Save it -------
-save(firm_year_emissions, file = paste0(proc_data,"/firm_year_emissions.RData"))
+save(firm_year_emissions, file = paste0(PROC_DATA,"/firm_year_emissions.RData"))

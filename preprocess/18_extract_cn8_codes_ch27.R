@@ -44,23 +44,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -72,7 +57,7 @@ library(purrr)
 library(tibble)
 
 # 1. Path to your downloaded PDF -------
-pdf_path <- paste0(raw_data, "/Correspondences_and_dictionaries/COMBINED_NOMENCLATURE_2022_EN.pdf")
+pdf_path <- paste0(RAW_DATA, "/Correspondences_and_dictionaries/COMBINED_NOMENCLATURE_2022_EN.pdf")
 
 # 2. Read all pages as text -------
 all_pages <- pdf_text(pdf_path)

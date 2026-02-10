@@ -42,26 +42,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -------------
 ## Setup ------
 # -------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(tidyr)
@@ -71,7 +55,7 @@ library(dplyr)
 # Load and clean data ---
 # -----------------------
 
-df <- read_csv(paste0(raw_data, "/Eurostat/fuel_qty_by_year_energy_use_from_energy_balance.csv"))
+df <- read_csv(paste0(RAW_DATA, "/Eurostat/fuel_qty_by_year_energy_use_from_energy_balance.csv"))
 
 df_fuel_use_energy_balances <- df %>% 
   mutate(
@@ -224,6 +208,6 @@ siec_used_for_energy_by_sector <- siec_used_for_energy_by_sector %>%
   unnest(nace2d)
 
 # save it
-save(siec_used_for_energy, file = paste0(proc_data,"/fuels_used_for_energy_across_sectors.RData"))
-save(siec_used_for_energy_by_sector, file = paste0(proc_data,"/fuels_used_for_energy_by_sector.RData"))
+save(siec_used_for_energy, file = paste0(PROC_DATA,"/fuels_used_for_energy_across_sectors.RData"))
+save(siec_used_for_energy_by_sector, file = paste0(PROC_DATA,"/fuels_used_for_energy_by_sector.RData"))
 

@@ -42,23 +42,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(Sys.info()[["user"]] =="JARDANG"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -67,9 +52,9 @@ library(dplyr)
 
 # Import data ----
 
-load(paste0(proc_data,"/df_b2b.RData"))
+load(paste0(PROC_DATA,"/df_b2b.RData"))
 
-load(paste0(proc_data,"/annual_accounts_selected_sample.RData"))
+load(paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
 
 # Create B2B with only transactions between firms in selected sample ----
 
@@ -126,4 +111,4 @@ load(paste0(proc_data,"/annual_accounts_selected_sample.RData"))
   }
 
 # save it ----
-save(df_b2b_selected_sample, file = paste0(proc_data,"/b2b_selected_sample.RData"))
+save(df_b2b_selected_sample, file = paste0(PROC_DATA,"/b2b_selected_sample.RData"))

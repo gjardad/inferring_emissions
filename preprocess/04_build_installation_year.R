@@ -48,23 +48,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -73,15 +58,15 @@ library(dplyr)
 
 ## Import data ------
 
-df_installation <- read.csv(paste0(raw_data,"/EUTL/Oct_2024_version/installation.csv"))
+df_installation <- read.csv(paste0(RAW_DATA,"/EUTL/Oct_2024_version/installation.csv"))
 
-df_compliance <- read.csv(paste0(raw_data,"/EUTL/Oct_2024_version/compliance.csv"))
+df_compliance <- read.csv(paste0(RAW_DATA,"/EUTL/Oct_2024_version/compliance.csv"))
 
 library(haven)
-df_belgium_euets <- read_dta(paste0(raw_data,"/NBB/EUTL_Belgium.dta")) %>% 
+df_belgium_euets <- read_dta(paste0(RAW_DATA,"/NBB/EUTL_Belgium.dta")) %>% 
   rename(bvd_id = bvdid, firm_id = companyregistrationnumber)
 
-df_account <- read.csv(paste0(raw_data,"/EUTL/Oct_2024_version/account.csv"))
+df_account <- read.csv(paste0(RAW_DATA,"/EUTL/Oct_2024_version/account.csv"))
 
 ## Clean data -------
 
@@ -157,13 +142,7 @@ installation_year_in_belgium <- installation_year_in_belgium %>%
   select(-has_bvd, -has_vat)
 
 ## Save it ------
-save(installation_year_emissions, file = paste0(proc_data,"/installation_year_emissions.RData"))
-save(installation_year_in_belgium, file = paste0(proc_data,"/installation_year_in_belgium.RData"))
+save(installation_year_emissions, file = paste0(PROC_DATA,"/installation_year_emissions.RData"))
+save(installation_year_in_belgium, file = paste0(PROC_DATA,"/installation_year_in_belgium.RData"))
 
-  
-
-  
-  
-  
-  
   

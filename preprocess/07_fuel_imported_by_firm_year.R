@@ -51,23 +51,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -76,8 +61,8 @@ library(dplyr)
 
 # Import and data --------
 
-load(paste0(proc_data,"/df_trade.RData"))
-#load(paste0(proc_data,"/cn8digit_codes_for_fossil_fuels.RData"))
+load(paste0(PROC_DATA,"/df_trade.RData"))
+#load(paste0(PROC_DATA,"/cn8digit_codes_for_fossil_fuels.RData"))
 
 # Calculate for each firm amount of fuel imported and share of imports that are fuels -----
 
@@ -135,7 +120,7 @@ load(paste0(proc_data,"/df_trade.RData"))
   
 # Include variable that identifies EUETS firms -------
   
-  load(paste0(proc_data, "/firm_year_belgian_euets.RData"))
+  load(paste0(PROC_DATA, "/firm_year_belgian_euets.RData"))
   firm_year_belgian_euets$is_euets <- 1
   
   fuel_imported_by_firm_year <- df_firm_year_fuel %>% 
@@ -145,7 +130,7 @@ load(paste0(proc_data,"/df_trade.RData"))
   
 # Include NACE 5-digit code -------
 
-load(paste0(proc_data,"/annual_accounts_selected_sample.RData"))
+load(paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
 
 fuel_imported_by_firm_year <- fuel_imported_by_firm_year %>% 
   left_join(df_annual_accounts_selected_sample %>% select(vat_ano, year, nace5d),
@@ -153,7 +138,7 @@ fuel_imported_by_firm_year <- fuel_imported_by_firm_year %>%
 
 # Include variable that identifies if firm is in annual accounts working sample --------
 
-load(paste0(proc_data,"/firms_in_selected_sample.RData"))
+load(paste0(PROC_DATA,"/firms_in_selected_sample.RData"))
 
 firms_in_selected_sample$is_in_sample <- 1
 
@@ -161,8 +146,6 @@ fuel_imported_by_firm_year <- fuel_imported_by_firm_year %>%
   left_join(firms_in_selected_sample, by = "vat_ano")
   
 # Save it ------
-save(fuel_imported_by_firm_year, file = paste0(proc_data,"/fuel_imported_by_firm_year.RData"))
-  
-  
+save(fuel_imported_by_firm_year, file = paste0(PROC_DATA,"/fuel_imported_by_firm_year.RData"))
   
   

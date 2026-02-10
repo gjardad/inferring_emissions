@@ -42,26 +42,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # ==============
 # Set up -------
 # ==============
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(readxl)
 
@@ -70,7 +54,7 @@ library(readxl)
 # ==============
 
 hs_codes_for_ch27 <- read_xlsx(
-  paste0(raw_data, "/Correspondences_and_dictionaries/HSCodeandDescription.xlsx"),
+  paste0(RAW_DATA, "/Correspondences_and_dictionaries/HSCodeandDescription.xlsx"),
   sheet = 1
 ) %>% 
   filter(substr(Code, 1, 2) == "27") %>% 
@@ -78,4 +62,4 @@ hs_codes_for_ch27 <- read_xlsx(
   rename(hs_code = 1, description = 2, parent_code = 3, level = 4, is_basic_leve = 5)
 
 # save it
-save(hs_codes_for_ch27, file = paste0(proc_data, "/hs_code_for_ch27_goods.RData"))
+save(hs_codes_for_ch27, file = paste0(PROC_DATA, "/hs_code_for_ch27_goods.RData"))

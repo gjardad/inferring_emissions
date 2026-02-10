@@ -46,23 +46,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -74,7 +59,7 @@ library(purrr)
 library(stringr)
 
 # CRF to NACE map ------
-  load(paste0(proc_data, "crf_to_nace_map.RData"))
+  load(paste0(PROC_DATA, "crf_to_nace_map.RData"))
 
 # Create data set with rows at the CRF-year level ------
 
@@ -97,7 +82,7 @@ library(stringr)
     "Table2(I).A-H"
   )
   
-  nir_folder <- file.path(raw_data, "/NIR/")
+  nir_folder <- file.path(RAW_DATA, "/NIR/")
   
   file_for_year <- function(y) {
     file.path(
@@ -154,6 +139,6 @@ library(stringr)
     left_join(co2_lookup, by = c("year", "crf"))
 
 # Save it ------
-save(emissions_by_crf_year, file = paste0(proc_data, "emissions_by_crf_year.RData"))
+save(emissions_by_crf_year, file = paste0(PROC_DATA, "emissions_by_crf_year.RData"))
   
 

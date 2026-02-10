@@ -52,23 +52,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(dplyr)
@@ -77,8 +62,8 @@ library(dplyr)
 # Load data --------
 # ===================
 
-load(paste0(proc_data,"/ncv_by_fuel_siec_year.RData"))
-load(paste0(proc_data,"/siec_to_ipcc.RData"))
+load(paste0(PROC_DATA,"/ncv_by_fuel_siec_year.RData"))
+load(paste0(PROC_DATA,"/siec_to_ipcc.RData"))
 
 ipcc_ncv_base <- ncv_by_fuel_siec_year %>%
   select(-c(unit, ncv_mj_per_tonne)) %>% 
@@ -100,9 +85,9 @@ ipcc_ncv_base <- ncv_by_fuel_siec_year %>%
 
 # which IPCC fuels show up in my customs data?
 
-load(paste0(proc_data,"/fuel_imported_by_firm_year.RData"))
-load(paste0(proc_data,"/cn8_to_ipcc_fuel_categories.RData"))
-load(paste0(proc_data,"/hs6_to_ipcc_fuel_categories.RData"))
+load(paste0(PROC_DATA,"/fuel_imported_by_firm_year.RData"))
+load(paste0(PROC_DATA,"/cn8_to_ipcc_fuel_categories.RData"))
+load(paste0(PROC_DATA,"/hs6_to_ipcc_fuel_categories.RData"))
 
 df <- fuel_imported_by_firm_year %>%
   mutate(
@@ -168,4 +153,4 @@ ipcc_ncv_full <- ipcc_ncv_base %>%
 ipcc_ncv_year <- ipcc_ncv_full
 
 # save it
-save(ipcc_ncv_year, file = paste0(proc_data,"/ipcc_ncv_year.RData"))
+save(ipcc_ncv_year, file = paste0(PROC_DATA,"/ipcc_ncv_year.RData"))

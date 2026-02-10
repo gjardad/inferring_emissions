@@ -67,26 +67,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -------------
 ## Setup ------
 # -------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(dplyr)
 library(tidyr)
@@ -110,12 +94,12 @@ BBL_TO_GJ <- BBL_TO_MMBTU * MMBTU_TO_GJ
 COAL_GJ_PER_TON <- 24.0           # common ballpark for steam coal (~24 GJ/ton)
 
 # Load price data
-load(paste0(proc_data,"/coal_price.RData"))  # has: year, eur_per_ton
-load(paste0(proc_data,"/gas_price.RData"))   # has: year, eur_per_mmbtu
-load(paste0(proc_data,"/oil_price.RData"))   # has: year, eur_per_bbl
+load(paste0(PROC_DATA,"/coal_price.RData"))  # has: year, eur_per_ton
+load(paste0(PROC_DATA,"/gas_price.RData"))   # has: year, eur_per_mmbtu
+load(paste0(PROC_DATA,"/oil_price.RData"))   # has: year, eur_per_bbl
 
 # Load data on fuel implied prices
-load(paste0(proc_data,"/firm_cncode_year_physical_qty.RData"))
+load(paste0(PROC_DATA,"/firm_cncode_year_physical_qty.RData"))
 
 # -----------------------------
 # 1) Implied price per CN-year

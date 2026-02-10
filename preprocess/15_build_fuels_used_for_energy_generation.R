@@ -42,26 +42,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -------------
 ## Setup ------
 # -------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(tidyr)
@@ -71,7 +55,7 @@ library(dplyr)
 #  Load data ---------
 # --------------------
 
-fuels_for_energy_use <- read_csv(paste0(raw_data, "/Eurostat/fuels_for_energy_use_in_belgium_from_energy_balance.csv"))
+fuels_for_energy_use <- read_csv(paste0(RAW_DATA, "/Eurostat/fuels_for_energy_use_in_belgium_from_energy_balance.csv"))
 
 df <- fuels_for_energy_use %>% 
   mutate(
@@ -94,7 +78,7 @@ siec_used_for_energy <- df %>%
 
 # convert to HS codes ----
 
-load(paste0(proc_data,"/hs_to_siec_map.RData"))
+load(paste0(PROC_DATA,"/hs_to_siec_map.RData"))
 
 hs_used_for_energy <- siec_used_for_energy %>% 
   

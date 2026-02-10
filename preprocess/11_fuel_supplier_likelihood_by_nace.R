@@ -42,7 +42,6 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # ------------------------------------------------------------------------------
 # Fuel-supplier likelihood classification
 #
@@ -62,21 +61,6 @@ source_try <- function(dir, fname_no_ext) {
 # Set up -----------
 # ------------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(dplyr)
 library(stringr)
@@ -142,7 +126,7 @@ classify_fuel_supplier_likelihood <- function(df, nace_col = "nace5d") {
 # Implement it ----------
 # -----------------------
 
-load(paste0(proc_data, "/firm_cncode_year_physical_qty.RData"))
+load(paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
 # unique_nace must have column nace5d (as in your object)
 unique_nace_classified <- classify_fuel_supplier_likelihood(fuel_qty, "nace5d")
@@ -158,4 +142,4 @@ likelihood_of_being_fuel_supplier_by_nace <- nace4_mapping
 
 # save it
 save(likelihood_of_being_fuel_supplier_by_nace,
-     file = paste0(proc_data, "/likelihood_of_being_fuel_supplier_by_nace.RData"))
+     file = paste0(PROC_DATA, "/likelihood_of_being_fuel_supplier_by_nace.RData"))

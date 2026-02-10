@@ -48,36 +48,21 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Import data --------
 
-  #load(paste0(proc_data, "/b2b_selected_random_sample.RData"))
+  #load(paste0(PROC_DATA, "/b2b_selected_random_sample.RData"))
   #df_b2b <- df_b2b_selected_random_sample
 
-  load(paste0(proc_data, "/b2b_selected_sample.RData"))
+  load(paste0(PROC_DATA, "/b2b_selected_sample.RData"))
   df_b2b <- df_b2b_selected_sample
   # j is buyer, i is supplier
   
-  load(paste0(proc_data, "/fuel_imported_by_firm_year.RData"))
+  load(paste0(PROC_DATA, "/fuel_imported_by_firm_year.RData"))
   
-  load(paste0(proc_data, "/firm_year_belgian_euets.RData"))
+  load(paste0(PROC_DATA, "/firm_year_belgian_euets.RData"))
   
 ### Identify fuel importers and their EU ETS status -------
   
@@ -164,7 +149,6 @@ code <- paste0(folder, "/carbon_policy_networks/code")
   amount_spent_on_fuel_by_firm_year <- df_with_amount_spent_on_fuel
   
 # Save it -----
-save(amount_spent_on_fuel_by_firm_year, file = paste0(proc_data, "/amount_spent_on_fuel_by_firm_year.RData"))
-  
+save(amount_spent_on_fuel_by_firm_year, file = paste0(PROC_DATA, "/amount_spent_on_fuel_by_firm_year.RData"))
   
   

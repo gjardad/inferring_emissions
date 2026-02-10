@@ -42,23 +42,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(Sys.info()[["user"]] =="JARDANG"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -68,7 +53,7 @@ library(dplyr) # even though dplyr is included in tidyverse, still need to load 
 # Import data ----
 
 library(haven)
-df_national_accounts <- read_dta(paste0(raw_data,"/NBB/Annual_Accounts_MASTER_ANO.dta"))
+df_national_accounts <- read_dta(paste0(RAW_DATA,"/NBB/Annual_Accounts_MASTER_ANO.dta"))
 
 # Clean data ----
 
@@ -78,5 +63,5 @@ df_national_accounts <- read_dta(paste0(raw_data,"/NBB/Annual_Accounts_MASTER_AN
     mutate(nace5d = str_pad(nace5d, width = 5, pad = "0"))
   
 # Save it ----
-save(df_national_accounts, file = paste0(proc_data,"/df_national_accounts_with_5digits.RData"))  
+save(df_national_accounts, file = paste0(PROC_DATA,"/df_national_accounts_with_5digits.RData"))  
   

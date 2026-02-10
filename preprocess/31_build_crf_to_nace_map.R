@@ -46,23 +46,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -258,4 +243,4 @@ crf_nace_long <- crf_nace_map %>%
     left_join(nace_groups, by = "nace_code")
 
 # Save it ---------
-save(crf_to_nace_map, file = paste0(proc_data, "crf_to_nace_map.RData"))
+save(crf_to_nace_map, file = paste0(PROC_DATA, "crf_to_nace_map.RData"))

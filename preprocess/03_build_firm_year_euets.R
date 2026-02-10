@@ -70,23 +70,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(Sys.info()[["user"]] =="JARDANG"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -96,14 +81,14 @@ library(dplyr) # even though dplyr is included in tidyverse, still need to load 
 # Import data -------
 
 library(haven)
-df_belgium_euets <- read_dta(paste0(raw_data,"/NBB/EUTL_Belgium.dta")) %>% 
+df_belgium_euets <- read_dta(paste0(RAW_DATA,"/NBB/EUTL_Belgium.dta")) %>% 
   rename(bvd_id = bvdid, firm_id = companyregistrationnumber)
 
-load(paste0(proc_data, "/firm_year_emissions.RData"))
+load(paste0(PROC_DATA, "/firm_year_emissions.RData"))
 
-df_national_accounts <- read_dta(paste0(raw_data,"/NBB/Annual_Accounts_MASTER_ANO.dta"))
+df_national_accounts <- read_dta(paste0(RAW_DATA,"/NBB/Annual_Accounts_MASTER_ANO.dta"))
 
-load(paste0(proc_data,"/annual_accounts_selected_sample.RData"))
+load(paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
 
 # Create df ------
 
@@ -139,4 +124,4 @@ firm_year_belgian_euets <- firm_year_emissions %>%
     distinct(vat, year, bvd_id, .keep_all = TRUE)
 
 # Save it -------
-save(firm_year_belgian_euets, file = paste0(proc_data,"/firm_year_belgian_euets.RData"))  
+save(firm_year_belgian_euets, file = paste0(PROC_DATA,"/firm_year_belgian_euets.RData"))  

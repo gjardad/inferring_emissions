@@ -43,23 +43,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # ==================
 # Import data ------
@@ -281,4 +266,4 @@ emission_factors_from_ipcc <- bind_rows(
   select(-c(ipcc_note))
 
 # save it
-save(emission_factors_from_ipcc, file = paste0(proc_data, "/emission_factors_from_ipcc.RData"))
+save(emission_factors_from_ipcc, file = paste0(PROC_DATA, "/emission_factors_from_ipcc.RData"))

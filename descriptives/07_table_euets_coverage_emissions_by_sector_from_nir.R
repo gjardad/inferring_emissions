@@ -42,28 +42,13 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Import data ----
 
 library(readxl)
-annexx_xii_2024 <- read_excel(paste0(raw_data, "/NIR/BE_2024_Art14_AnnexXII_Consistency_with_ETS_280224.xlsx")) %>% 
+annexx_xii_2024 <- read_excel(paste0(RAW_DATA, "/NIR/BE_2024_Art14_AnnexXII_Consistency_with_ETS_280224.xlsx")) %>% 
   select(1,4) %>% 
   rename(crf = 1, share = 2) %>% 
   filter(!is.na(crf) & !is.na(share)) %>% 
@@ -74,7 +59,7 @@ annexx_xii_2024 <- read_excel(paste0(raw_data, "/NIR/BE_2024_Art14_AnnexXII_Cons
   mutate(share_2024 = as.numeric(share)*100) %>% 
   select(crf_code, crf_text, share_2024)
 
-annexx_xii_2025 <- read_excel(paste0(raw_data, "/NIR/BE_2025_Art14_Annex_XII-Consistency_with_ETS_2025_1281_Final_130325.xlsx")) %>% 
+annexx_xii_2025 <- read_excel(paste0(RAW_DATA, "/NIR/BE_2025_Art14_Annex_XII-Consistency_with_ETS_2025_1281_Final_130325.xlsx")) %>% 
   select(1,4) %>% 
   rename(crf = 1, share = 2) %>% 
   filter(!is.na(crf) & !is.na(share)) %>% 

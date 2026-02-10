@@ -43,23 +43,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # ==================
 # Build mapping ----
@@ -258,5 +243,5 @@ cn8_to_ipcc_fuel_categories <- dplyr::bind_rows(
 )
 
 # save it
-save(cn8_to_ipcc_fuel_categories, file = paste0(proc_data, "/cn8_to_ipcc_fuel_categories.RData"))
-save(hs6_to_ipcc_fuel_categories, file = paste0(proc_data, "/hs6_to_ipcc_fuel_categories.RData"))
+save(cn8_to_ipcc_fuel_categories, file = paste0(PROC_DATA, "/cn8_to_ipcc_fuel_categories.RData"))
+save(hs6_to_ipcc_fuel_categories, file = paste0(PROC_DATA, "/hs6_to_ipcc_fuel_categories.RData"))

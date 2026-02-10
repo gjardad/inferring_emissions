@@ -42,26 +42,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # ------------
 # Set up -----
 # ------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tibble)
 
@@ -69,7 +53,7 @@ library(tibble)
 # Load data ---
 # -------------
 
-oil_quarterly <- read_csv(paste0(raw_data, "/crude_oil_bfo_m2_europe_fob_euro_per_barrel_quarterly.csv")) %>% 
+oil_quarterly <- read_csv(paste0(RAW_DATA, "/crude_oil_bfo_m2_europe_fob_euro_per_barrel_quarterly.csv")) %>% 
   rename(eur_per_bbl = 3)
 
 library(lubridate)
@@ -87,4 +71,4 @@ oil_price <- oil_quarterly %>%
   arrange(year)
 
 # save it
-save(oil_price, file = paste0(proc_data,"/oil_price.RData"))
+save(oil_price, file = paste0(PROC_DATA,"/oil_price.RData"))

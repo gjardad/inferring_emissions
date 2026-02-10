@@ -57,21 +57,6 @@
 # Setup ---------
 # ===============
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Load packages
 suppressPackageStartupMessages({
@@ -242,7 +227,7 @@ ppml_lofo_fullcal <- function(df,
 # ============================================
 
 # 0) Load data
-load(paste0(proc_data, "/loocv_training_sample.RData"))
+load(paste0(PROC_DATA, "/loocv_training_sample.RData"))
 df <- loocv_training_sample
 
 # 1) Build sector-year totals
@@ -277,8 +262,8 @@ metrics_tbl <- build_metrics_table(
   n_firms_est     = data.table::uniqueN(df$vat)
 )
 
-metrics_path_rds <- file.path(output, "model_performance_metrics.rds")
-metrics_path_csv <- file.path(output, "model_performance_metrics.csv")
+metrics_path_rds <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
+metrics_path_csv <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 
 metrics_all <- append_metrics_log(
   metrics_tbl,

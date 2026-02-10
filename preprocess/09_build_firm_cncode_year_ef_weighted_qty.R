@@ -56,26 +56,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -------------
 ## Setup ------
 # -------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(tidyr)
@@ -94,11 +78,11 @@ pick_col <- function(df, candidates) {
 # --------------------
 # Load required data
 # --------------------
-load(paste0(proc_data, "/ipcc_ncv_year.RData"))                 # expects: ipcc_fuel, year, ncv_tj_per_kg (or NCV in MJ/t etc)
-load(paste0(proc_data, "/emission_factors_from_ipcc.RData"))    # expects: fuel, ef (kgCO2/TJ)
-load(paste0(proc_data, "/cn8_to_ipcc_fuel_categories.RData"))   # CN8 overrides when HS6 too coarse
-load(paste0(proc_data, "/hs6_to_ipcc_fuel_categories.RData"))   # default HS6 mapping
-load(paste0(proc_data, "/firm_cncode_year_physical_qty.RData"))
+load(paste0(PROC_DATA, "/ipcc_ncv_year.RData"))                 # expects: ipcc_fuel, year, ncv_tj_per_kg (or NCV in MJ/t etc)
+load(paste0(PROC_DATA, "/emission_factors_from_ipcc.RData"))    # expects: fuel, ef (kgCO2/TJ)
+load(paste0(PROC_DATA, "/cn8_to_ipcc_fuel_categories.RData"))   # CN8 overrides when HS6 too coarse
+load(paste0(PROC_DATA, "/hs6_to_ipcc_fuel_categories.RData"))   # default HS6 mapping
+load(paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
 # ------------------------------------------------------------
 # 1) Build CN8 -> IPCC mapping (CN8 overrides HS6)
@@ -234,7 +218,7 @@ print(missing_ef_fuels)
 # 6) Save outputs
 # ------------------------------------------------------------
 save(ef_weighted_fuel_qty,
-     file = paste0(proc_data, "/firm_cncode_year_ef_weighted_qty.RData"))
+     file = paste0(PROC_DATA, "/firm_cncode_year_ef_weighted_qty.RData"))
 
 ############################################################
 # Notes:
