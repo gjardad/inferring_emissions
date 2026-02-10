@@ -1,0 +1,65 @@
+\section{Suggestive Evidence of Proxy's Information Content}
+
+In this section, we describe the training sample and provide suggestive evidence on the information content of the proxy.
+
+\noindent \textbf{Training Sample.} The training sample consists of an unbalanced panel of firms for which emissions are observed. These firms fall into two groups. First, EU ETS–regulated firms, for which annual emissions are publicly available from the EU Transaction Log (EUTL). Second, non–EU ETS firms operating in sectors (NACE 19) and (NACE 24). In these sectors, EU ETS coverage is effectively complete, so that all emissions are reported by ETS-regulated installations and non-EU ETS firms are assumed to have zero emissions. Table \complete in Appendix \complete reports EU ETS emissions coverage by sector for 2024 and 2025.\footnote{While we cannot guarantee that EU ETS coverage is exactly 100\% in these sectors in earlier years, the number of ETS-regulated installations is nearly constant over time, suggesting no meaningful changes in coverage.}
+
+Table \complete provides summary statistics of the training sample. Below, we use the sample to compute some descriptive statistics that provide suggestive evidence of the information content of the proxy. In Section \complete, we use the training sample to assess the out-of-sample predictive performance of different models. 
+
+
+\noindent \textbf{Proxy's Information Content.} One would expect a good proxy for fossil fuel consumption to i) be positively and strongly correlated with firms' emissions, even after controlling for firm size; and ii) to represent a meaningful share of input expenditures for firms that are emission sources, and a negligible share for those that are not. 
+
+We use our training sample to assess both properties. In Table \complete and Figure \complete, we address property i). The table shows the results of three different regression models of emissions into the fuel consumption proxy at the firm-year level. The specifications follow
+
+    \begin{equation}
+        \label{eq: reg model}
+        emissions_{it} = \eta_i + \gamma_t + \alpha'x_{it} + \beta*fuel\_consumption_{it} + \varepsilon_{it}
+    \end{equation}
+
+\noindent where $emissions_{it}$ is firm $i$'s emissions in year $t$, $\eta_i$ is a NACE 2-digit code sector fixed-effect, $\gamma_t$ is a year fixed-effect, $x_{it}$ is a vector of firm-year $it$ covariates, and $fuel\_consumption_{it}$ is the proxy for firms' consumption of fossil fuels. Throughout, the fuel consumption proxy is measured in nominal euros. Emissions are measured in tons of CO$_2$. The specifications differ in the set of covariates $x_{it}$ and the exact definitions of $emissions_{it}$ and $fuel\_consumption_{it}$, as discussed below.
+
+In column (1), we report the results from specification (\ref{eq: reg model}) when $x_{it}$ is empty, the fuel consumption proxy includes purchases from all importers (regulated and non-regulated by the EUETS), and both fuel consumption and emissions are included in levels. The coefficient $\beta$ is positive and significant (t-stat 15.95), although small in magnitude. This is mainly due to the fact that fuel consumption and emissions are both extremely skewed variables with large differences in scale across firms. In levels, the regression interprets the coefficient as the absolute change in emissions associated with a one-unit (one euro) change in fuel spending. Since a one-euro increase in fuel purchasing is negligible relative to the scale of firm-level emissions (with many firms emitting tens of thousands of tons annually), the slope in levels mechanically appears tiny—even though the underlying relationship may be strong.
+
+    In contrast, the log–log specification in column (2) rescales both variables so that the model captures proportional relationships rather than absolute changes. A one-percent increase in fuel spending is economically meaningful for firms of all sizes, and thus the estimated elasticity is large and stable. This point is made explicitly in Figure \ref{fig: emissions vs fuel}, which plots emissions vs fuels across firm-year observations in levels (panel (a)) and in logs (panel (b)).
+
+    Column (2) defines the fuel consumption proxy according to (\ref{eq: fuel consumption}) and (\ref{eq: fuel consumption for EUETS importers}). In column (3), we exclude purchases from EUETS importers as in (\ref{eq: fuel consumption excl euets importers}). This increases the magnitude of the coefficient on fuel consumption as well as the R2 measures, suggesting that indeed purchases from EUETS importers mainly add noise to the proxy.
+
+    Columns (2) and (3) establish that fuel consumption is positively correlated with emissions. However, given that the data set only includes pollutant firms and that emissions are proportional to firms' size, we would likely find a positive relationship between emissions and any firm-level measure increasing in size. In columns (4) and (5), we include firms' log revenue in the set of covariates and find that the coefficient in fuel consumption remains statistically significant (t-stat 6.37 and 7.98, respectively). Thus, our proxy for fuel consumption is correlated with emissions even after controlling for firms' size.
+
+    \begin{table}
+        \centering
+
+        \caption{Regression results}
+        
+        \label{tab: regression}
+        
+        %\scalebox{0.85}{
+          \input{dec25_version/tables/reg_table}
+        %}
+        \caption*{\footnotesize \textit{Notes}: Table reports estimates of version of specification \ref{tab: regression}. Column (1) reports estimates of regression where both $emissions_{it}$ and $fuel\_consumption_{it}$ are included in levels. Column (2) reports estimates of the log-log specification. Column (3) reports estimates of the log-log specification when $fuel\_consumption_{it}$ excludes purchases from EUETS fuel importers. Column (4) reports estimates of the log-log specification adding $\log(revenue)$ as a control. Column (5) reports estimates of the log-log specification when adding $\log(revenue)$ as a control, and $fuel\_consumption_{it}$ excludes purchases from EUETS fuel importers. Observations are at the firm $\times$ year level. All specifications include NACE 5-digit sector and year fixed effects. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+    \end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \caption{Emissions vs Fuel Consumption}
+    \label{fig: emissions vs fuel}
+
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/emissions_fuel_levels.png}
+        \caption{Levels}
+        \label{fig: emissions vs fuels in levels}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/emissions_fuel_logs.png}
+        \caption{Logs}
+        \label{fig: emissions vs fuels in logs}
+    \end{subfigure}
+        \caption*{\footnotesize \textit{Notes}: Figure plots scatterplots of emissions vs the proxy for fuel consumption that excludes purchases from EUETS fuel importers. Panel (A) plots the scatterplot when both emissions and fuel consumption are in levels. Panel (B) reports the scatterplot when both quantities are in logs. Panel (B) also reports the fitted regression line from the specification $
+        \log(emissions)_{it} = \alpha + \beta \log(fuel\_consumption)_{it} + \varepsilon_{it}$. Each observation is a firm $
+        \times$ year. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+\end{figure}
+
+We then ask whether the fuel consumption proxy is a meaningful share of input expenditures for firms that are emission sources, and a negligible share for those that are not. Figure \complete shows the kernel density of the input cost share of fuel imports across firms by emitters and non-emitters, separately for sectors NACE 19 and NACE 24. We use the benchmark definition of the fuel consumption proxy, as in (\ref{eq: fuel consumption}). 

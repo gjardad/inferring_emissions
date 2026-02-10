@@ -1,0 +1,523 @@
+\documentclass[11pt,  reqno]{amsart}
+%\documentclass[11pt]{amsart}
+%\usepackage{harvard}
+\usepackage{graphicx,amsmath,amssymb,epsfig,epstopdf}
+\usepackage{subcaption}
+\usepackage{color}
+\newcommand{\complete}{\textcolor{red}{XX} }
+\usepackage{natbib}
+\usepackage{url} 
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    citecolor=blue,
+    linkcolor=blue,
+    urlcolor=blue
+    }
+\usepackage{float} % Load the float package
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+\usetikzlibrary{calc}
+\usepackage{comment}
+\usepackage{booktabs}
+\usepackage{lscape}
+\usepackage[gen]{eurosym}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{longtable}
+
+
+\tikzset{place/.style={circle,thick,draw=blue!75,fill=blue!20,minimum size=10mm}}
+\tikzset{place2/.style={circle,thick,draw=blue!75,fill=green!20,minimum size=10mm}}
+\tikzset{place3/.style={circle,thick,draw=red!75,fill=orange!20,minimum size=10mm}}
+\tikzset{main node/.style={circle,draw,font=\sffamily\small\bfseries,minimum size=10mm}}
+
+%\bibliographystyle{econometrica}
+%\usepackage{showkeys}
+\long\def\comment#1{}
+\oddsidemargin +0.2in
+ \evensidemargin +0.2in
+\topmargin 40pt \textheight 8.1in \textwidth 6in
+\linespread{1.3}\parskip .05in
+%% ----------------------------------------------------------------
+\vfuzz2pt % Don't report over-full v-boxes if over-edge is small
+\hfuzz2pt % Don't report over-full h-boxes if over-edge is small
+% THEOREMS -------------------------------------------------------
+\long\def\comment#1{}
+\newtheorem{theorem}{Theorem}
+\newtheorem{conjecture}{Conjecture}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{assumption}{Assumption}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{step}{Step}
+\newtheorem{remark}{Comment}
+\newtheorem{claim}{Claim}
+%\numberwithin{remark}{section}
+\newtheorem{example}{Example}
+%\numberwithin{equation}{section}
+
+\newcommand{\citen}{\citeasnoun}
+
+
+\newcommand{\norm}[1]{\left\Vert#1\right\Vert}
+\newcommand{\abs}[1]{\left\vert#1\right\vert}
+\newcommand{\set}[1]{\left\{#1\right\}}
+\newcommand{\Real}{\mathbb R}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\To}{\longrightarrow}
+\newcommand{\BX}{\mathbf{B}(X)}
+\newcommand{\A}{\mathcal{A}}
+\newcommand{\what}{\widehat}
+\newcommand{\eg}{e.g., \xspace}
+\newcommand{\ie}{i.e.,\xspace}
+\newcommand{\etc}{etc.\@\xspace}
+\newcommand{\iid}{\emph{i.i.d.}\ }
+\newcommand{\etal}{et.\ al.\ }
+\newcommand{\PP}{P}
+\newcommand{\be}{\begin{eqnarray}}
+\newcommand{\ee}{\end{eqnarray}}
+\newcommand{\Tau}{\mathcal{T}}
+\newcommand{\EE}{E}
+\newcommand{\Ss}{\mathcal{S}}
+\newcommand{\GG}{\Gamma}
+\newcommand{\NN}{\mathbf{N}}
+\newcommand{\JJ}{J}
+\newcommand{\XX}{\mathcal{X}}
+\newcommand{\EC}{\mathcal{E}}
+\newcommand{\U}{\mathcal{U}}
+\newcommand{\asex}{ \text{ as $ \tau T  \rightarrow k$  and $\tau \searrow 0$ }}
+\newcommand{\asint}{ \text{ as $ \tau T  \rightarrow \infty$  and $ \tau \searrow  0$ }}
+
+\newcommand{\ind}{ \overset{d}{\longrightarrow}}
+\newcommand{\inp}{ \overset{p}{\longrightarrow}}
+\newcommand{\ba}{\begin{array}}
+\newcommand{\ea}{\end{array}}
+\newcommand{\bs}{\begin{align}\begin{split}\nonumber}
+\newcommand{\bsnumber}{\begin{align}\begin{split}}
+\newcommand{\es}{\end{split}\end{align}}
+\newcommand{\doublespace}{\linespread{1.1}}
+\newcommand{\singlespace}{\linespread{0.85}}
+\newcommand{\fns}{\singlespace\footnotesize}
+\newcommand{\cooldate}{\begin{flushright}\footnotesize\today\normalsize\end{flushright}}
+\newcommand{\expect}{\mathcal{E}}
+\newcommand{\sss}{\scriptscriptstyle}
+\newcommand{\n}{n}
+\newcommand{\inpr}{ \overset{p^*_{\scriptscriptstyle n}}{\longrightarrow}}
+\newcommand{\T}{ \scriptscriptstyle T}
+\newcommand{\LL}{ \mathcal{L}}
+\newcommand{\M}{ \scriptscriptstyle M}
+\newcommand{\al}{ \scriptscriptstyle A}
+\renewcommand{\(}{\left(}
+\renewcommand{\)}{\right)}
+\renewcommand{\[}{\left[}
+\renewcommand{\]}{\right]}
+\renewcommand{\hat}{\widehat}
+
+\newcommand{\kk}{\kappa}
+\newcommand{\wpco}{\text{ w. pr. $\geq 1 - \epsilon$  } }
+\newcommand{\jb}{ { {\mathbf{j}}} }
+\newcommand{\BB}{\Bbb{B}}
+\newcommand{\inlaw}{\overset{D}\sim}
+\newcommand{\QED}{$\blacksquare$}
+\newcommand{\aT}{A_T}
+\newcommand{\kb}{\text{\fns{$\frac{k}{b}$}}}
+\newcommand{\kT}{\text{\fns{$\frac{k}{T}$}}}
+\renewcommand{\theequation}{\thesection.\arabic{equation}}
+\renewcommand{\fns}{\footnotesize}
+\newcommand{\smalls}{\fontsize}
+\newcommand{\cc}{\mathbf{c}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\F}{\mathcal{F}}
+\newcommand{\G}{\mathcal{G}}
+\newcommand{\C}{\mathcal{C}}
+\newcommand{\K}{\mathcal{K}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\W}{\mathcal{W}}
+\newcommand{\R}{\mathcal{R}}
+\newcommand{\Z}{\mathcal{Z}}
+\newcommand{\QQ}{\widetilde{Q}}
+\newcommand{\nnocr}{\nonumber\\}
+\newcommand{\nno}{\nonumber}
+\newcommand{\Gn}{\mathbb{G}_n}
+\newcommand{\Gp}{\mathbf{G}}
+\newcommand{\Pn}{\mathbb{P}_n}
+\newcommand{\Pp}{P}
+\newcommand{\En}{\mathbb{E}_n}
+\newcommand{\Ep}{E}
+\newcommand{\barf}{\overline{f}}
+\newcommand{\barfp}{\overline{f'}}
+\newcommand{\underf}{\underline{f}}
+\newcommand{\Uniform}{{\text{Uniform}}}
+\newcommand{\trace}{{\text{trace}}}
+\newcommand{\ltwob}
+{\tilde{\beta}^{^*}}
+%\def\RR{{\rm I\kern-0.18em R}}
+\def\RR{ {\Bbb{R}}}
+\def\mK{{\mathcal K}}
+\def\hn{{h}}
+
+\begin{document}
+
+\title[]{Inferring Firms' Emissions Using Transaction and Balance-sheet Data}
+
+\author[]{Gabriel Jardanosvki\textsuperscript{*} \and Gert Bijnens\textsuperscript{$\dagger$}}
+\thanks{\noindent \textsuperscript{*}Jardanovski (corresponding author): Northwestern University. E-mail: \texttt{gabrielj@u.northwestern.edu}.}
+\thanks{\textsuperscript{$\dagger$} Bijnens: National Bank of Belgium. E-mail: \texttt{gert.bijnens@nbb.be}.}
+
+\begin{abstract}
+This note proposes a procedure to infer firms' yearly emissions using business-to-business (B2B) transaction data and balance-sheet data from Belgium. We propose a firm-year-level proxy for the consumption of fossil fuels and formally evaluate its performance as a predictor of emissions using a sample of Belgian firms for which we observe yearly emissions. We find that the proxy explains a meaningful share of the variance of emissions across firm-years even after controlling for firm size. In our preferred specification, the out-of-sample R$^2$ is 0.42. We also discuss future strategies to improve the inference procedure. 
+\end{abstract}
+
+\maketitle
+
+\pagebreak
+
+\section{Introduction}\label{sec: introduction}
+    
+    The emissions of greenhouse gases (GHG) from industrial sources represent almost 30\% of worldwide emissions \citep{owid-ghg-emissions-by-sector}. Not surprisingly, policies aiming at curbing emissions from these sources are widespread. Understanding the causes of changes in industrial emissions over time can help improve the design of environmental policies in the future, but that usually requires detailed data on emissions at the level of the firm. To address this, we propose a procedure to predict firms’ emissions using balance-sheet data and records of business-to-business transactions.
+
+    The procedure consists of three steps. First, we propose a proxy for firms' consumption of fossil fuels based on records of business-to-business transactions and customs data. Second, we use the fact that for some firms in Europe their emissions are publicly available and project emissions on the fuel consumption proxy. Third, we use the projection to predict firm-level emissions for firms for which emissions are not available. We apply and evaluate the performance of the procedure to firms in Belgium, a country for which we have access to all the required data sets.
+
+    Concretely, we project emissions into a proxy of fossil fuel consumption at the firm-year level. Data on the consumption of fuels is not readily available for Belgian firms. We propose to build a proxy based on records of business-to-business transactions and customs data. In Belgium, virtually all of the supply of fossil fuels is imported. Because of this, using customs data to identify the firms that import fuels into Belgium is sufficient to keep track of which firms supply fuels domestically. Then, using records of business-to-business transactions, we compute the amount in nominal euros that any given firm purchases from firms flagged as fuel importers. That is our proxy for fuel consumption.
+
+    Our first empirical result establishes that the fuel consumption proxy is positively correlated with and explains a meaningful share of the variance of emissions across firms, even after controlling for firm size. Then, we proceed to formally assess the performance of different regression models in out-of-sample predictions in a Leave-One-Out Cross-Validation (LOOCV) exercise. 
+
+    \section{Data}
+
+     \noindent \textbf{Annual Accounts.} We obtain firm-year-level revenue for all Belgian private firms from the National Bank of Belgium (NBB)'s Annual Accounts. This is the data set used to construct the National Income and Product Accounts in Belgium.\footnote{See p. 81 in \url{https://www.nbb.be/doc/dq/e_method/gni_methodological_inventory_belgium_version_2022_publication.pdf} for further details.} The data also contains firms' NACE 5-digit sector codes.
+     
+    \noindent \textbf{B2B.} The NBB's business-to-business (B2B) transactions database covers almost all bilateral business transactions between Belgian firms in the period 2002-2022. It is a virtually complete network representation of the private sector in Belgium \citep{duprez2023belgian}.
+    
+    The data contains firm-level unique identifiers for all Belgian private firms that have taken part in at least one transaction with other Belgian firms in the period 2002-2022.
+    
+    For each year and each buyer-supplier relationship between any two Belgian private firms, it informs the yearly monetary transaction value in nominal euros. We do not observe which products were transacted or their quantity.
+
+    \noindent \textbf{CBE.} The Crossroads Bank of Enterprises (\textit{Banque-Carrefour des Entreprises}; BCE or CBE) is the official administrative registry of all legal and natural persons engaged in economic activity in Belgium. It assigns each firm a unique enterprise\footnote{We use firm and enterprise interchangeably.}, which serves as the master firm ID used consistently across Belgian administrative datasets (including the B2B and the Annual Accounts). A single enterprise can operate multiple establishment units\footnote{We use establishment units, installation, or plants interchangeably.}, each with its own establishment identifier linked to the enterprise number and an establishment-specific NACE code.  
+    
+    \noindent \textbf{Customs.} This data set reports the universe of imports and exports in Belgium.  For each Belgian firm, it reports the amount, in values and quantities, of imports and exports by destination and source country for each product classified at the 8-digit combined nomenclature (CN), with around 10,000 distinct products.
+
+    We collect CN codes for products classified as fossil fuels according to chapter 27 in the World Harmonized System (HS). We restrict attention to fossil fuels used in stationary installations in industrial facilities. Table \ref{tab: list of fuels} lists all fuels we keep track of.
+
+    \noindent \textbf{Eurostat.} From Eurostat, we collect aggregate data on imports, exports, and domestic production by fuel and year for Belgium.
+
+    \noindent \textbf{EUTL.}The European Union Transaction Log (EUTL) is the main reporting and monitoring tool of the European Union Emissions Trading System (EUETS), the world's first and largest market-based carbon pricing initiative and the flagship carbon pricing policy in Europe.
+    
+    The EUETS' main purpose is to establish a price for the right to emit greenhouse gases (GHGs). Instead of directly setting the price, each year the EU Commission imposes a cap on the continent-wide aggregate emissions from power and manufacturing plants across the 31 participating countries. 
+
+    Within the cap, the EU distributes emission allowances. One allowance gives its holder the right to emit one ton of carbon dioxide-equivalent (CO$_2$-eq) GHGs. Throughout the year, firms can trade allowances in a permit market, which determines their price. Scarce allowances command a positive price in the permit market. Every year, regulated installations need to surrender allowances to the regulatory authority at least equal to their verified emissions of the previous year. 
+
+    The EUTL makes publicly available yearly information on the amount of emission allowances surrendered by each regulated installation. Each installation has a unique firm-level identifier, but a firm might own multiple installations. We define a firm's emissions in any given year to be equal to the sum of emissions in that year across all installations it owns. This gives us emissions for all Belgian firms regulated by the EUETS for all years between 2005 and 2022.
+
+    \noindent \textbf{National Inventories.} National inventories provide aggregate emissions by sector and year. In particular, Annex XII to the National Inventories for the years 2024 and 2025 compares aggregate emissions with the volume of emissions covered by the EUETS by category of economic activity, for selected categories.\footnote{Economic activities are grouped into Common Reporting Format (CRF) categories in National Inventories. The CRF categories map into NACE codes, although not 1:1.}
+    
+
+    \section{A Proxy for Fuel Consumption}
+
+    This section motivates our proxy for fossil fuel consumption, formally defines it, and presents suggestive evidence of its information content.
+
+    \subsection{Motivation and Definition}
+
+    We first establish the fact that fuel supply in Belgium comes from imports. From Eurostat, we collect imports and total supply (imports + domestic production) of fossil fuels by year and by type of fuel. Figure \ref{fig: total supply vs imports} plots total supply against imports, where each observation is a fuel type-year. It is evident that across all fuels and years, imports represent the vast majority of the quantity supplied - it tracks almost perfectly the 45-degree line. As such, we are assured that identifying fuel importers in the data is enough to keep track of the vast majority of fossil fuel supplied in Belgium.
+
+    \begin{figure}
+        \centering
+        \caption{Total Supply vs Imports Across Fossil Fuels and Years}
+        \includegraphics[scale = 0.5]{dec25_version/figures/total_supply_vs_imports.png}
+        \label{fig: total supply vs imports}
+        \caption*{\footnotesize \textit{Notes}: Figure plots aggregate data on total supply against imports by fossil fuel and year in Belgium. The variables come from the Complete energy balances available in Eurostat (data code \textit{nrg\_bal\_c}). Total supply is the sum of Primary production (data code \textit{PPRD}) and imports (data code \textit{IMP}). Both are measured in Terajoules (TJ). Each blue dot is a fuel $\times$ year and the dotted black line is the 45-degree line. We include all years between 2005 and 2022. In the data, fuels are defined at the level of the Standard International Energy Product Classification (SIEC). We include all fuels except the ones not used to generate GHGs in stationary installations or umbrella categories, to avoid double-counting. The following SIEC codes are excluded: E7000, H8000, FE, C0000X0350-0370, C0350-0370, P1000, O4000XBIO, R5110-5150\_W6000RI, R5210B, R5210P, R5220B, R5220P, R5230P, R5230B, R5290, R5300.}
+    \end{figure}
+
+    We identify fuel importers using customs data. If in any given year a firm imports into Belgium a positive amount of any of the fossil fuels listed in Table \ref{tab: list of fuels}, we flag it as a fuel importer. Because we do not observe what each firm buys from each supplier, we define the fuel consumption proxy to be the nominal amount domestic Belgian firms purchase from domestic Belgian fuel importers:
+
+    \begin{equation}
+        \label{eq: fuel consumption}
+        fuel\_consumption_{it} = \sum_{j \in \text{fuel importers}} x_{ijt}
+    \end{equation}
+    
+    Fuel importers can either supply fuels to domestic firms, export fuels to other countries (working as a re-exporter), or burn the fuel themselves. Because our proxy is based on how much domestic firms buy from fuel importers, it is not subject to misclassifying re-exporters as domestic fuel suppliers. However, the B2B data set does not inform us whether domestic firms buy fuels or emission-intensive goods from fuel importers. In the case of the latter, the fuel consumption proxy would be poorly informative of the downstream firm's emissions. To deal with this, we define our fuel consumption proxy for firm $i$ in year $t$ to be the sum of purchases of $i$ in year $t$ across all fuel importers that are not regulated by the EUETS. The idea is that if a fuel importer is itself regulated by the EUETS, then it is a pollutant firm and therefore it likely burns a significant portion of the fuel it imports. Formally, for all firms that are not fuel importers or are not regulated by the EUETS
+
+    \begin{equation}
+        \label{eq: fuel consumption excl euets importers}
+        fuel\_consumption_{it} = \sum_{j \in \text{fuel importers}/\text{EUETS}} x_{ijt}
+    \end{equation}
+
+    \noindent where $x_{ijt}$ denotes the amount in nominal euros firm $i$ purchases from firm $j$ in year $t$.
+
+    For fuel importers that are regulated by the EUETS, we have
+
+    \begin{equation}
+        \label{eq: fuel consumption for EUETS importers}
+        fuel\_consumption_{it} = \sum_{j \in \text{fuel importers}/\text{EUETS}} x_{ijt} + \sum_{f \in \text{fossil fuels}} import_{ift}
+    \end{equation}
+    
+    \noindent where $import_{ift}$ is the amount in nominal euros firm $i$ imports of fuel $f$ in year $t$. Again, we also consider a version of (\ref{eq: fuel consumption for EUETS importers}) where we sum purchases across all importers $j$, regardless of their EUETS status. 
+
+    We have only discussed a proxy for consumption of fossil fuels, but industrial emissions also come from industrial processes, for which consumption of fossil fuels is arguably a poor proxy. It turns out, however, that the EUETS regulates 100\% of the installations responsible for emitting GHGs from industrial processes. This can be seen in Table \ref{tab: share emissions covered}, which shows aggregate emissions by CRF category and the percentage of each category's emissions that is regulated by the EUETS.\footnote{Economic activities are grouped into Common Reporting Format (CRF) categories in National Inventories. The CRF categories map into NACE codes.} Categories under the second heading refer to emissions from industrial processes: ``2A Mineral products", ``2B Chemical industry", ``2C Metal production", ``2D3 Non-energy products from fuels and solvent use", and ``2H Other". \footnote{Category 2H mainly includes the production of pulp and paper.} For all of them except for 2D3, for which the total emissions are negligibly small, EUETS covers 100\% of the installations. Therefore, when inferring emissions for firms not regulated by the EUETS, we can safely restrict attention to consumption of fossil fuels as a proxy.
+
+    \subsection{Suggestive Evidence of Proxy's Information Content.} One would expect a good proxy for fossil fuel consumption to be i) a meaningful share of input expenditures for firms that are emission sources, and a negligible share for those that are not; and ii) positively correlated with firms' emissions, even after controlling for firm size.
+
+    All firms regulated by the EUETS are heavy pollutant and most of the non-EUETS firms are not. Thus, we assess property i) by plotting the share of firm-year observations for which the fuel consumption proxy is positive by EUETS status. This is shown on the left region in Figure \ref{fig: fuel consumption by EUETS status}. Indeed, almost all (99.57\%) EUETS firms consume some amount of fossil fuels. However, this is also true for a large share of non-EUETS firms (84.68\%). This suggests that the proxy is positively correlated with firms' true consumption of fossil fuels, but that it also includes expenditures on other goods. Figure \ref{fig: fuel consumption by EUETS status} also shows the average expenditure share on fossil fuels by EUETS status in the right region. It is reassuring that fuel expenditures are more relevant among EUETS firms than among non-EUETS firms (17.35\% and 6.08\% of total input costs, respectively).
+
+    In Table \ref{tab: regression} and Figure \ref{fig: emissions vs fuel} we address property ii. The table shows the results of five different regression models of emissions into the fuel consumption proxy at the firm-year level. The specifications follow
+    
+    \begin{equation}
+        \label{eq: reg model}
+        emissions_{it} = \eta_i + \gamma_t + \alpha'x_{it} + \beta*fuel\_consumption_{it} + \varepsilon_{it}
+    \end{equation}
+
+    \noindent where $emissions_{it}$ is firm $i$'s emissions in year $t$, $\eta_i$ is a NACE sector fixed-effect, $\gamma_t$ is a year fixed-effect, $x_{it}$ is a vector of firm-year $it$ covariates, and $fuel\_consumption_{it}$ is the proxy for firms' consumption of fossil fuels. Throughout, the fuel consumption proxy is measured in nominal euros, and we do not deflate it since we already include a year fixed-effect\footnote{If we were to differentiate between fuels within the fuel consumption proxy, we would have to introduce fuel-specific deflators. But since we do not, deflating the fuel consumption measure is redundant after including year fixed-effects.} Emissions are measured in tons of CO$_2$. The specifications differ in the set of covariates $x_{it}$ and the exact definitions of $emissions_{it}$ and $fuel\_consumption_{it}$, as discussed below. Our data contains firm-year observations for all EUETS-regulated Belgian firms between 2005 and 2022.\footnote{We restrict our sample to only include firms that share an NACE 2-digit code with at least one other firm in the sample. We do this to ensure the data we use in these regressions is the same as the data used in the LOOCV. In the LOOCV, if a firm is a ``singleton" in the sense that the sector it belongs to only includes that firm, when leaving out this firm, the regression will not be able to identify the coefficient associated with the sector fixed-effect. Thus, we run our regressions on the sample of firms that are not ``singletons" with respect to the NACE sectors they belong to. This results in 222 different firms in our sample over 18 years. If the data were a balanced panel, we would end up with 3996 observations. However, in 2012, as EUETS entered Phase III, the policy expanded its scope, and new firms started being regulated. Additionally, there are some firms that shut down their emission-intensive activities during the period, in which case they leave the panel.} This results in a total of 2689 observations.
+    
+    In column (1), we report the results from specification (\ref{eq: reg model}) when $x_{it}$ is empty, the fuel consumption proxy includes purchases from all importers (regulated and non-regulated by the EUETS), and both fuel consumption and emissions are included in levels. The coefficient $\beta$ is positive and significant (t-stat 15.95), although small in magnitude. This is mainly due to the fact that fuel consumption and emissions are both extremely skewed variables with large differences in scale across firms. In levels, the regression interprets the coefficient as the absolute change in emissions associated with a one-unit (one euro) change in fuel spending. Since a one-euro increase in fuel purchasing is negligible relative to the scale of firm-level emissions (with many firms emitting tens of thousands of tons annually), the slope in levels mechanically appears tiny—even though the underlying relationship may be strong.
+
+    In contrast, the log–log specification in column (2) rescales both variables so that the model captures proportional relationships rather than absolute changes. A one-percent increase in fuel spending is economically meaningful for firms of all sizes, and thus the estimated elasticity is large and stable. This point is made explicitly in Figure \ref{fig: emissions vs fuel}, which plots emissions vs fuels across firm-year observations in levels (panel (a)) and in logs (panel (b)).
+
+    Column (2) defines the fuel consumption proxy according to (\ref{eq: fuel consumption}) and (\ref{eq: fuel consumption for EUETS importers}). In column (3), we exclude purchases from EUETS importers as in (\ref{eq: fuel consumption excl euets importers}). This increases the magnitude of the coefficient on fuel consumption as well as the R2 measures, suggesting that indeed purchases from EUETS importers mainly add noise to the proxy.
+
+    Columns (2) and (3) establish that fuel consumption is positively correlated with emissions. However, given that the data set only includes pollutant firms and that emissions are proportional to firms' size, we would likely find a positive relationship between emissions and any firm-level measure increasing in size. In columns (4) and (5), we include firms' log revenue in the set of covariates and find that the coefficient in fuel consumption remains statistically significant (t-stat 6.37 and 7.98, respectively). Thus, our proxy for fuel consumption is correlated with emissions even after controlling for firms' size.
+
+    \begin{table}
+        \centering
+
+        \caption{Regression results}
+        
+        \label{tab: regression}
+        
+        %\scalebox{0.85}{
+          \input{dec25_version/tables/reg_table}
+        %}
+        \caption*{\footnotesize \textit{Notes}: Table reports estimates of version of specification \ref{tab: regression}. Column (1) reports estimates of regression where both $emissions_{it}$ and $fuel\_consumption_{it}$ are included in levels. Column (2) reports estimates of the log-log specification. Column (3) reports estimates of the log-log specification when $fuel\_consumption_{it}$ excludes purchases from EUETS fuel importers. Column (4) reports estimates of the log-log specification adding $\log(revenue)$ as a control. Column (5) reports estimates of the log-log specification when adding $\log(revenue)$ as a control, and $fuel\_consumption_{it}$ excludes purchases from EUETS fuel importers. Observations are at the firm $\times$ year level. All specifications include NACE 5-digit sector and year fixed effects. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+    \end{table}
+
+\begin{figure}[ht!]
+    \centering
+    \caption{Emissions vs Fuel Consumption}
+    \label{fig: emissions vs fuel}
+
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/emissions_fuel_levels.png}
+        \caption{Levels}
+        \label{fig: emissions vs fuels in levels}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/emissions_fuel_logs.png}
+        \caption{Logs}
+        \label{fig: emissions vs fuels in logs}
+    \end{subfigure}
+        \caption*{\footnotesize \textit{Notes}: Figure plots scatterplots of emissions vs the proxy for fuel consumption that excludes purchases from EUETS fuel importers. Panel (A) plots the scatterplot when both emissions and fuel consumption are in levels. Panel (B) reports the scatterplot when both quantities are in logs. Panel (B) also reports the fitted regression line from the specification $
+        \log(emissions)_{it} = \alpha + \beta \log(fuel\_consumption)_{it} + \varepsilon_{it}$. Each observation is a firm $
+        \times$ year. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+\end{figure}
+
+    \section{Performance of the Inference Procedure} \label{sec: performance}
+
+    To formally assess the extent to which our regression model is predictive of firms' emissions, we conduct a Leave-One-Out Cross-Validation (LOOCV) exercise using EUETS firms. The exercise amounts to doing repeated out-of-sample predictions. The idea is to randomly pick a firm among the ones for which we observe emissions, exclude it from the training data, fit the model using the remaining firms, use the fitted model to predict emissions for the firm that was initially excluded, and then use the fact that we observe this firm's emissions to assess how far the inference based on our model is to the actual observed value. See Algorithm \ref{algorithm: loocv} for a detailed description. The data used to train the models is the same as the one used to estimate the regressions in Table \ref{tab: regression}.
+    
+    We evaluate the accuracy of the five different models listed in Table \ref{tab: regression}. The results are summarized in Table \ref{tab: loocv}. For each of the models, we compute the following out-of-sample performance metrics, all of them formally defined in Algorithm \ref{algorithm: loocv}:
+    
+    \begin{itemize}
+        \item[i.] normalized Root Mean Squared Error (nRMSE);
+
+        \item[ii.] Mean Absolute Percentage Deviation (MAPD);
+
+        \item[iii.] LOO R-squared ($R^2_{LOO}$); and
+
+        \item[iv.] Spearman rank correlation ($\rho$).
+    \end{itemize}
+
+    The four metrics capture different dimensions of predictive accuracy. The root mean squared error (RMSE) measures the average size of the model’s prediction errors in \textit{absolute} units - in this case, tons of CO$_2$. To make this quantity easier to interpret and comparable across models, we normalize it by the sample standard deviation of emissions. The resulting normalized RMSE (nRMSE) expresses the prediction error as a fraction of the overall dispersion in emissions: a value below 1 indicates that the model predicts better than a naive benchmark that assigns every firm the mean emissions, whereas a value above 1 indicates worse performance. As seen in Table \ref{tab: loocv}, the nRMSE suggests that the models with only fuel consumption (rows 2 and 3) improve upon the naive benchmark and perform significantly better than the models that include both fuel consumption and revenue (rows 4 and 5). Also, among the two models with only fuel consumption, using fuel consumption excluding purchases from EUETS importers seems to improve prediction. 
+    
+    The leave-one-out R$^2$ (R$^2_{LOO}$) measures how much of the variation in emissions across firms the model can explain out-of-sample. Formally, it compares the model’s squared prediction errors to the total variance of emissions. Predicting the sample mean for every firm would result in a R$^2_{LOO}$ equal to zero. If R$^2_{LOO} > 0$, the model improves upon this benchmark. Again, the model with only fuel consumption excluding purchases from EUETS importers performs better than the sample average, better than the models that include both revenue and fuel consumption, and better than the model that only includes raw fuel consumption.
+
+    The Mean Absolute Percentual Deviation (MAPD) takes the average across firms' predicted emissions \textit{percentual} deviation from observed emissions. The smaller its value, the better. According to this metric, Table \ref{tab: loocv} indicates that the model with revenue and fuel consumption excluding purchases from EUETS importers performs the best.
+
+    Finally,  the Spearman correlation measures how well the model preserves the ranking of firms by emissions. Formally, let $\boldsymbol{y}$ be the vector of observed emissions and $\hat{\boldsymbol{y}}$ be the vector of predicted emissions. A firm-year's ranking $R(y_{it})$ in terms of observed emissions is its position within the ascending order of firm-years' observed emissions $\boldsymbol{y}$, and a firm-year's ranking in terms of predicted emissions, $R(\hat{y}_{it})$, is the analogous for $\hat{\boldsymbol{y}}$.  We define the Spearman correlation to be the Pearson correlation between the ranking vectors:
+
+    \begin{equation}
+        \label{eq: spearman}
+        \rho_S = \text{corr}(R(y_{it}), R(\hat{y}_{it}))
+    \end{equation}
+
+    The closer the Spearman correlation is to 1, the better the model is at preserving the ranking of emissions between firms. The last column in Table \ref{tab: loocv} suggests that the model with revenue and fuel consumption excluding EUETS importers performs the best at this metric.
+
+    Across the four performance metrics, it is clear that adding the raw measure of fuel consumption adds noise relative to the measure of fuel consumption excluding purchases from EUETS importers. However, there is no clear agreement as to whether we should include revenues as an explanatory variable. In theory, if we had a perfect measure of fuel consumption, adding the revenue term (or any measure of size) should not help explain emissions. However, given that our fuel consumption proxy is noisy, it is not surprising that introducing revenue has some explanatory power: to the extent that larger firms emit more, introducing revenue disciplines the prediction relative to a model that only uses the noisy information contained in the fuel consumption proxy.
+
+    At the same time, the nRMSE and R$^2_{LOO}$ suggest that adding revenue comes at a cost. This is because the nRMSE and the R$^2_{LOO}$ are measures of absolute prediction error: they penalize large deviations in levels, and therefore place substantial weight on observations with very large emissions. In a highly skewed distribution like firm-level CO$_2$ emissions - where the largest firms emit orders of magnitude more than the median firm - these metrics are dominated by how well the model predicts the top tail. Even small proportional mistakes for the largest emitters translate into very large absolute residuals, which cause nRMSE and R$^2_{LOO}$ to deteriorate.
+
+    Indeed, it seems to be the case that the model including $\log(revenue)$ as a covariate leads to substantial prediction errors for large firms. In Figure \ref{fig: abs error by firm size bin}, we plot the distribution of absolute errors across firms separately for two models: the one with only fuel consumption excluding purchases from EUETS importers as a covariate and the one that also includes revenue. We split firms into seven bins by firm size (revenue) and compute the box-plot of the distribution of absolute errors by bin.
+
+    Two things are apparent from Figure \ref{fig: abs error by firm size bin}. First, for both models all the key moments of the distribution of absolute errors within each bin (minimum, 25th percentile, median, 75th percentile, and maximum) increase with firm size. This is a consequence of the fact that a given prediction error in a log-log model results in larger absolute errors for firms with larger emissions. Second, the absolute errors are higher for the model with only fuel consumption across all firm size bins except the last one. For large firms, the absolute errors for the model with revenue are larger. Since nRMSE and R$^2_{LOO}$ place a higher weight on exactly those firms, they heavily penalize the model with revenue as a covariate.
+
+    The reason why this happens is an apparent change in the link between size and emissions across the firm size distribution. Figure \ref{fig: emissions vs rev} shows the scatterplot (and the corresponding regression line) of emissions vs revenue separately for two groups of firms: those in firm size bins 1 to 6 (``Small firms") and those in firm size bin 7 (``Large firms"). The relationship between emissions and revenue becomes flatter for the group of larger firms, as well as the variance around the estimated regression line. However, when fitting a model like (\ref{eq: reg model}), we force the  $\alpha$ coefficient to be the same across all firms. This results in a $\alpha$ coefficient much larger than the one if we were to restrict our sample to large firms, and as a result, we infer significant prediction errors for this group - even as we reduce the prediction error for all other firm size bins.
+
+    \begin{figure}
+        \centering
+        \caption{Absolute Prediction Errors by Firm Size Bin and Model}
+        \includegraphics[scale = 0.85]{dec25_version/figures/abs_errors_loocv_in_models_with_and_wout_revenue.png}
+        \label{fig: abs error by firm size bin}
+        \caption*{\footnotesize \textit{Notes}: Figure plots the absolute value of the difference between observed and predicted emissions for all firm-years in the LOOCV sample. Predicted emissions are out-of-sample predictions from LOOCV based on the log-log specification of (\ref{eq: reg model}), with the proxy for fuel consumption defined as the sum of purchases from fuel importers excluding EUETS importers (as in (\ref{eq: fuel consumption excl euets importers})). Firms are classified into equally large seven bins according to their revenue. Red dots represent the absolute prediction errors from LOOCV based on the log-log specification of (\ref{eq: reg model}) where $x_{it}$ is empty. Blue does represent the absolute prediction errors from LOOCV based on the log-log specification of (\ref{eq: reg model}) where $x_{it} = \log(revenue)_{it}$. Boxplots represent the absolute errors positioned at the 10th (lower end point), 25th (lower line), median (middle thick line), 75th (upper line), and 90th (upper end point) percentiles of the distribution of absolute prediction errors within the model and firm size bin. LOOCV is applied to panel data with $\times$ year observations. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+    \end{figure}
+
+    In contrast to the nRMSE and the R$^2_{LOO}$, the MAPD and the Spearman correlation measure relative accuracy rather than absolute deviations. As such, they do not disproportionately penalize errors for large firms. Because of this, and because revenue does contain information predictive of emissions even after controlling for fuel consumption, both the MAPD and the Spearman correlation select the model with revenue as a covariate.
+
+    Ideally, we would like a model that explores the information contained in revenue and, at the same time, is flexible enough to allow for the coefficient associated with the covariate to differ across groups of firms. This is exactly what Linear Local Forests \citep{friedberg} do, which we expect to introduce in future iterations of this note. 
+
+\begin{figure}[ht!]
+    \centering
+    \caption{Emissions vs Revenue by Firm Size Bin}
+    \label{fig: emissions vs rev}
+
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/revenue_vs_emissions_small_firms.png}
+        \caption{Small firms}
+        \label{fig: emissions vs rev bins 1-19}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{dec25_version/figures/revenue_vs_emissions_large_firms.png}
+        \caption{Large firms}
+        \label{fig: emissions vs rev bin 20}
+    \end{subfigure}
+    \caption*{\footnotesize \textit{Notes}: Figure plots scatterplots of emissions vs revenue in log scale separately for small (size bins 1 to 6; Panel (A)) and large firms (size bin 7; Panel (B)). It also shows regression lines of the form $\log(emissions)_{it} = \alpha + \beta \log(revenue)_{it} + \varepsilon_{it}$ fitted for each group separately. Observations are at the firm-year level. Classification of observations into each bin is at the firm-year level, which means a given firm can be in different size bins across different years. Data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+\end{figure}
+
+    \begin{table}[ht]
+    \centering
+
+    \caption{Out-of-sample performance from LOOCV}
+    
+    \label{tab: loocv}
+    
+    %\scalebox{0.85}{
+      \input{dec25_version/tables/loocv_results}
+    %}
+    \caption*{\footnotesize \textit{Notes}: Table reports the normalized Root Mean Squared Errors (nRMSE), Mean Absolute Percentage Deviation (MAPD), Leave-One-Out R$^2$ (R$^2_{LOO}$), and Spearman correlation ($\rho_S$) for the LOOCV applied to each of the specifications listed in the column \textbf{Covariates}. All regression models follow the specification in \ref{eq: reg model}, but differ in terms of whether $emissions_{it}$ and $fuel\_consumption_{it}$ enter in levels (row 1) or logs (rows 2 to 5); whether $x_{it}$ is empty (rows 1 to 3) or includes $\log(revenue)_{it}$ (rows 4 and 5), and whether it uses the fuel consumption proxy that sums all purchases from fuel importers (rows 1, 2, and 4) or the fuel consumption proxy that excludes purchases from fuel importers regulated by the EUETS (rows 3 and 5). Across all models, data is an unbalanced panel of EUETS-regulated Belgian firms between 2005 and 2022. It excludes firms for which NACE sectors are singletons within the sample. It only includes firm-years for which emissions are positive.}
+    
+    \end{table}
+
+    \input{dec25_version/tables/algorithm_loocv}
+
+    \begin{landscape}
+    \begin{table}[ht]
+    \centering
+    \caption{Descriptive Statistics for EUETS-regulated firms in 2018}
+    \scalebox{0.85}{
+      \input{dec25_version/tables/descriptive_stats_training_data}
+    }
+    \caption*{\footnotesize \textit{Notes}: Table reports descriptive statistics for all EUETS-regulated firms present in the data in the year 2018. Fuel importer status is a binary variable that indicates whether a firm imported any fossil fuel in 2018.}  
+    \end{table}
+    \end{landscape}
+    
+
+    % Share of EUETS firms that purchase from fuel importers > share of non-EUETS firms that purchase from fuel importers, and amount spent on fuel importers per dollar of revenue for EUETS firms is largar than amount spent on fuel importers per dollar of revenue for non-EUETS firms.
+
+    \begin{figure}
+        \centering
+        \caption{Fuel Consumption by EUETS Status}
+        \includegraphics[scale=0.7]{dec25_version/figures/fuel_consumption_by_euets_status.png}
+        \label{fig: fuel consumption by EUETS status}
+        \caption*{\footnotesize \textit{Notes}: Figure plots the share of firm-year observations for which the proxy of fuel consumption is positive (left panel) and the amount the proxy of fuel consumption represents as a share of firm-year total input costs (right panel) by EUETS status. Firm-year total input cost is defined as the sum of firm-year total purchases from domestic Belgian firms in B2B plus the sum of firm-year imports across all CN codes and source countries. A firm is said to be regulated by the EUETS if it is listed as such for at least one year in EUTL. Data is a selected sample from the universe of Belgian firms listed in the Annual Accounts. Our sample selection closely follows \cite{dhyne2020} and \cite{deloecker2014}. We restrict our analysis to firms in the private and non-financial sectors with positive labor costs, at least one full-time-equivalent employee, and positive output. These criteria remove from the sample firms without employees (self-employed) and foreign firms with no local economic activity in Belgium.}
+    \end{figure}
+
+    % Proxy of Fuel Consumption is positively correlated with emissions even after controlling for size (revenue). Important to include variables in logs.
+
+    % Show regression table with different specifications.
+    
+    % Show graph with scatter plot between emissions and fuel in logs and levels.
+
+    % LOO procedure. Why we prefer the specification that includes revenue.
+    
+    \section{Next Steps}
+
+    We already mentioned in Section \ref{sec: performance} our desire to estimate the relationship between emissions and revenue using methods that allow for heterogeneous coefficients across groups of firms - in particular, across firm size bins. In this section, we discuss additional ways to improve the performance of our inference procedure. We focus on strategies to i) increase the information content of our fuel consumption proxy, ii) ensure firm-level estimates are consistent with sector-level aggregates, and iii) flag non-EUETS firms which are likely to be sources of emissions. 
+
+    \noindent \textbf{Quality of the proxy.} As currently defined, the fuel consumption proxy does not differentiate between fuels. However, customs data does inform us the quantity of each fuel imported by each firm (at the level of the CN 8-digit code and by country of origin) in both nominal euros and physical amount (kg). We can use this piece of information in three ways:
+
+    \begin{itemize}
+        \item[1.] Introduce fuel-specific deflators. As of now, our fuel consumption proxy bundles together all fuels in nominal euros. The proxy would be more informative if we were able to correctly capture changes in fuel consumption over time that are only due to changes in quantities, not prices. 
+        \vspace{0.3cm}
+        \item[2.] Introduce fuel-specific emission factors. This would allow us to weight differently input purchases from fuel importers that supply different fuels.
+        \vspace{0.3cm}
+        \item[3.] Incorporate information from energy balances on which fuels are used by each sector to generate GHGs emissions. If, from energy balances, we observe that sector $X$ only consumes fuel $f$, this means purchases of a firm $x$ that belongs to sector $X$ from a fuel importer that doesn't supply fuel $f$ probably reflect purchases of goods other than fuels. In this case, the purchases from this fuel importer should not be included in the fuel consumption proxy. Taking these cases into account would likely increase the information content of our proxy. 
+    \end{itemize}
+
+    Additionally, we plan to incorporate information on fuel importers' NACE sectors. Quite possibly the main source of noise in our proxy is its inability to identify purchases from fuel importers that are indeed purchases of fossil fuels. The NACE sectors of fuel importers identify importers' main and secondary economic activities\footnote{The Annual Accounts provides only one NACE sector per firm, but the CBE provides multiple NACE sectors per establishment reflecting each establishment's main and secondary activities. We aggregate it to the level of the firm and obtain multiple NACE sectors for each firm.}. Some NACE codes are more suggestive that a given firm sells fossil fuels than others. For example, if a firm's primary activity is C19 (\textit{Manufacture of coke and refined petroleum products}) or G46.71 (\textit{Wholesale of solid, liquid and gaseous fuels and related products}), purchases from it are very likely to be fossil fuels. Alternatively, a firm associated with a D35.11 (\textit{Production of electricity}) might sell fuel, but most likely consumes it to produce electricity. 
+
+    Concretely, we plan to create three categories of fuel importers' NACE sectors: NACE codes very likely to sell fossil fuels (high prior), NACE codes that may sell fuels, but are ambiguous (medium prior), and NACE codes unlikely to sell fossil fuels (low prior/incidental). These categories will be mutually exclusive, such that by construction
+
+    \begin{align}
+        fuel\_consumption_{it} =& fuel\_consumption_{it}^{high} + \nonumber \\
+        &  fuel\_consumption_{it}^{medium} + fuel\_consumption_{it}^{low}
+    \end{align}
+
+    We will then compare the results of the LOOCV exercise when defining $fuel\_consumption_{it}$ as in (\ref{eq: fuel consumption}) with a specification where $fuel\_consumption_{it}$ only includes $fuel\_consumption_{it}^{high}$ or $fuel\_consumption_{it}^{high} + fuel\_consumption_{it}^{medium}$. 
+
+    \noindent \textbf{Ensure consistency with aggregates.} The results from the LOOCV suggest that the fuel consumption proxy captures reasonably well the \textit{ranking} of emissions between firms, although there are meaningful errors in \textit{levels}. We propose to use sector-year-level emission aggregates to discipline firm-year-level emission inference. The idea is to rescale each firm's emissions such that the sum across all firms of any given sector equals the sectoral aggregate. Formally, let $E_{s,t}$ be the observed sector-year aggregate emissions for sector $s$ in year $t$. By construction, we have
+
+    \begin{equation}
+        \sum_{i \in s} E_{it} = \sum_{i \in s \cap \text{EUETS}} E_{it} + \sum_{i \in s/\text{EUETS}} E_{it} = E_{s,t}
+    \end{equation}
+
+    For the set of firms in sector $s$ which are not part of the EUETS, denoted by $s/\text{EUETS}$, we substitute $E_{it}$ in the equation above for $\hat{E}_{it}$, the predicted emissions using our preferred model. However, when using $\hat{E}_{it}$, the right-hand-side equality in the equation above no longer holds. To fix this, we re-scale firm-level emissions according to
+
+    \begin{equation}
+        \lambda_{st} := \frac{E_{s,t}}{\sum_{i \in s \cap \text{EUETS}} E_{it} + \sum_{i \in s/\text{EUETS}} \hat{E}_{it}}
+    \end{equation}
+
+    \noindent and define $\tilde{E}_{it} := \lambda_{st} \hat{E}_{it}$ for all $i \in s/\text{EUETS}$ and $\tilde{E}_{it} := \lambda_{st} E_{it}$ for all $i \in s ]cap \text{EUETS}$. This ensures $\sum_{i \in s} \tilde{E}_{it} = E_{st}$ and preserves the cross-sectional relative magnitude of emissions:
+
+    \begin{equation}
+        \frac{\tilde{E}_{it}}{\tilde{E}_{jt}} = \frac{\hat{E}_{it}}{\hat{E}_{jt}}
+    \end{equation}
+
+    \noindent for any two firms $i,j$. 
+    
+    We expect this re-scaling to increase the accuracy of firms' emissions in levels, as well as ensure that the micro-level inference is consistent with macro-level aggregates.
+    
+    \noindent \textbf{Identifying emitters.} The proxy for fuel consumption seems to be informative of the \textit{volume} of emissions of any given firm conditional on it being a pollutant firm. Still, it might not be a good predictor of whether any given firm is an emission source. We discuss a strategy to address the latter. This would result in a two-step inference procedure: first, we would identify firms that are likely emission sources among the ones that the EUETS does not regulate; second, we would select the preferred model from the LOOCV exercise and use it to predict the volume of emissions for the firms flagged in the first step.
+
+    We propose to categorize non-EUETS firms into emitter/non-emitter according to a threshold on the volume of our proxy for fossil fuel purchases. We will consider different thresholds and different versions of the proxy. For each threshold $\tau$ and version $P_{it}$, we will classify firms into emitters if $P_{it} \geq \tau$ and non-emitters otherwise. To assess the quality of the procedure, we will use data on firms we know are emitters/non-emitters and compute for each pair $(\tau, P_{it})$ the True Positive Rate (TPR) and False Positive Rate (FPR):
+    
+    \begin{align}
+    \text{TPR} &:= \mathbb{P}(\text{emitter}_{it}| P_{it} \geq \tau) \\
+    \text{FPR} &:= \mathbb{P}(\text{non-emitter}_{it}| P_{it} \geq \tau) 
+    \end{align}
+
+    We will choose the pair ($\tau, P_{it}$) that maximizes TPR and minimizes FPR. 
+    
+    We will consider the following versions of the proxy:
+    \begin{itemize}
+        \item[1.] Absolute fuel purchases (in logs)
+        \vspace{0.3cm}
+        \item[2.] Fuel purchases normalized by firm size
+        \vspace{0.3cm}
+        \item[3.] Percentile rank of fuel purchases within (NACE $\times$ year)
+    \end{itemize}
+
+    The training sample will include EUETS firms, which we know are emitters, and non-EUETS that fall into one of two categories: firms that belong to sectors for which aggregate emissions are zero and non-EUETS firms that belong to sectors for which EUETS emissions coverage is 100\%. Any firm in one of these two categories is certainly a non-emitter.
+
+    \begin{table}
+        \centering
+
+        \caption{Share of Emissions Regulated by EUETS, by Category and Year}
+        
+        \label{tab: share emissions covered}
+        
+        \scalebox{0.85}{
+          \input{dec25_version/tables/emissions_by_crf_agg_and_euets}
+        }
+    \caption*{\footnotesize \textit{Notes}: Table reports the share of GHG emissions covered by the EUETS by year by CRF category for selected categories. Data is directly obtained from Annexx XII of Belgium's National Inventories.}
+    \end{table}
+
+    \input{dec25_version/tables/cn8_fossil_fuel_codes}
+
+    \bibliographystyle{apalike} 
+    \bibliography{refs}
+
+\end{document}

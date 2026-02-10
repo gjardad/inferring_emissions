@@ -1,0 +1,194 @@
+\documentclass[12pt]{article}
+
+\usepackage[margin=0.75in]{geometry}
+
+\usepackage{comment}
+\usepackage{mathpazo}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{natbib}
+\bibliographystyle{apalike}
+
+\usepackage{fancyhdr}
+
+\usepackage{amsmath}
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\newtheorem{corollary}{Corollary}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+
+\usepackage{hyperref}
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{}
+\lhead{Gabriel Jardanovski}
+\rfoot{\thepage}
+
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor={blue},
+    citecolor={blue},
+    }
+
+\title{\textbf{Carbon Policy in a Networked Economy}}
+\date{}
+
+\begin{document}
+    %\maketitle
+    \sloppy
+    \thispagestyle{fancy}
+
+    \section*{EUETS vs Aggregate Emissions}
+
+    This documents investigates what's going on with EUETS emissions over time by sector, and how it compares with aggregate emissions over time by sector.
+
+    Aggregate emissions in sector $s$, year $t$ is calculated according to the following expression:
+
+    $$ z_{s,t} = \sum_{c(s)} \sum_f \frac{q_{s,t,f}}{\sum_{r \in c(s)} q_{r,t,f}} \times z_{c(s),f,t} + \sum_{i(s)} \frac{VA_{s,t}}{\sum_{r \in i(s)} VA_{r,t}} \times z_{i(s),t}$$
+    where $z$ denotes emissions, $f$ denotes fossil fuels (coal, petroleum, etc), $q_{s,t,f}$ denotes the quantity consumed of fuel $f$ by sector $s$ in year $t$, $VA_{s,t}$ denotes the value-added of sector $s$ in year $t$, $c(s)$ denotes the energy categories in the National Inventory which sector $s$ is mapped to, and $i(s)$ denotes the industrial process categories in the national inventory to which sector $s$ is mapped to. The emissions $z_{c(s),t}$ and $z_{i(s),t}$ are directly obtained from national inventories.
+
+    On the other hand, EUETS emissions by sector is equal to the sum across installations that belong to a particular sector, by year. Installations are assigned to a sector according to a NACE matching table, prepared for the first round of the CBAM quantitative assessment\footnote{The matching data is available \href{https://climate.ec.europa.eu/news-your-voice/events/stakeholder-meeting-results-preliminary-carbon-leakage-list-phase-4-eu-emissions-trading-system-2018-05-25_en}{here} under "Publication of the carbon leakage indicator and underlying data".}.
+
+    For some sectors, the Annex XII to the National GHG Inventories of 2024 and 2025 report the coverage ratio of EUETS emissions. The National Inventory of 2024 reports the coverage ratio for the year 2022, and the National Inventory of 2025 reports the coverage ratio for the year 2023. I add the information for the year 2022 for the subset of sectors for which this information is available.
+
+    Each of the plot that follows depicts the evolution of aggregate and EUETS emissions over time for a particular sector.
+
+    \subsection*{Take-aways}
+
+    \begin{itemize}
+        \item[1.] For most sectors, aggregate emissions is above EUETS emissions across the entire time period.
+        
+        \item[2.] For sectors C17 (Figure \ref{sector C17}) and C19 (Figure \ref{sector C19}) EUETS emissions are above aggregate emissions. Aggregate emissions in C17 is a share of aggregate emissions in the combined sector C17-C18 (Figure \ref{sector C17-C18}). Even if considering the sum of C17 and C18, EUETS emissions are above the aggregate. 
+        
+        \item[3.] For sector D35 (Figure \ref{sector D35}), EUETS emissions are below the aggregate. However, the ratio is below what Annex XII suggests it to be (it hovers around 0.8 since 2013, whereas Annex XII suggests it to be 0.85). It is possible that due to CHP units, part of the emissions from power plants in sectors C17 and C19 is attributed to the electricity sector in Annex XII. This would be consistent with facts 2. and 3., although quantitatively it cannot fully explain the gap documented in fact 2. 
+
+        \item[4.] In sectors C20-C21 (Chemicals; Figure \ref{sector C20-C21})and C24-C25 (Iron \& Steel; Figure \ref{sector C24-C25}), EUETS emissions go down sharply after 2020, and so does the ratio.
+
+        \item[5.] The share of \textit{stationary} emissions covered by the EUETS, after summing all sectors, is somewhat consistent over time (Figure \ref{total emissions}) and it hovers around 70\% before 2012 and 75\% since then. The big drop after 2020 is fully attributable to the drop in sectors C20 and C24, discussed in fact 4.   
+    \end{itemize}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_B.png}
+        \label{sector B}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C10-C12.png}
+        \label{sector C10-C12}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C13-C15.png}
+        \label{sector C13-C15}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C16.png}
+        \label{sector C16}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C17-C18.png}
+        \label{sector C17-C18}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C17.png}
+        \label{sector C17}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C19.png}
+        \label{sector C19}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C20-C21.png}
+        \label{sector C20-C21}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C20.png}
+        \label{sector C20}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C21.png}
+        \label{sector C21}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C22.png}
+        \label{sector C22}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C23.png}
+        \label{sector C23}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C24-C25.png}
+        \label{sector C24-C25}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C24.png}
+        \label{sector C25}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C27.png}
+        \label{sector C27}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C28.png}
+        \label{sector C28}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C29.png}
+        \label{sector C29}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_C30.png}
+        \label{sector C30}
+    \end{figure}
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_vs_agg_sector_D35.png}
+        \label{sector D35}
+    \end{figure}   
+
+    \begin{figure}
+        \caption{}
+        \includegraphics[scale=0.8]{comparison_agg_euets_by_sector/euets_coverage_on_aggregate.png}
+        \label{total emissions}
+    \end{figure}  
+
+\end{document}
