@@ -1,32 +1,22 @@
-# 00_config/paths.R
-
-# -----------------------
-# User-specific root
-# -----------------------
 if (tolower(Sys.info()[["user"]]) == "jardang") {
-  BASE_DIR <- "X:/Documents/JARDANG"
+  DATA_DIR <- "X:/Documents/JARDANG/data"
+  REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
+} else if (tolower(Sys.info()[["user"]]) == "jota_"){
+  DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
+  REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
 } else {
-  stop("Define BASE_DIR for this user.")
+  stop("Define 'folder' for this user.")
 }
 
-# -----------------------
-# Project roots
-# -----------------------
-PROJECT_DIR <- file.path(BASE_DIR, "carbon_policy_networks")
+PROC_DATA <- file.path(DATA_DIR, "processed")
+RAW_DATA <- file.path(DATA_DIR, "raw")
+INT_DATA <- file.path(DATA_DIR, "intermediate")
 
-DATA_RAW  <- file.path(PROJECT_DIR, "data", "raw")
-DATA_INT  <- file.path(PROJECT_DIR, "data", "intermediate")
-DATA_PROC <- file.path(PROJECT_DIR, "data", "processed")
-OUTPUT    <- file.path(PROJECT_DIR, "output")
+UTILS_DIR <- file.path(REPO_DIR, "utils")
+LOOCV_DIR <- file.path(REPO_DIR, "loocv")
 
-CODE_DIR  <- file.path(PROJECT_DIR, "code")
-LOOCV_ROOT <- file.path(CODE_DIR, "inferring_emissions")
-
-# -----------------------
-# Pipeline-specific paths
-# -----------------------
-PROXY_CACHE_DIR <- file.path(LOOCV_ROOT, "02_proxies", "cache")
-LOOCV_RESULTS   <- file.path(LOOCV_ROOT, "04_loocv", "results")
-FIG_DIR         <- file.path(LOOCV_ROOT, "05_analysis", "figures")
-
-CACHE_DIR <- PROXY_CACHE_DIR   # if older code uses CACHE_DIR
+source_try <- function(dir, fname_no_ext) {
+  f <- file.path(dir, paste0(fname_no_ext, ".R"))
+  if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
+  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
+}
