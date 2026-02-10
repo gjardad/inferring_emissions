@@ -1,38 +1,3 @@
-# ============== BEGIN SETTING UP PATHS ============= #
-suppressPackageStartupMessages({
-  library(data.table)
-})
-
-# ========================
-# Define data paths ------
-# =========================
-
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  DATA_DIR <- "X:/Documents/JARDANG/data"
-} else {
-  stop("Define 'folder' for this user.")
-}
-
-PROC_DATA <- file.path(DATA_DIR, "data", "processed")
-RAW_DATA <- file.path(DATA_DIR, "data", "raw")
-INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
-
-# ===========================
-# Define paths for code -----
-# ===========================
-
-source_try <- function(dir, fname_no_ext) {
-  f <- file.path(dir, paste0(fname_no_ext, ".R"))
-  if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
-  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
-}
-
-repo_dir <- paste0(getwd(), "/inferring_emissions")
-utils_dir <- file.path(repo_dir, "utils")
-loocv_dir <- file.path(repo_dir, "loocv")
-
-#================== END SETTING UP PATHS ================ #
-
 ###############################################################################
 # execution.R
 #
@@ -46,11 +11,40 @@ loocv_dir <- file.path(repo_dir, "loocv")
 #        and selects the best triple by RMSE
 ###############################################################################
 
+# ====================
+# Define paths ------------------
+# ====================
+
+if (tolower(Sys.info()[["user"]]) == "jardang") {
+  DATA_DIR <- "X:/Documents/JARDANG/data"
+  REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
+} else if (tolower(Sys.info()[["user"]]) == "jota_"){
+  DATA_DIR <- "C:/Users/jota_/Documents/NBB_projects/data"
+  REPO_DIR <- "C:/Users/jota_/Documents/NBB_projects/inferring_emissions"
+} else {
+  stop("Define 'folder' for this user.")
+}
+
+PROC_DATA <- file.path(DATA_DIR, "data", "processed")
+RAW_DATA <- file.path(DATA_DIR, "data", "raw")
+INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
+
+UTILS_DIR <- file.path(REPO_DIR, "utils")
+LOOCV_DIR <- file.path(REPO_DIR, "loocv")
+
+source_try <- function(dir, fname_no_ext) {
+  f <- file.path(dir, paste0(fname_no_ext, ".R"))
+  if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
+  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
+}
+
+
+
 # -----------------------
 # Paths + outputs
 # -----------------------
 output_dir <- file.path(DATA_DIR, "output")
-proxy_cache_dir <- file.path(repo_dir, "proxies", "cache")
+proxy_cache_dir <- file.path(REPO_DIR, "proxies", "cache")
 metrics_path_rds <- file.path(output_dir, "model_performance_metrics.rds")
 metrics_path_csv <- file.path(output_dir, "model_performance_metrics.csv")
 
@@ -59,16 +53,16 @@ if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 # -----------------------
 # Source auxiliary code
 # -----------------------
-source_try(utils_dir, "calc_metrics")
-source_try(utils_dir, "build_metrics_table")
-source_try(utils_dir, "append_loocv_performance_metrics_log")
-source_try(utils_dir, "step1_metrics_threshold")
+source_try(UTILS_DIR, "calc_metrics")
+source_try(UTILS_DIR, "build_metrics_table")
+source_try(UTILS_DIR, "append_loocv_performance_metrics_log")
+source_try(UTILS_DIR, "step1_metrics_threshold")
 
-source_try(loocv_dir, "ppml")
-source_try(loocv_dir, "hurdle_fast_prep_base_DT")
-source_try(loocv_dir, "hurdle_fast_step1_ext")
-source_try(loocv_dir, "hurdle_fast_step2_int")
-source_try(loocv_dir, "hurdle_fast_evaluate_triples")
+source_try(LOOCV_DIR, "ppml")
+source_try(LOOCV_DIR, "hurdle_fast_prep_base_DT")
+source_try(LOOCV_DIR, "hurdle_fast_step1_ext")
+source_try(LOOCV_DIR, "hurdle_fast_step2_int")
+source_try(LOOCV_DIR, "hurdle_fast_evaluate_triples")
 
 # -----------------------
 # Load data
