@@ -44,6 +44,7 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 PROC_DATA <- file.path(DATA_DIR, "data", "processed")
 RAW_DATA <- file.path(DATA_DIR, "data", "raw")
 INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
+OUTPUT_DIR <- file.path(DATA_DIR, "output")
 
 UTILS_DIR <- file.path(REPO_DIR, "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "loocv")
@@ -55,29 +56,14 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
-rm(list = ls())
-
 # ===============
 # User paths ----
 # ===============
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  folder <- "X:/Documents/JARDANG"
-} else {
-  stop("Define 'folder' for this user.")
-}
 
-proc_data <- file.path(folder, "carbon_policy_networks", "data", "processed")
-output   <- file.path(folder, "carbon_policy_networks", "output")
-
-code <- file.path(folder, "carbon_policy_networks", "code")
-root  <- file.path(code, "inferring_emissions")
-utils <- file.path(root, "utils")
-loocv <- file.path(root, "loocv")
 
 # IMPORTANT: set this to where your proxy_*.rds actually live
 # In your newer structure this is usually root/02_proxies/cache
-cache_dir <- file.path(root, "proxies", "cache")
+cache_dir <- file.path(REPO_DIR, "proxies", "cache")
 
 # ===============
 # Config --------
@@ -110,15 +96,15 @@ suppressPackageStartupMessages({
 # ===============
 # Helpers -------
 # ===============
-source(file.path(utils, "calc_metrics.R"))
-source(file.path(utils, "build_metrics_table.R"))
-source(file.path(utils, "append_loocv_performance_metrics_log.R"))
-source(file.path(loocv, "ppml.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "build_metrics_table.R"))
+source(file.path(UTILS_DIR, "append_loocv_performance_metrics_log.R"))
+source(file.path(LOOCV_DIR, "ppml.R"))
 
 # ===============
 # Load data -----
 # ===============
-load(file.path(proc_data, "loocv_training_sample.RData"))
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 df_full <- loocv_training_sample
 
 sector_year_totals_full <- as.data.table(df_full)[
@@ -132,7 +118,7 @@ syt_run <- sector_year_totals_full
 sample_tag <- "all"
 
 if (isTRUE(TEST_MODE)) {
-  source(file.path(utils, "make_lofo_subsample.R"))
+  source(file.path(UTILS_DIR, "make_lofo_subsample.R"))
 
   # NOTE ON NUMERICAL STABILITY (LOFOCV + PARTIAL POOLING):
   # With very aggressive downsampling (≈10%), some LOFO folds leave too little
@@ -234,8 +220,8 @@ metrics_tbl_proxy <- rbindlist(metrics_list, fill = TRUE)
 # ===============
 # Append log ----
 # ===============
-metrics_path_rds <- file.path(output, "model_performance_metrics.rds")
-metrics_path_csv <- file.path(output, "model_performance_metrics.csv")
+metrics_path_rds <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
+metrics_path_csv <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 
 metrics_all <- append_metrics_log(
   metrics_tbl_proxy,

@@ -53,26 +53,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # ------------
 # Set up -----
 # ------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tibble)
 
@@ -83,7 +67,7 @@ library(tibble)
 ## Exchange rate -----
 
 library(xml2)
-xml <- read_xml(paste0(raw_data, "/ecb_usd_eur.xml"))
+xml <- read_xml(paste0(RAW_DATA, "/ecb_usd_eur.xml"))
 
 obs_nodes <- xml_find_all(xml, ".//*[local-name()='Obs']")
 
@@ -139,4 +123,4 @@ gas_price <- gas_price %>%
   mutate(eur_per_mmbtu = price_usd_per_mmbtu*eur_per_usd)
 
 # save it
-save(gas_price, file = paste0(proc_data,"/gas_price.RData"))
+save(gas_price, file = paste0(PROC_DATA,"/gas_price.RData"))

@@ -38,7 +38,6 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -----------------------
 # 0) Small logger
 # -----------------------
@@ -54,14 +53,9 @@ log_step <- function(msg) {
 # -----------------------
 # 1) Paths
 # -----------------------
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  folder <- "X:/Documents/JARDANG"
-} else {
-  stop("Define 'folder' for this user.")
-}
 
 PROJECT_DIR <- file.path(folder, "carbon_policy_networks")
-proc_data   <- file.path(PROJECT_DIR, "data", "processed")
+PROC_DATA   <- file.path(PROJECT_DIR, "data", "processed")
 output_dir  <- file.path(PROJECT_DIR, "output")
 
 code_root <- file.path(PROJECT_DIR, "code", "inferring_emissions")
@@ -165,7 +159,7 @@ source_try(LOOCV_DIR, "hurdle_fast_evaluate_pair")
 # 7) Load data once + build sector-year totals once
 # -----------------------
 log_step("Loading LOOCV training sample...")
-load(file.path(proc_data, "loocv_training_sample.RData"))
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 df_full <- as.data.table(loocv_training_sample)
 
 sector_year_totals_full <- df_full[

@@ -44,26 +44,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # --------------
 ## Set up ------
 # --------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(dplyr)
@@ -72,7 +56,7 @@ library(dplyr)
 # Load data --
 # ------------
 
-load(paste0(proc_data,"/annual_accounts_selected_sample.RData"))
+load(paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
 
 # -----------------------
 # Select key variables --
@@ -84,7 +68,6 @@ df_annual_accounts_selected_sample_key_variables <- df_annual_accounts_selected_
          fte = v_0001003, wage_bill = v_0001023, value_added = v_0009800)
 
 # save it
-save(df_annual_accounts_selected_sample_key_variables, file = paste0(proc_data,"/annual_accounts_selected_sample_key_variables.RData"))
-
+save(df_annual_accounts_selected_sample_key_variables, file = paste0(PROC_DATA,"/annual_accounts_selected_sample_key_variables.RData"))
 
 

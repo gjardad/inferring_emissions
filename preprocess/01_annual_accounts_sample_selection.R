@@ -52,23 +52,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 ## Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -77,7 +62,7 @@ library(dplyr)
 
 # Import data ----
 
-load(paste0(proc_data,"/df_national_accounts_with_5digits.RData"))
+load(paste0(PROC_DATA,"/df_national_accounts_with_5digits.RData"))
 
 # Clean data ----
 
@@ -135,9 +120,9 @@ firms_in_more_selected_sample <- more_selected_sample %>%
   
 # save it ----
 df_annual_accounts_selected_sample <- selected_sample
-save(df_annual_accounts_selected_sample, file = paste0(proc_data,"/annual_accounts_selected_sample.RData"))
+save(df_annual_accounts_selected_sample, file = paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
 
-save(firms_in_selected_sample, file = paste0(proc_data,"/firms_in_selected_sample.RData"))
+save(firms_in_selected_sample, file = paste0(PROC_DATA,"/firms_in_selected_sample.RData"))
   
 df_annual_accounts_more_selected_sample <- more_selected_sample
-save(df_annual_accounts_more_selected_sample, file = paste0(proc_data,"/annual_accounts_more_selected_sample.RData"))  
+save(df_annual_accounts_more_selected_sample, file = paste0(PROC_DATA,"/annual_accounts_more_selected_sample.RData"))  

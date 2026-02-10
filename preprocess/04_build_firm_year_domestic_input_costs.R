@@ -42,24 +42,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -67,7 +51,7 @@ library(tidyverse)
 library(dplyr) # even though dplyr is included in tidyverse, still need to load it separately
 
 # Import data ------
-load(paste0(proc_data, "/b2b_selected_sample.RData"))
+load(paste0(PROC_DATA, "/b2b_selected_sample.RData"))
 df_b2b <- df_b2b_selected_sample
 
 # Clean data ------
@@ -78,5 +62,5 @@ firm_year_domestic_input_cost <- df_b2b %>%
   rename(vat = vat_j_ano)
 
 # Save it -----
-save(firm_year_domestic_input_cost, file = paste0(proc_data,"/firm_year_domestic_input_cost.RData"))  
+save(firm_year_domestic_input_cost, file = paste0(PROC_DATA,"/firm_year_domestic_input_cost.RData"))  
 

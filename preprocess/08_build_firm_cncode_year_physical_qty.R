@@ -51,26 +51,10 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # -------------
 ## Setup ------
 # -------------
 
-rm(list = ls())
-
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 library(tidyverse)
 library(tidyr)
@@ -80,7 +64,7 @@ library(dplyr)
 #  Load data ---------
 # --------------------
 
-load(paste0(proc_data,"/fuel_imported_by_firm_year.RData"))
+load(paste0(PROC_DATA,"/fuel_imported_by_firm_year.RData"))
 
 # ---------------------------------------------
 # CN-year physical qty using customs data -------
@@ -215,9 +199,9 @@ fuel_qty <- fuel_qty %>%
   )
 
 # Load price data
-load(paste0(proc_data,"/coal_price.RData"))  # has: year, eur_per_ton
-load(paste0(proc_data,"/gas_price.RData"))   # has: year, eur_per_mmbtu
-load(paste0(proc_data,"/oil_price.RData"))   # has: year, eur_per_bbl
+load(paste0(PROC_DATA,"/coal_price.RData"))  # has: year, eur_per_ton
+load(paste0(PROC_DATA,"/gas_price.RData"))   # has: year, eur_per_mmbtu
+load(paste0(PROC_DATA,"/oil_price.RData"))   # has: year, eur_per_bbl
 
 # --- Standardize price series names/units (using known column names) ---
 coal_price_std <- coal_price %>%
@@ -295,7 +279,7 @@ fuel_qty <- fuel_qty %>%
   ungroup()
 
 # save it
-save(fuel_qty, file = paste0(proc_data, "/firm_cncode_year_physical_qty.RData"))
+save(fuel_qty, file = paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
 # ==================================================================
 # Diagnosing missing quantities ------------------------------------

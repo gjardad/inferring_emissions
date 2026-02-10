@@ -29,12 +29,4 @@ PROXY_CACHE_DIR <- file.path(LOOCV_ROOT, "02_proxies", "cache")
 LOOCV_RESULTS   <- file.path(LOOCV_ROOT, "04_loocv", "results")
 FIG_DIR         <- file.path(LOOCV_ROOT, "05_analysis", "figures")
 
-# -----------------------
-# Backwards-compatible aliases (old scripts expect these)
-# -----------------------
-raw_data  <- DATA_RAW
-int_data  <- DATA_INT
-proc_data <- DATA_PROC
-out_data  <- OUTPUT
-
 CACHE_DIR <- PROXY_CACHE_DIR   # if older code uses CACHE_DIR

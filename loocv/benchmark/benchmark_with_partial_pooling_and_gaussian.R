@@ -27,22 +27,6 @@
 #   baseline that applies the intensive model to everyone (i.e., p=1).
 ###############################################################################
 
-rm(list = ls())
-
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  folder <- "X:/Documents/JARDANG"
-} else {
-  stop("Define folder for this user.")
-}
-
-raw_data  <- file.path(folder, "carbon_policy_networks", "data", "raw")
-int_data  <- file.path(folder, "carbon_policy_networks", "data", "intermediate")
-proc_data <- file.path(folder, "carbon_policy_networks", "data", "processed")
-output    <- file.path(folder, "carbon_policy_networks", "output")
-code      <- file.path(folder, "carbon_policy_networks", "code")
-root      <- file.path(code, "inferring_emissions")
-utils     <- file.path(root, "06_utils")
-loocv     <- file.path(root, "04_loocv")
 
 suppressPackageStartupMessages({
   library(data.table)
@@ -50,9 +34,9 @@ suppressPackageStartupMessages({
 })
 
 # Helpers (you already have these in your system)
-source(file.path(loocv, "calc_metrics.R"))
-source(file.path(loocv, "build_metrics_table.R"))
-source(file.path(loocv, "append_loocv_performance_metrics_log.R"))
+source(file.path(LOOCV_DIR, "calc_metrics.R"))
+source(file.path(LOOCV_DIR, "build_metrics_table.R"))
+source(file.path(LOOCV_DIR, "append_loocv_performance_metrics_log.R"))
 
 # ============================================================
 # LOFOCV: log-Gaussian (emitters only) + sector RE + calibration
@@ -255,7 +239,7 @@ logGaussianPP_lofo_fullcal <- function(df,
 # Run benchmark on your LOOCV training sample
 # ============================================================
 
-load(file.path(proc_data, "loocv_training_sample.RData"))
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 df <- loocv_training_sample
 
 sector_year_totals <- as.data.table(df)[
@@ -289,8 +273,8 @@ metrics_tbl <- build_metrics_table(
   n_firms_est     = data.table::uniqueN(df$vat)
 )
 
-metrics_path_rds <- file.path(output, "model_performance_metrics.rds")
-metrics_path_csv <- file.path(output, "model_performance_metrics.csv")
+metrics_path_rds <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
+metrics_path_csv <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 
 metrics_all <- append_metrics_log(
   metrics_tbl,

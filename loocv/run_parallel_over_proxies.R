@@ -59,6 +59,7 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 PROC_DATA <- file.path(DATA_DIR, "data", "processed")
 RAW_DATA <- file.path(DATA_DIR, "data", "raw")
 INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
+OUTPUT_DIR <- file.path(DATA_DIR, "output")
 
 UTILS_DIR <- file.path(REPO_DIR, "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "loocv")
@@ -70,20 +71,12 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
-rm(list = ls())
-
 # =========================
 # User paths (adapt as needed)
 # =========================
-if (tolower(Sys.info()[["user"]]) == "jardang") {
-  folder <- "X:/Documents/JARDANG"
-} else {
-  stop("Define 'folder' for this user.")
-}
 
 PROJECT_DIR <- file.path(folder, "carbon_policy_networks")
-proc_data   <- file.path(PROJECT_DIR, "data", "processed")
+PROC_DATA   <- file.path(PROJECT_DIR, "data", "processed")
 output      <- file.path(PROJECT_DIR, "output")
 
 code_dir <- file.path(PROJECT_DIR, "code", "inferring_emissions")
@@ -112,8 +105,8 @@ N_WORKERS <- max(1, parallel::detectCores() - 1)
 FUTURE_PLAN <- "multisession" # Windows-safe. Use "multicore" on Linux/Mac.
 
 # Metrics log output
-metrics_path_rds <- file.path(output, "model_performance_metrics.rds")
-metrics_path_csv <- file.path(output, "model_performance_metrics.csv")
+metrics_path_rds <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
+metrics_path_csv <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 
 # =========================
 # Packages
@@ -127,14 +120,14 @@ suppressPackageStartupMessages({
 # =========================
 # Sources (must be available to workers)
 # =========================
-source(file.path(utils, "calc_metrics.R"))
-source(file.path(utils, "build_metrics_table.R"))
-source(file.path(utils, "append_loocv_performance_metrics_log.R"))
-source(file.path(loocv, "run_one_proxy.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "build_metrics_table.R"))
+source(file.path(UTILS_DIR, "append_loocv_performance_metrics_log.R"))
+source(file.path(LOOCV_DIR, "run_one_proxy.R"))
 
 # Model implementations (example: your existing PPML code)
 # Adjust the path/filename to match your repo.
-source(file.path(loocv, "ppml.R"))
+source(file.path(LOOCV_DIR, "ppml.R"))
 
 # Later you’ll add:
 # source(file.path(loocv, "hurdle.R"))
@@ -142,7 +135,7 @@ source(file.path(loocv, "ppml.R"))
 # =========================
 # Load data
 # =========================
-load(file.path(proc_data, "loocv_training_sample.RData"))
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 df_full <- as.data.table(loocv_training_sample)
 
 # Build auxiliary sector-year totals once
@@ -157,7 +150,7 @@ sample_tag <- "all"
 
 # Optional test subsample
 if (isTRUE(TEST_MODE)) {
-  source(file.path(utils, "make_lofo_subsample.R"))
+  source(file.path(UTILS_DIR, "make_lofo_subsample.R"))
   sub <- make_lofo_subsample(df = df_full, frac = TEST_FRAC, seed = TEST_SEED)
   df_run  <- as.data.table(sub$df_sub)
   syt_run <- as.data.table(sub$sector_year_totals)

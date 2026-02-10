@@ -57,11 +57,8 @@ if (!exists("LOOCV_ROOT")) {
 cache_dir <- if (exists("LOOCV_ROOT")) file.path(LOOCV_ROOT, "02_proxies", "cache") else "02_proxies/cache"
 
 # default path to saved loocv training sample (adjust if you save elsewhere)
-# many of your scripts save loocv_training_sample to proc_data. If you have proc_data
-# in your environment after sourcing your paths, this will pick it up.
 loocv_rdata_candidates <- c(
-  # if proc_data variable exists (as in your 06_build_loocv_training_sample.R)
-  if (exists("proc_data")) file.path(proc_data, "loocv_training_sample.RData") else NULL,
+  if (exists("PROC_DATA")) file.path(PROC_DATA, "loocv_training_sample.RData") else NULL,
   file.path("01_preprocess", "loocv_training_sample.RData"),
   file.path("data", "processed", "loocv_training_sample.RData")
 )
@@ -69,7 +66,7 @@ loocv_rdata_candidates <- loocv_rdata_candidates[file.exists(loocv_rdata_candida
 
 if (length(loocv_rdata_candidates) == 0 && !exists("loocv_training_sample")) {
   stop("Could not find loocv_training_sample.RData. Either load loocv_training_sample in the R session or place the file in one of the candidate locations and re-run.\nCandidate locations: ",
-       paste(c("proc_data/... (if proc_data exists)", "01_preprocess/loocv_training_sample.RData", "data/processed/loocv_training_sample.RData"), collapse = "; "))
+       paste(c("PROC_DATA/... (if PROC_DATA exists)", "01_preprocess/loocv_training_sample.RData", "data/processed/loocv_training_sample.RData"), collapse = "; "))
 }
 
 # load loocv_training_sample if not in env already

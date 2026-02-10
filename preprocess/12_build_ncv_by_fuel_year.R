@@ -48,23 +48,8 @@ source_try <- function(dir, fname_no_ext) {
 }
 
 
-
 # Setup ------
-rm(list = ls())
 
-if(tolower(Sys.info()[["user"]]) == "jardang"){
-  folder <- "X:/Documents/JARDANG" 
-}
-
-raw_data <- paste0(folder, "/carbon_policy_networks/data/raw")
-
-int_data <- paste0(folder, "/carbon_policy_networks/data/intermediate")
-
-proc_data <- paste0(folder, "/carbon_policy_networks/data/processed")
-
-output <- paste0(folder, "/carbon_policy_networks/output")
-
-code <- paste0(folder, "/carbon_policy_networks/code")
 
 # Libraries ----
 
@@ -73,7 +58,7 @@ library(dplyr)
 
 # Import and clean data --------
 
-ncv_by_fuel_siec_year <- read_csv(paste0(raw_data, "/Eurostat/ncv_by_fuel_year.csv")) %>%
+ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.csv")) %>%
   select(calval, unit, siec, TIME_PERIOD, OBS_VALUE) %>% 
   rename(ncv_type = calval, year = TIME_PERIOD, value = OBS_VALUE) %>%
   tidyr::separate(
@@ -91,7 +76,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(raw_data, "/Eurostat/ncv_by_fuel_year.c
   ) %>%
   select(ncv_type, unit, siec_fullcode, siec_name, siec_code, year, value)
   
-  load(paste0(proc_data, "/hs_to_siec_map.RData"))
+  load(paste0(PROC_DATA, "/hs_to_siec_map.RData"))
 
 # Impute data from IRES -----------
 
@@ -277,6 +262,6 @@ ncv_by_fuel_siec_year <- read_csv(paste0(raw_data, "/Eurostat/ncv_by_fuel_year.c
     rename(ncv_value = value, ncv_unit = unit)
 
 # Save it ------
-save(ncv_by_fuel_siec_year, file = paste0(proc_data,"/ncv_by_fuel_siec_year.RData"))
-save(ncv_by_fuel_hs_year, file = paste0(proc_data,"/ncv_by_fuel_hs_year.RData"))
+save(ncv_by_fuel_siec_year, file = paste0(PROC_DATA,"/ncv_by_fuel_siec_year.RData"))
+save(ncv_by_fuel_hs_year, file = paste0(PROC_DATA,"/ncv_by_fuel_hs_year.RData"))
   
