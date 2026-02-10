@@ -85,6 +85,14 @@ The pipeline precomputes step 1 and step 2 independently for every proxy,
 then evaluates only the top-K (proxy_ext, threshold) pairs × top-K proxy_int
 combinations to find the best triple by RMSE.
 
+## Work environment
+This project is developed across two desktops (never simultaneously):
+- **Remote desktop (RMD)**: user `jardang` — paths start with `X:/Documents/JARDANG/...`
+- **Local desktop**: user `jota_` — paths start with `C:/Users/jota_/...`
+
+When running data analysis or scripts, the user will specify which desktop they
+are working from so that the correct paths are used.
+
 ## Conventions
 - Preprocessing scripts are numbered to indicate execution order
 - Descriptive scripts are also numbered
