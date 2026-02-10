@@ -16,18 +16,16 @@
 #   output_dir      : directory to write outputs
 ###############################################################################
 
-
-# ============== BEGIN SETTING UP PATHS ============= #
-suppressPackageStartupMessages({
-  library(data.table)
-})
-
-# ========================
-# Define data paths ------
-# =========================
+# ====================
+# Define paths ------------------
+# ====================
 
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   DATA_DIR <- "X:/Documents/JARDANG/data"
+  REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
+} else if (tolower(Sys.info()[["user"]]) == "jota_"){
+  DATA_DIR <- "C:/Users/jota_/Documents/NBB_projects/data"
+  REPO_DIR <- "C:/Users/jota_/Documents/NBB_projects/inferring_emissions"
 } else {
   stop("Define 'folder' for this user.")
 }
@@ -36,9 +34,8 @@ PROC_DATA <- file.path(DATA_DIR, "data", "processed")
 RAW_DATA <- file.path(DATA_DIR, "data", "raw")
 INT_DATA <- file.path(DATA_DIR, "data", "intermediate")
 
-# ===========================
-# Define paths for code -----
-# ===========================
+UTILS_DIR <- file.path(REPO_DIR, "utils")
+LOOCV_DIR <- file.path(REPO_DIR, "loocv")
 
 source_try <- function(dir, fname_no_ext) {
   f <- file.path(dir, paste0(fname_no_ext, ".R"))
@@ -46,18 +43,16 @@ source_try <- function(dir, fname_no_ext) {
   source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
 }
 
-repo_dir <- paste0(getwd(), "/inferring_emissions")
-utils_dir <- file.path(repo_dir, "utils")
-loocv_dir <- file.path(repo_dir, "loocv")
 
-#================== END SETTING UP PATHS ================ #
 
-source_try(utils_dir, "calc_metrics")
-source_try(utils_dir, "step1_metrics_threshold")
-source_try(loocv_dir, "hurdle_fast_prep_base_DT")
-source_try(loocv_dir, "hurdle_fast_step1_ext")
-source_try(loocv_dir, "hurdle_fast_step2_int")
-source_try(loocv_dir, "hurdle_fast_evaluate_triples")
+
+
+source_try(UTILS_DIR, "calc_metrics")
+source_try(UTILS_DIR, "step1_metrics_threshold")
+source_try(LOOCV_DIR, "hurdle_fast_prep_base_DT")
+source_try(LOOCV_DIR, "hurdle_fast_step1_ext")
+source_try(LOOCV_DIR, "hurdle_fast_step2_int")
+source_try(LOOCV_DIR, "hurdle_fast_evaluate_triples")
 
 if (!exists("df_run")) stop("df_run not found in environment")
 if (!exists("syt_run")) stop("syt_run not found in environment")
