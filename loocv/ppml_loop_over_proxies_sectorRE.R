@@ -48,22 +48,13 @@ OUTPUT_DIR <- file.path(DATA_DIR, "output")
 
 UTILS_DIR <- file.path(REPO_DIR, "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "loocv")
+CACHE_DIR <- file.path(REPO_DIR, "proxies", "cache")
 
 source_try <- function(dir, fname_no_ext) {
   f <- file.path(dir, paste0(fname_no_ext, ".R"))
   if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
   source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
 }
-
-
-# ===============
-# User paths ----
-# ===============
-
-
-# IMPORTANT: set this to where your proxy_*.rds actually live
-# In your newer structure this is usually root/02_proxies/cache
-cache_dir <- file.path(REPO_DIR, "proxies", "cache")
 
 # ===============
 # Config --------
