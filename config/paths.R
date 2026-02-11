@@ -24,5 +24,5 @@ METRICS_PATH_CSV <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 source_try <- function(dir, fname_no_ext) {
   f <- file.path(dir, paste0(fname_no_ext, ".R"))
   if (!file.exists(f)) stop("Missing file: ", normalizePath(f, winslash = "/", mustWork = FALSE))
-  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = TRUE)
+  source(normalizePath(f, winslash = "/", mustWork = TRUE), local = FALSE)
 }
