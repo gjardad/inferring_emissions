@@ -24,18 +24,6 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 }
 source(file.path(REPO_DIR, "config", "paths.R"))
 
-
-
-# -----------------------
-# Paths + outputs
-# -----------------------
-output_dir <- file.path(DATA_DIR, "output")
-proxy_cache_dir <- file.path(REPO_DIR, "proxies", "cache")
-metrics_path_rds <- file.path(output_dir, "model_performance_metrics.rds")
-metrics_path_csv <- file.path(output_dir, "model_performance_metrics.csv")
-
-if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
-
 # -----------------------
 # Source auxiliary code
 # -----------------------

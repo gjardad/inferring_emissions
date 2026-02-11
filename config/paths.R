@@ -4,9 +4,11 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
   DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
   REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
+  OUTPUT_DIR <- "C:/Users/jota_/Documents/inferring_emissions_output"
 } else {
-  stop("Define 'folder' for this user.")
+  stop("Define directories for this user.")
 }
+
 
 PROC_DATA <- file.path(DATA_DIR, "processed")
 RAW_DATA <- file.path(DATA_DIR, "raw")
@@ -14,6 +16,10 @@ INT_DATA <- file.path(DATA_DIR, "intermediate")
 
 UTILS_DIR <- file.path(REPO_DIR, "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "loocv")
+
+PROXY_CACHE_DIR <- file.path(REPO_DIR, "proxies", "cache")
+METRICS_PATH_RDS <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
+METRICS_PATH_CSV <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 
 source_try <- function(dir, fname_no_ext) {
   f <- file.path(dir, paste0(fname_no_ext, ".R"))
