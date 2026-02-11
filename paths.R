@@ -1,6 +1,7 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   DATA_DIR <- "X:/Documents/JARDANG/data"
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
+  OUTPUT_DIR <- "X:/Documents/JARDANG/inferring_emissions_output"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
   DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
   REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
