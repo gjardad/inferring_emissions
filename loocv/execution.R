@@ -12,7 +12,7 @@
 ###############################################################################
 
 # ====================
-# Define paths ------------------
+# Define paths -------
 # ====================
 
 if (tolower(Sys.info()[["user"]]) == "jardang") {
@@ -42,6 +42,7 @@ source_try(LOOCV_DIR, "hurdle_fast_evaluate_triples")
 # Load data
 # -----------------------
 load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+library(data.table)
 df_full <- as.data.table(loocv_training_sample)
 
 sector_year_totals_full <- df_full[
