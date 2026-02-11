@@ -13,10 +13,10 @@
 #     4. Random firms to pad to target
 #
 # OUTPUTS  (saved to RAW_DATA/NBB/downsampled/)
-#   Annual_Accounts_MASTER_ANO_sample.dta
-#   B2B_ANO_sample.dta
-#   import_export_ANO_sample.dta
-#   sampled_firms.rds          (the firm IDs, for reference)
+#   Annual_Accounts_MASTER_ANO.dta   (same name as original, in downsampled/ subfolder)
+#   B2B_ANO.dta
+#   import_export_ANO.dta
+#   sampled_firms.rds                (the firm IDs, for reference)
 #
 # RUN ON: RMD (jardang)
 ###############################################################################
@@ -177,7 +177,7 @@ cat("  Filtering Annual_Accounts...\n")
 aa_sample <- read_dta(file.path(RAW_NBB, "Annual_Accounts_MASTER_ANO.dta")) %>%
   filter(vat_ano %in% sampled_firms)
 cat("    Rows:", nrow(aa_sample), "\n")
-write_dta(aa_sample, file.path(OUT_DIR, "Annual_Accounts_MASTER_ANO_sample.dta"))
+write_dta(aa_sample, file.path(OUT_DIR, "Annual_Accounts_MASTER_ANO.dta"))
 rm(aa_sample)
 gc()
 
@@ -186,7 +186,7 @@ cat("  Filtering import_export...\n")
 trade_sample <- read_dta(file.path(RAW_NBB, "import_export_ANO.dta")) %>%
   filter(vat_ano %in% sampled_firms)
 cat("    Rows:", nrow(trade_sample), "\n")
-write_dta(trade_sample, file.path(OUT_DIR, "import_export_ANO_sample.dta"))
+write_dta(trade_sample, file.path(OUT_DIR, "import_export_ANO.dta"))
 rm(trade_sample)
 gc()
 
@@ -195,12 +195,12 @@ cat("  Filtering B2B...\n")
 b2b_sample <- read_dta(file.path(RAW_NBB, "B2B_ANO.dta")) %>%
   filter(vat_i_ano %in% sampled_firms | vat_j_ano %in% sampled_firms)
 cat("    Rows:", nrow(b2b_sample), "\n")
-write_dta(b2b_sample, file.path(OUT_DIR, "B2B_ANO_sample.dta"))
+write_dta(b2b_sample, file.path(OUT_DIR, "B2B_ANO.dta"))
 rm(b2b_sample)
 gc()
 
 cat("\n=== Done! Downsampled files saved to:", OUT_DIR, "===\n")
-cat("  - Annual_Accounts_MASTER_ANO_sample.dta\n")
-cat("  - B2B_ANO_sample.dta\n")
-cat("  - import_export_ANO_sample.dta\n")
+cat("  - Annual_Accounts_MASTER_ANO.dta\n")
+cat("  - B2B_ANO.dta\n")
+cat("  - import_export_ANO.dta\n")
 cat("  - sampled_firms.rds\n")
