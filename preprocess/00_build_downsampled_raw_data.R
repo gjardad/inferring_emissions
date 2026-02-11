@@ -190,10 +190,12 @@ write_dta(trade_sample, file.path(OUT_DIR, "import_export_ANO.dta"))
 rm(trade_sample)
 gc()
 
-# 5c. B2B — keep rows where EITHER supplier or buyer is in the sample
+# 5c. B2B — keep rows where BOTH supplier and buyer are in the sample
+#     (07_build_b2b_selected_sample.R already filters to firms in annual accounts,
+#      so this mirrors what the pipeline actually uses downstream)
 cat("  Filtering B2B...\n")
 b2b_sample <- read_dta(file.path(RAW_NBB, "B2B_ANO.dta")) %>%
-  filter(vat_i_ano %in% sampled_firms | vat_j_ano %in% sampled_firms)
+  filter(vat_i_ano %in% sampled_firms & vat_j_ano %in% sampled_firms)
 cat("    Rows:", nrow(b2b_sample), "\n")
 write_dta(b2b_sample, file.path(OUT_DIR, "B2B_ANO.dta"))
 rm(b2b_sample)
