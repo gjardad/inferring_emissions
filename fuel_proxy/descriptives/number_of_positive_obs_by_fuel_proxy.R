@@ -1,12 +1,12 @@
 ###############################################################################
 # number_of_positive_obs_by_fuel_proxy.R
 #
-# Summarize cached proxies (02_proxies/cache/*.rds) restricted to the LOOCV
-# training sample (loocv_training_sample). Produces one row per proxy with
-# overall and euets-grouped counts of zeros / positives and other stats.
+# Summarize cached proxies restricted to the LOOCV training sample
+# (loocv_training_sample). Produces one row per proxy with overall and
+# euets-grouped counts of zeros / positives and other stats.
 #
-# Usage: source() after setting LOOCV_ROOT or sourcing your paths.R, or run in
-# an interactive session where loocv_training_sample is available.
+# Usage: source() after sourcing paths.R, or run in an interactive session
+# where loocv_training_sample is available.
 #
 ###############################################################################
 
@@ -21,7 +21,7 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else {
   stop("Define REPO_DIR for this user.")
 }
-source(file.path(REPO_DIR, "config", "paths.R"))
+source(file.path(REPO_DIR, "paths.R"))
 
 
 
@@ -31,16 +31,7 @@ library(jsonlite)   # for serializing mods (optional)
 # -----------------------
 # CONFIG - adjust if needed
 # -----------------------
-# If you already source your repo paths earlier, LOOCV_ROOT should exist.
-# Otherwise set LOOCV_ROOT manually, or change cache_dir and loocv_path below.
-if (!exists("LOOCV_ROOT")) {
-  if (file.exists("00_config/paths.R")) {
-    source("00_config/paths.R")    # this is how 02_build_proxies.R sets LOOCV_ROOT
-  }
-}
-
-# default cache dir relative to LOOCV_ROOT
-cache_dir <- if (exists("LOOCV_ROOT")) file.path(LOOCV_ROOT, "02_proxies", "cache") else "02_proxies/cache"
+cache_dir <- PROXY_CACHE_DIR
 
 # default path to saved loocv training sample (adjust if you save elsewhere)
 loocv_rdata_candidates <- c(

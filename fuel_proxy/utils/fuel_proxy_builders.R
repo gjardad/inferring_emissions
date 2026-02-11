@@ -11,15 +11,15 @@
 
 load_aux <- function() {
   list(
-    aa_nace = readRDS(file.path(cache_dir, "aux_aa_nace.rds")),
-    likelihood_tbl = readRDS(file.path(cache_dir, "aux_likelihood_tbl.rds")),
-    cn8_strict = readRDS(file.path(cache_dir, "aux_cn8_strict.rds")),
-    firm_year_fuel_totals = readRDS(file.path(cache_dir, "aux_firm_year_fuel_totals.rds")),
-    firm_year_cn8 = readRDS(file.path(cache_dir, "aux_firm_year_cn8.rds")),
-    firm_year_siec = readRDS(file.path(cache_dir, "aux_firm_year_siec.rds")),
-    siec_all_used = readRDS(file.path(cache_dir, "aux_siec_all_used.rds")),
-    buyer_sector_siec = readRDS(file.path(cache_dir, "aux_buyer_sector_siec.rds")),
-    b2b = readRDS(file.path(cache_dir, "aux_b2b_minimal.rds"))
+    aa_nace = readRDS(file.path(AUX_CACHE_DIR, "aux_aa_nace.rds")),
+    likelihood_tbl = readRDS(file.path(AUX_CACHE_DIR, "aux_likelihood_tbl.rds")),
+    cn8_strict = readRDS(file.path(AUX_CACHE_DIR, "aux_cn8_strict.rds")),
+    firm_year_fuel_totals = readRDS(file.path(AUX_CACHE_DIR, "aux_firm_year_fuel_totals.rds")),
+    firm_year_cn8 = readRDS(file.path(AUX_CACHE_DIR, "aux_firm_year_cn8.rds")),
+    firm_year_siec = readRDS(file.path(AUX_CACHE_DIR, "aux_firm_year_siec.rds")),
+    siec_all_used = readRDS(file.path(AUX_CACHE_DIR, "aux_siec_all_used.rds")),
+    buyer_sector_siec = readRDS(file.path(AUX_CACHE_DIR, "aux_buyer_sector_siec.rds")),
+    b2b = readRDS(file.path(AUX_CACHE_DIR, "aux_b2b_minimal.rds"))
   )
 }
 

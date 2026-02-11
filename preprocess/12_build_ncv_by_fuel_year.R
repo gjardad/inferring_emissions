@@ -31,7 +31,7 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else {
   stop("Define REPO_DIR for this user.")
 }
-source(file.path(REPO_DIR, "config", "paths.R"))
+source(file.path(REPO_DIR, "paths.R"))
 
 
 # Setup ------

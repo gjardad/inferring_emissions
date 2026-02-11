@@ -1,19 +1,19 @@
 ###############################################################################
-# 02_proxies/02_build_proxies.R
+# build_proxies.R
 #
 # PURPOSE:
 #   Loads proxy grid definitions and builds each proxy once.
-#   Results are cached to 02_proxies/cache as .rds files.
+#   Results are cached to proxies/cache as .rds files.
 #
 # INPUTS (via aux):
-#   - aux <- load_aux() 
+#   - aux <- load_aux()   (requires aux_*.rds in AUX_CACHE_DIR)
 #
 # OUTPUT:
-#   - Writes: proxy_*.rds to 02_proxies/cache/
+#   - Writes: proxy_*.rds to proxies/cache/
 ###############################################################################
 
 # ====================
-# Define paths ------------------
+# Define paths -------
 # ====================
 
 if (tolower(Sys.info()[["user"]]) == "jardang") {
@@ -23,33 +23,25 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else {
   stop("Define REPO_DIR for this user.")
 }
-source(file.path(REPO_DIR, "config", "paths.R"))
-
-
-
-# ----------------------------
-# Setup
-# ----------------------------
-source("X:/Documents/JARDANG/carbon_policy_networks/code/inferring_emissions/00_config/paths.R")
+source(file.path(REPO_DIR, "paths.R"))
 
 # ----------------------------
 # Load utilities + builders
 # ----------------------------
-source(file.path(LOOCV_ROOT, "06_utils", "progress_utils.R"))
-source(file.path(LOOCV_ROOT, "06_utils", "fuel_proxy_builders.R"))
+source_try(UTILS_DIR, "progress_utils")
+source_try(UTILS_DIR, "fuel_proxy_builders")
 
 # ----------------------------
 # Load proxy grid
 # ----------------------------
-source(file.path(LOOCV_ROOT, "02_proxies", "01_define_proxy_grid.R"))
+source(file.path(REPO_DIR, "fuel_proxy", "proxies", "define_proxy_grid.R"))
 # expects object: proxy_grid (a tibble/data.frame: one row per proxy config)
 stopifnot(exists("proxy_grid"))
 
-# Cache directory in the new structure
-CACHE_DIR <- file.path(LOOCV_ROOT, "02_proxies", "cache")
-if (!dir.exists(CACHE_DIR)) dir.create(CACHE_DIR, recursive = TRUE)
+# Cache directory
+if (!dir.exists(PROXY_CACHE_DIR)) dir.create(PROXY_CACHE_DIR, recursive = TRUE)
 
-tic("02_build_proxies")
+tic("build_proxies")
 
 aux <- load_aux()
 
@@ -74,20 +66,20 @@ start_all <- Sys.time()
 
 for (k in seq_len(nrow(grid))) {
   progress_eta(k, nrow(grid), start_all, every = 5, prefix = "  ")
-  
+
   row <- grid[k, , drop = FALSE]
   # `row` is a 1-row df; convert cleanly to list of scalars
   mods <- as.list(row)
   mods <- lapply(mods, function(x) if (length(x) == 1) x[[1]] else x)
-  
+
   nm  <- make_proxy_name(mods)
-  out_path <- file.path(CACHE_DIR, paste0(nm, ".rds"))
-  
+  out_path <- file.path(PROXY_CACHE_DIR, paste0(nm, ".rds"))
+
   if (file.exists(out_path)) next
-  
+
   log_step(paste0("Building ", nm))
   t0 <- Sys.time()
-  
+
   proxy <- tryCatch(
     {
       build_fuel_proxy(mods, aux) %>%
@@ -101,17 +93,17 @@ for (k in seq_len(nrow(grid))) {
       stop(e)
     }
   )
-  
+
   # ---- Complete proxy on full buyer-year universe ----
   buyer_year_universe <- aux$b2b %>%
     dplyr::distinct(buyer_id, year)
-  
+
   proxy <- buyer_year_universe %>%
     dplyr::left_join(proxy, by = c("buyer_id", "year")) %>%
     dplyr::mutate(fuel_proxy = dplyr::coalesce(fuel_proxy, 0))
-  
+
   saveRDS(list(name = nm, mods = mods, proxy = proxy), out_path)
-  
+
   elapsed <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   log_step(paste0("Saved ", nm, " | build time ", round(elapsed, 1), "s"))
 }

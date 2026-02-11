@@ -22,18 +22,22 @@ consumption proxies. Different proxy variants apply different tweaks to this pip
 
 ## Language & runtime
 - All code is **R**
-- Shared config in `config/paths.R` (sets BASE_DIR, DATA_RAW, DATA_INT, etc.)
-  and `config/load_packages.R`
-- Data lives on a network drive (`X:/Documents/JARDANG/carbon_policy_networks/data/`)
+- Shared config in `paths.R` (root; sets DATA_DIR, REPO_DIR, derived paths)
+- Data lives on a network drive (`X:/Documents/JARDANG/data/`)
 
 ## Folder structure
-config/          Shared paths and package loading
-preprocess/      Numbered scripts (00-32) that build intermediate & processed datasets
-proxies/         Defines the proxy grid and builds fuel-consumption proxy variants
-loocv/           LOOCV pipeline: model definitions, execution, parallel runners
-descriptives/    Summary stats, diagnostics, tables, and figures (outside LOOCV)
-utils/           Reusable helper functions (metrics, subsample builders, etc.)
-paper/           LaTeX source for the paper (git submodule)
+paths.R              Shared path constants (must be sourced at top of every script)
+preprocess/          Numbered scripts (00-32) that build intermediate & processed datasets
+fuel_proxy/          Everything for the fuel-consumption-proxy exercise
+  proxies/           Defines the proxy grid and builds fuel-consumption proxy variants
+  models/            LOOCV pipeline: model definitions, execution, parallel runners
+  descriptives/      Summary stats, diagnostics, tables, and figures
+  utils/             Reusable helper functions (metrics, subsample builders, etc.)
+fuel_suppliers/      Everything for the fuel-supplier identification exercise (TBD)
+  models/
+  descriptives/
+  utils/
+paper/               LaTeX source for the paper (git submodule)
 
 
 ## Regression models
@@ -96,5 +100,5 @@ are working from so that the correct paths are used.
 ## Conventions
 - Preprocessing scripts are numbered to indicate execution order
 - Descriptive scripts are also numbered
-- Helper functions live in `utils/` and are sourced where needed
-- `config/paths.R` must be sourced at the top of every script to set path constants
+- Helper functions live in `fuel_proxy/utils/` and are sourced where needed
+- `paths.R` (at repo root) must be sourced at the top of every script to set path constants

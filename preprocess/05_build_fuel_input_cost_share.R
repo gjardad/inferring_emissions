@@ -45,12 +45,9 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else {
   stop("Define REPO_DIR for this user.")
 }
-source(file.path(REPO_DIR, "config", "paths.R"))
+source(file.path(REPO_DIR, "paths.R"))
 
 
-
-# ---- Bootstrap ----
-source("X:/Documents/JARDANG/carbon_policy_networks/code/loocv_pipeline/00_config/paths.R")
 
 suppressPackageStartupMessages({
   library(dplyr)

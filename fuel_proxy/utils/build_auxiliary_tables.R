@@ -29,13 +29,9 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 } else {
   stop("Define REPO_DIR for this user.")
 }
-source(file.path(REPO_DIR, "config", "paths.R"))
-
-
+source(file.path(REPO_DIR, "paths.R"))
 
 tic("01_build_aux_tables")
-
-source(file.path(LOOCV_ROOT, "00_config", "load_packages.R"))
 
 log_step("Loading processed datasets...")
 load(paste0(PROC_DATA,"/b2b_selected_sample.RData"))
