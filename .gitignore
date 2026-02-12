@@ -2,5 +2,7 @@
 cache/
 **/cache/*
 
+**/nul
+
 # ---- R serialized objects ----
 *.rds
