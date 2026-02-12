@@ -122,50 +122,26 @@ ef_ipcc <- emission_factors_from_ipcc %>%
   distinct(ipcc_fuel, ef_kgco2_per_tj)
 
 # ------------------------------------------------------------
-# 3) Convert quantities (kg / bbl / mmbtu) to energy in TJ
+# 3) Convert quantities (kg) to energy in TJ
 # ------------------------------------------------------------
-
-# Constants
-KG_PER_BBL_CRUDE <- 136          # approx; you can tweak (e.g. 135-140) if desired
-GJ_PER_MMBTU     <- 1.055        # energy unit conversion
-TJ_PER_GJ        <- 1e-3
 
 ef_weighted_fuel_qty <- fuel_qty %>%
   mutate(
     cncode = str_pad(str_replace_all(as.character(cncode), "\\s+", ""), 8, pad = "0"),
     year   = as.integer(year),
-    quantity = as.numeric(quantity),
-    quantity_units = tolower(as.character(quantity_units))
+    quantity = as.numeric(quantity)
   ) %>%
   left_join(cn_to_ipcc, by = "cncode") %>%
   left_join(ipcc_ncv_year %>% select(ipcc_fuel, year, ncv_tj_per_kg),
             by = c("ipcc_fuel", "year")) %>%
   left_join(ef_ipcc, by = "ipcc_fuel") %>%
   mutate(
-    # Energy in TJ on an NCV-consistent basis where applicable
-    energy_tj = case_when(
-      quantity_units == "kg" &
-        !is.na(quantity) & !is.na(ncv_tj_per_kg) ~
-        quantity * ncv_tj_per_kg,
-      
-      quantity_units == "bbl" &
-        !is.na(quantity) & !is.na(ncv_tj_per_kg) ~
-        quantity * KG_PER_BBL_CRUDE * ncv_tj_per_kg,
-      
-      quantity_units == "mmbtu" &
-        !is.na(quantity) ~
-        quantity * GJ_PER_MMBTU * TJ_PER_GJ,
-      
-      TRUE ~ NA_real_
+    energy_tj = if_else(
+      !is.na(quantity) & !is.na(ncv_tj_per_kg),
+      quantity * ncv_tj_per_kg,
+      NA_real_
     ),
-    
-    energy_source = case_when(
-      quantity_units == "kg" ~ "mass_kg_x_ncv",
-      quantity_units == "bbl" ~ "volume_bbl_x_kgperbbl_x_ncv",
-      quantity_units == "mmbtu" ~ "energy_mmbtu_to_tj",
-      TRUE ~ "missing"
-    ),
-    
+
     co2_kg = if_else(
       !is.na(energy_tj) & !is.na(ef_kgco2_per_tj),
       energy_tj * ef_kgco2_per_tj,

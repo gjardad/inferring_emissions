@@ -2,13 +2,12 @@
 # 01_preprocess/08_build_firm_cncode_year_physical_qty.R
 #
 # PURPOSE
-#   Construct firm–CNcode–year physical quantities for imported fuels (hierarchy: weight if reliable; internal unit value deflation; external price deflation).
+#   Construct firm–CNcode–year physical quantities for imported fuels.
+#   Hierarchy: (1) customs weight if reliable, (2) CN8-year internal median
+#   deflation, (3a-c) progressively coarser internal unit value deflation.
 #
 # INPUTS
 #   - data/processed/fuel_imported_by_firm_year.RData
-#   - data/processed/coal_price.RData
-#   - data/processed/gas_price.RData
-#   - data/processed/oil_price.RData
 #
 # OUTPUTS
 #   - data/processed/firm_cncode_year_physical_qty.RData
@@ -54,22 +53,18 @@ load(paste0(PROC_DATA,"/fuel_imported_by_firm_year.RData"))
 
 # ---------------------------------------------
 # CN-year physical qty using customs data -------
-
-  # we have data on value and wegiht for each good
-  # weight is in kg. if reliable, that's the physical qty
-  # but not always realiable.
-
-  # compute within good-year distribution of implied prices (value/weight)
-  # across firms. if p90/p10 < 30, then weight data is reliable.
-
-  # if p90/p10 < 30 and the implied price of a given firm-good-year obs is not an outlier,
-  # then use the obs weight as the physical qty
-
-  # if p90/p10 < 30 but the implied price of a given firm-good-year obs is an outlier,
-  # deflate value using the median price of the good-year price distribution
-
-  # if p90/p10 > 30, then weight data is not reliable and we deflate the value
-  # using external time series on prices
+#
+# We have data on value and weight for each good.
+# Weight is in kg. If reliable, that's the physical qty,
+# but not always reliable.
+#
+# Tier hierarchy:
+#   1. Use reported weight if CN8-year price distribution is well-behaved
+#      (p90/p10 <= 30) and firm is not an outlier
+#   2. Deflate value using CN8-year internal median price (p90/p10 <= 30)
+#   3a. Deflate value using CN8-year winsorized median (>= 3 firms, no p90/p10 gate)
+#   3b. Deflate value using CN6-year median from winsorized pool (>= 5 firms)
+#   3c. Deflate value using CN4-year median from winsorized pool (>= 10 firms)
 # ---------------------------------------------
 
 # clean it
@@ -174,148 +169,89 @@ fuel_qty <- df %>%
   )
 
 # ======================================
-# Merge with external price data -------
+# Tier 3: Internal unit value cascade --
 # ======================================
 
-fuel_qty <- fuel_qty %>%
+# Build winsorized observation pool: for each CN8-year with >= 3 firms,
+# trim observations outside [p10, p90] of price_eur_per_kg
+winsorized_pool <- df_price_firm %>%
+  group_by(cncode, year) %>%
+  filter(n_distinct(vat_ano) >= 3) %>%
   mutate(
-    cncode = str_replace_all(as.character(cncode), "\\s+", ""),
-    cn4 = substr(cncode, 1, 4),
-    year = as.integer(year)
-  )
-
-# Load price data
-load(paste0(PROC_DATA,"/coal_price.RData"))  # has: year, eur_per_ton
-load(paste0(PROC_DATA,"/gas_price.RData"))   # has: year, eur_per_mmbtu
-load(paste0(PROC_DATA,"/oil_price.RData"))   # has: year, eur_per_bbl
-
-# --- Standardize price series names/units (using known column names) ---
-coal_price_std <- coal_price %>%
-  transmute(
-    year = as.integer(year),
-    price_eur_per_kg = as.numeric(eur_per_ton) / 1000
-  )
-
-gas_price_std <- gas_price %>%
-  transmute(
-    year = as.integer(year),
-    price_eur_per_mmbtu = as.numeric(eur_per_mmbtu)
-  )
-
-oil_price_std <- oil_price %>%
-  transmute(
-    year = as.integer(year),
-    price_eur_per_bbl = as.numeric(eur_per_bbl)
-  )
-
-# Map cn4 to benchmark fuel (your existing mapping)
-cn4_price_map <- tibble::tibble(
-  cn4 = c("2711","2710","2713","2709","2701","2702","2703","2704"),
-  fuel_benchmark = c("gas","oil","oil","oil","coal","coal","coal","coal")
-)
-
-# Create cn4-year table with the appropriate price unit for each benchmark
-years <- sort(unique(fuel_qty$year))
-
-cn4_year_price_units <- cn4_price_map %>%
-  tidyr::crossing(year = years) %>%
-  left_join(gas_price_std %>% mutate(fuel_benchmark = "gas"),
-            by = c("fuel_benchmark", "year")) %>%
-  left_join(oil_price_std %>% mutate(fuel_benchmark = "oil"),
-            by = c("fuel_benchmark", "year")) %>%
-  left_join(coal_price_std %>% mutate(fuel_benchmark = "coal"),
-            by = c("fuel_benchmark", "year")) %>%
-  mutate(
-    price_for_deflation = case_when(
-      fuel_benchmark == "gas"  ~ price_eur_per_mmbtu,
-      fuel_benchmark == "oil"  ~ price_eur_per_bbl,
-      fuel_benchmark == "coal" ~ price_eur_per_kg,
-      TRUE ~ NA_real_
-    ),
-    deflation_units = case_when(
-      fuel_benchmark == "gas"  ~ "mmbtu",
-      fuel_benchmark == "oil"  ~ "bbl",
-      fuel_benchmark == "coal" ~ "kg",
-      TRUE ~ NA_character_
-    )
+    p10 = quantile(price_eur_per_kg, 0.10, na.rm = TRUE),
+    p90 = quantile(price_eur_per_kg, 0.90, na.rm = TRUE)
   ) %>%
-  select(cn4, year, fuel_benchmark, price_for_deflation, deflation_units)
+  filter(price_eur_per_kg >= p10, price_eur_per_kg <= p90) %>%
+  ungroup() %>%
+  select(vat_ano, cncode, year, price_eur_per_kg)
 
-# Apply fallback deflation ONLY when fuel_qty_kg is missing
+# Tier 3a: CN8-year winsorized median
+cn8_year_relaxed <- winsorized_pool %>%
+  group_by(cncode, year) %>%
+  summarise(price_cn8_relaxed = median(price_eur_per_kg, na.rm = TRUE),
+            .groups = "drop")
+
+# Tier 3b: CN6-year median from winsorized pool (>= 5 firms)
+cn6_year_price <- winsorized_pool %>%
+  mutate(cn6 = substr(cncode, 1, 6)) %>%
+  group_by(cn6, year) %>%
+  filter(n_distinct(vat_ano) >= 5) %>%
+  summarise(price_cn6 = median(price_eur_per_kg, na.rm = TRUE),
+            .groups = "drop")
+
+# Tier 3c: CN4-year median from winsorized pool (>= 10 firms)
+cn4_year_price <- winsorized_pool %>%
+  mutate(cn4 = substr(cncode, 1, 4)) %>%
+  group_by(cn4, year) %>%
+  filter(n_distinct(vat_ano) >= 10) %>%
+  summarise(price_cn4 = median(price_eur_per_kg, na.rm = TRUE),
+            .groups = "drop")
+
+# Merge fallback prices and apply cascade
 fuel_qty <- fuel_qty %>%
-  left_join(cn4_year_price_units, by = c("cn4", "year")) %>%
+  mutate(
+    cn6 = substr(cncode, 1, 6),
+    cn4 = substr(cncode, 1, 4)
+  ) %>%
+  left_join(cn8_year_relaxed, by = c("cncode", "year")) %>%
+  left_join(cn6_year_price, by = c("cn6", "year")) %>%
+  left_join(cn4_year_price, by = c("cn4", "year")) %>%
   mutate(
     quantity = case_when(
       !is.na(fuel_qty_kg) ~ fuel_qty_kg,
-      is.na(fuel_qty_kg) & !is.na(imports_value) & !is.na(price_for_deflation) ~ imports_value / price_for_deflation,
+      !is.na(imports_value) & !is.na(price_cn8_relaxed) ~ imports_value / price_cn8_relaxed,
+      !is.na(imports_value) & !is.na(price_cn6)         ~ imports_value / price_cn6,
+      !is.na(imports_value) & !is.na(price_cn4)         ~ imports_value / price_cn4,
       TRUE ~ NA_real_
     ),
-    quantity_units = case_when(
-      !is.na(fuel_qty_kg) ~ "kg",
-      is.na(fuel_qty_kg) & !is.na(imports_value) & !is.na(price_for_deflation) ~ deflation_units,
-      TRUE ~ NA_character_
-    ),
+    quantity_units = "kg",
     qty_source = case_when(
       qty_source %in% c("weight_direct", "value_deflated") ~ qty_source,
-      is.na(fuel_qty_kg) & !is.na(imports_value) & !is.na(price_for_deflation) ~ paste0("value_deflated_external_", fuel_benchmark),
+      !is.na(imports_value) & !is.na(price_cn8_relaxed) ~ "deflated_cn8_relaxed",
+      !is.na(imports_value) & !is.na(price_cn6)         ~ "deflated_cn6",
+      !is.na(imports_value) & !is.na(price_cn4)         ~ "deflated_cn4",
       TRUE ~ "missing"
     )
   ) %>%
-  filter(year >= 2005) %>% 
+  filter(year >= 2005) %>%
   ungroup()
 
 # save it
 save(fuel_qty, file = paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
 # ==================================================================
-# Diagnosing missing quantities ------------------------------------
-
-# The construction of physical quantities follows a strict
-# hierarchy:
-#
-# (1) Use reported customs weight (kg) when reliable
-# (2) Otherwise, deflate values using internal CN–year median
-#     unit values (€/kg) when those distributions are well-behaved
-# (3) Otherwise, deflate values using external benchmark prices
-#     (coal in kg, oil in barrels, gas in MMBtu)
-#
-# As a result, missing quantities arise for two structural reasons:
-#
-# - "no_value_and_no_kg":
-#     Observations with neither reported weight nor reported value.
-#     These quantities are unrecoverable from customs data and are
-#     excluded from downstream energy and emissions calculations.
-#
-# - "no_external_price_match":
-#     Observations with reported values but belonging to CN4 product
-#     groups for which no external benchmark price is assigned
-#     (e.g. non-energy petroleum products, coal-processing by-products,
-#     or process gases such as CN4 = 2712, 2707, 2706, 2705, 2708, 2714).
-#     For these products, imputing physical quantities would require
-#     additional assumptions that are not justified, so quantities
-#     are left missing by construction.
-#
-# These missing quantities are therefore intentional and reflect
-# conservative identification choices rather than data errors.
+# Diagnostics: quantity source breakdown
 # ==================================================================
 
+cat("\n--- Quantity source breakdown ---\n")
 fuel_qty %>%
-  ungroup() %>%
-  mutate(
-    missing_qty = is.na(quantity),
-    reason = case_when(
-      !missing_qty ~ "has_quantity",
-      is.na(fuel_qty_kg) & is.na(imports_value) ~ "no_value_and_no_kg",
-      is.na(fuel_qty_kg) & !is.na(imports_value) & is.na(price_for_deflation) ~ "no_external_price_match",
-      is.na(fuel_qty_kg) & !is.na(imports_value) & !is.na(price_for_deflation) ~ "should_have_external_qty_check_logic",
-      TRUE ~ "other"
-    )
-  ) %>%
-  count(reason, sort = TRUE)
+  count(qty_source, sort = TRUE) %>%
+  mutate(pct = round(n / sum(n) * 100, 1)) %>%
+  print()
 
+cat("\n--- Missing quantities by CN4 ---\n")
 fuel_qty %>%
-  ungroup() %>% 
   filter(is.na(quantity), !is.na(imports_value)) %>%
-  count(substr(cncode, 1, 4), sort = TRUE)
-
+  count(cn4 = substr(cncode, 1, 4), sort = TRUE) %>%
+  print()
 
