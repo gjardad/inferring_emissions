@@ -4,6 +4,11 @@
 # PURPOSE
 #   Build sector-year emissions from the National Inventory Report (NIR).
 #
+# DATA SOURCE
+#   BEL-CRT xlsx files downloaded from UNFCCC:
+#   2025 CRT: https://unfccc.int/documents/646468
+#   2024 CRT: https://unfccc.int/documents/644992
+#
 # WHERE THIS FILE BELONGS
 #   loocv_pipeline/01_preprocess/32_build_emissions_by_sector_year_from_nir.R
 ###############################################################################
