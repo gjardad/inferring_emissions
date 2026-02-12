@@ -41,7 +41,7 @@ library(dplyr)
 # Load and clean data ---
 # -----------------------
 
-df <- read_csv(paste0(RAW_DATA, "/Eurostat/fuel_qty_by_year_energy_use_from_energy_balance.csv"))
+df <- read_csv(paste0(RAW_DATA, "/Eurostat/energy_balance_belgium.csv"))
 
 df_fuel_use_energy_balances <- df %>% 
   mutate(
