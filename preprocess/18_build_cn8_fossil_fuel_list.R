@@ -21,48 +21,176 @@
 # │ (HS/CN nomenclature) and greenhouse gas emissions reporting (IPCC,    │
 # │ EU ETS).                                                              │
 # │                                                                       │
-# │ TASK: Produce a complete list of 8-digit Combined Nomenclature (CN8)  │
-# │ product codes from Chapter 27 of the Harmonized System ("Mineral      │
-# │ fuels, mineral oils and products of their distillation; bituminous    │
-# │ substances; mineral waxes") that correspond to fossil fuels which     │
-# │ could be combusted for energy in stationary installations (e.g.       │
-# │ boilers, furnaces, kilns, CHP plants, backup generators).            │
+# │ TASK: From the complete list of 8-digit Combined Nomenclature (CN8)  │
+# │ product codes from Chapter 27 below, identify which codes correspond │
+# │ to fossil fuels that could be combusted for energy in stationary     │
+# │ installations (e.g. boilers, furnaces, kilns, CHP plants, backup    │
+# │ generators).                                                          │
 # │                                                                       │
-# │ Use the 2022 version of the EU Combined Nomenclature as your         │
-# │ reference (Commission Implementing Regulation (EU) 2021/1832).       │
+# │ The CN8 codes and descriptions below are taken from the 2022 EU      │
+# │ Combined Nomenclature (Commission Implementing Regulation (EU)       │
+# │ 2021/1832, Annex I).                                                 │
 # │                                                                       │
-# │ INCLUSION CRITERIA — include CN8 codes for:                           │
-# │ - Solid fossil fuels: coal (anthracite, bituminous, sub-bituminous), │
-# │   lignite, coke, semi-coke, briquettes                               │
-# │ - Liquid fossil fuels: crude oil, fuel oils (heavy and light), gas   │
-# │   oils / diesel, kerosene, motor gasoline, naphtha, LPG, petroleum  │
-# │   coke, other petroleum products that can be burned for heat or      │
-# │   power                                                              │
-# │ - Gaseous fossil fuels: natural gas, petroleum gases (propane,       │
-# │   butane, ethylene, etc.) in gaseous or liquefied form               │
-# │ - Peat and peat products                                             │
+# │ INPUT — All CN8 codes in Chapter 27:                                  │
 # │                                                                       │
-# │ EXCLUSION CRITERIA — exclude CN8 codes for:                           │
-# │ - Electricity (CN 2716)                                               │
-# │ - Products that are not fuels and cannot be combusted for energy:    │
-# │   lubricating oils, greases, paraffin wax, petroleum jelly /         │
-# │   vaseline, bitumen / asphalt                                        │
-# │ - Mineral products that are not fuels: mineral tar, sulfur           │
+# │   2701 — Coal; briquettes, ovoids and similar solid fuels:           │
+# │     27011100  Anthracite                                              │
+# │     27011210  Coking coal                                             │
+# │     27011290  Other bituminous coal                                   │
+# │     27011900  Other coal (incl. sub-bituminous)                      │
+# │     27012000  Briquettes, ovoids and similar solid fuels from coal   │
+# │   2702 — Lignite:                                                    │
+# │     27021000  Lignite, not agglomerated                              │
+# │     27022000  Agglomerated lignite                                   │
+# │   2703 — Peat:                                                       │
+# │     27030000  Peat (including peat litter)                           │
+# │   2704 — Coke and semi-coke:                                         │
+# │     27040010  Coke and semi-coke of coal                             │
+# │     27040030  Coke and semi-coke of lignite                          │
+# │     27040090  Other coke and semi-coke (incl. retort carbon)         │
+# │   2705 — Coal gas, water gas, producer gas:                          │
+# │     27050000  Coal gas, water gas, producer gas, similar gases       │
+# │   2706 — Tar:                                                        │
+# │     27060000  Tar from coal, lignite, peat; other mineral tars       │
+# │   2707 — Oils from high-temperature coal tar distillation:           │
+# │     27071000  Benzol (benzene)                                       │
+# │     27072000  Toluol (toluene)                                       │
+# │     27073000  Xylol (xylenes)                                       │
+# │     27074000  Naphthalene                                            │
+# │     27075000  Other aromatic hydrocarbon mixtures                    │
+# │     27079100  Creosote oils                                          │
+# │     27079911  Crude light oils (>= 90% distils at 200°C)            │
+# │     27079919  Other crude light oils                                 │
+# │     27079920  Sulphuretted toppings; anthracene                      │
+# │     27079950  Basic products                                         │
+# │     27079980  Phenols                                                │
+# │     27079991  Products for manufacture of heading 2803               │
+# │     27079999  Other products of coal tar distillation                │
+# │   2708 — Pitch and pitch coke:                                       │
+# │     27081000  Pitch from coal tar or mineral tars                    │
+# │     27082000  Pitch coke                                             │
+# │   2709 — Crude petroleum oils:                                       │
+# │     27090010  Natural gas condensates                                │
+# │     27090090  Other crude petroleum oils                             │
+# │   2710 — Petroleum oils (not crude), preparations, waste oils:       │
+# │     27101211  Light oils for specific process                        │
+# │     27101215  Light oils for chemical transformation                 │
+# │     27101221  White spirit                                           │
+# │     27101225  Other special spirits                                  │
+# │     27101231  Aviation spirit (avgas)                                │
+# │     27101241  Motor spirit, RON < 95                                 │
+# │     27101245  Motor spirit, RON 95-98                                │
+# │     27101249  Motor spirit, RON >= 98                                │
+# │     27101250  Motor spirit, leaded                                   │
+# │     27101270  Spirit type jet fuel                                   │
+# │     27101290  Other light oils and preparations                      │
+# │     27101911  Medium oils for specific process                       │
+# │     27101915  Medium oils for chemical transformation                │
+# │     27101921  Jet fuel (kerosene type)                               │
+# │     27101925  Other kerosene                                         │
+# │     27101929  Other medium oils and preparations                     │
+# │     27101931  Gas oils for specific process                          │
+# │     27101935  Gas oils for chemical transformation                   │
+# │     27101943  Gas oils, sulphur <= 0.001%                            │
+# │     27101946  Gas oils, sulphur > 0.001% to 0.002%                  │
+# │     27101947  Gas oils, sulphur > 0.002% to 0.1%                    │
+# │     27101948  Gas oils, sulphur > 0.1%                               │
+# │     27101951  Fuel oils for specific process                         │
+# │     27101955  Fuel oils for chemical transformation                  │
+# │     27101962  Fuel oils, sulphur <= 0.1%                             │
+# │     27101966  Fuel oils, sulphur > 0.1% to 0.5%                     │
+# │     27101967  Fuel oils, sulphur > 0.5%                              │
+# │     27101971  Lubricating oils for specific process                  │
+# │     27101975  Lubricating oils for chemical transformation           │
+# │     27101981  Motor/compressor/turbine lube oils                     │
+# │     27101983  Hydraulic oils                                         │
+# │     27101985  White oils, liquid paraffin                            │
+# │     27101987  Gear oils and reductor oils                            │
+# │     27101991  Metal-working compounds, mould-release oils            │
+# │     27101993  Electrical insulating oils                             │
+# │     27101999  Other lubricating oils                                 │
+# │     27102011  Gas oils w/ biodiesel, sulphur <= 0.001%              │
+# │     27102016  Gas oils w/ biodiesel, sulphur > 0.001% to 0.1%      │
+# │     27102019  Gas oils w/ biodiesel, sulphur > 0.1%                 │
+# │     27102032  Fuel oils w/ biodiesel, sulphur <= 0.5%               │
+# │     27102038  Fuel oils w/ biodiesel, sulphur > 0.5%                │
+# │     27102090  Other petroleum oils w/ biodiesel                      │
+# │     27109100  Waste oils containing PCBs/PCTs/PBBs                  │
+# │     27109900  Other waste oils                                       │
+# │   2711 — Petroleum gases and gaseous hydrocarbons:                   │
+# │     27111100  LNG                                                    │
+# │     27111211  Propane (>= 99%), for power/heating                   │
+# │     27111219  Propane (>= 99%), other purposes                      │
+# │     27111291  Propane (90-99%), for specific process                 │
+# │     27111293  Propane (90-99%), for chemical transformation          │
+# │     27111294  Propane (90-99%), other purposes                       │
+# │     27111297  Other propane                                          │
+# │     27111310  Butanes, for specific process                          │
+# │     27111330  Butanes, for chemical transformation                   │
+# │     27111391  Butanes (90-95%), other purposes                       │
+# │     27111397  Other butanes                                          │
+# │     27111400  Ethylene, propylene, butylene, butadiene               │
+# │     27111900  Other LPG                                              │
+# │     27112100  Natural gas in gaseous state                           │
+# │     27112900  Other gaseous hydrocarbons                             │
+# │   2712 — Petroleum jelly, paraffin wax, mineral waxes:              │
+# │     27121010  Crude petroleum jelly                                  │
+# │     27121090  Other petroleum jelly                                  │
+# │     27122010  Synthetic paraffin wax                                 │
+# │     27122090  Other paraffin wax                                     │
+# │     27129011  Crude ozokerite, lignite/peat wax                     │
+# │     27129019  Other ozokerite, lignite/peat wax                     │
+# │     27129031  Crude mineral waxes, for specific process              │
+# │     27129033  Crude mineral waxes, for chemical transformation       │
+# │     27129039  Crude mineral waxes, other purposes                    │
+# │     27129091  Blends of 1-alkenes                                    │
+# │     27129099  Other mineral waxes                                    │
+# │   2713 — Petroleum coke, petroleum bitumen, other residues:         │
+# │     27131100  Petroleum coke, not calcined                           │
+# │     27131200  Petroleum coke, calcined                               │
+# │     27132000  Petroleum bitumen                                      │
+# │     27139010  Other residues for manufacture of heading 2803         │
+# │     27139090  Other residues of petroleum oils                       │
+# │   2714 — Bituminous minerals, natural bitumen:                      │
+# │     27141000  Bituminous or oil-shale and tar sands                  │
+# │     27149000  Other natural bitumen and natural asphalt              │
+# │   2715 — Bituminous mixtures:                                        │
+# │     27150000  Bituminous mixtures                                    │
+# │   2716 — Electrical energy:                                          │
+# │     27160000  Electrical energy                                      │
 # │                                                                       │
-# │ EDGE CASES — use your judgment on borderline products. If a product  │
-# │ (e.g. white spirit, certain naphtha grades) is sometimes burned for  │
-# │ energy in industrial settings but is primarily used as a solvent or  │
-# │ feedstock, include it and note the ambiguity in the description. The │
-# │ goal is to be inclusive rather than to miss genuine fuels.            │
+# │ CLASSIFICATION CRITERIA:                                              │
+# │                                                                       │
+# │ Include codes for:                                                    │
+# │   - Solid fossil fuels: coal, lignite, coke, semi-coke, briquettes  │
+# │   - Liquid fossil fuels: crude oil, fuel oils, gas oils / diesel,   │
+# │     kerosene (heating), naphtha, LPG, petroleum coke, and other     │
+# │     petroleum products burned for heat or power in STATIONARY        │
+# │     installations                                                     │
+# │   - Gaseous fossil fuels: natural gas, petroleum gases (propane,    │
+# │     butane, ethylene, etc.) in gaseous or liquefied form             │
+# │   - Peat and peat products                                           │
+# │                                                                       │
+# │ Exclude codes for:                                                    │
+# │   - Electricity (2716)                                                │
+# │   - Transport fuels: motor gasoline / motor spirit (27101231–        │
+# │     27101250), aviation gasoline (27101231), jet fuels — both        │
+# │     gasoline-type (27101270) and kerosene-type (27101921)            │
+# │   - Products primarily NOT fuels: lubricating oils, greases,         │
+# │     paraffin wax, petroleum jelly, bitumen / asphalt, mineral waxes │
+# │   - Mineral tar pitch (27081000) — used as binder, not fuel          │
+# │                                                                       │
+# │ Edge cases: If a product (e.g. white spirit, naphtha grades, waste  │
+# │ oils) is sometimes burned for energy but primarily used as solvent   │
+# │ or feedstock, INCLUDE it and note "[EDGE CASE: ...]" in the         │
+# │ description.                                                          │
 # │                                                                       │
 # │ OUTPUT FORMAT: Return an R tribble() with exactly two columns:       │
-# │ - cn_code: character, the 8-digit CN code with no spaces (e.g.,      │
-# │   "27011100")                                                         │
-# │ - description: character, the official CN 2022 product description   │
+# │   - cn_code: character, 8-digit CN code (e.g., "27011100")          │
+# │   - description: character, CN 2022 product description (append     │
+# │     edge-case notes in square brackets where applicable)             │
 # │                                                                       │
-# │ Group the codes by HS4 heading (2701, 2702, ..., 2715) and include  │
-# │ a brief comment above each group indicating what it covers.          │
-# │                                                                       │
+# │ Group codes by HS4 heading with a brief R comment above each group. │
 # │ Do not include any codes outside Chapter 27.                          │
 # └─────────────────────────────────────────────────────────────────────────┘
 #
@@ -97,172 +225,24 @@ library(tibble)
 #         (Combined Nomenclature applicable from 1 January 2022)
 #
 # Inclusion criteria : solid, liquid & gaseous fossil fuels; peat
-# Exclusion criteria : electricity (2716), lubricating oils & greases,
-#                      paraffin wax, petroleum jelly, bitumen/asphalt,
-#                      mineral tar, sulfur
+# Exclusion criteria : electricity (2716), transport fuels (motor gasoline,
+#                      aviation gasoline, jet fuels), lubricating oils &
+#                      greases, paraffin wax, petroleum jelly,
+#                      bitumen/asphalt, mineral tar
 # Edge-case policy   : inclusive — borderline products noted in description
 # =============================================================================
 
+# =============================================================================
+# <<< PASTE LLM OUTPUT HERE >>>
+#
+# Run the prompt documented above in a fresh Claude Opus 4.6 conversation,
+# then replace this placeholder with the resulting tribble().
+# The output should be an R tribble with columns: cn_code, description
+# =============================================================================
+
 cn8digit_codes_for_fossil_fuels <- tribble(
-  ~cn_code,     ~description,
-
-  # ---------------------------------------------------------------------------
-  # 2701 — Coal: anthracite, bituminous coal, other coal, briquettes
-  # ---------------------------------------------------------------------------
-  "27011100",   "Anthracite, whether or not pulverised, but not agglomerated",
-  "27011210",   "Bituminous coal, whether or not pulverised, but not agglomerated: coking coal",
-  "27011290",   "Bituminous coal, whether or not pulverised, but not agglomerated: other",
-  "27011900",   "Other coal (including sub-bituminous), whether or not pulverised, but not agglomerated",
-  "27012000",   "Briquettes, ovoids and similar solid fuels manufactured from coal",
-
-  # ---------------------------------------------------------------------------
-  # 2702 — Lignite
-  # ---------------------------------------------------------------------------
-  "27021000",   "Lignite, whether or not pulverised, but not agglomerated",
-  "27022000",   "Agglomerated lignite",
-
-  # ---------------------------------------------------------------------------
-  # 2703 — Peat
-  # ---------------------------------------------------------------------------
-  "27030000",   "Peat (including peat litter), whether or not agglomerated",
-
-  # ---------------------------------------------------------------------------
-  # 2704 — Coke and semi-coke of coal, lignite or peat; retort carbon
-  # ---------------------------------------------------------------------------
-  "27040010",   "Coke and semi-coke of coal",
-  "27040030",   "Coke and semi-coke of lignite",
-  "27040090",   "Other (including coke and semi-coke of peat; retort carbon) [NOTE: retort carbon is primarily used for electrodes but is combustible]",
-
-  # ---------------------------------------------------------------------------
-  # 2705 — Coal gas, water gas, producer gas and similar gases
-  # ---------------------------------------------------------------------------
-  "27050000",   "Coal gas, water gas, producer gas and similar gases, other than petroleum gases and other gaseous hydrocarbons",
-
-  # ---------------------------------------------------------------------------
-  # 2707 — Oils and other products of high-temperature coal-tar distillation
-  #         [NOTE: many 2707 products are primarily chemical feedstocks/solvents
-  #          but can be combusted in industrial settings; included per edge-case
-  #          policy]
-  # ---------------------------------------------------------------------------
-  "27071000",   "Benzol (benzene) [EDGE CASE: primarily chemical feedstock; combustible]",
-  "27072000",   "Toluol (toluene) [EDGE CASE: primarily solvent/feedstock; combustible]",
-  "27073000",   "Xylol (xylenes) [EDGE CASE: primarily solvent/feedstock; combustible]",
-  "27075000",   "Other aromatic hydrocarbon mixtures of which >= 65% by volume distils at 250 deg C (ISO 3405) [EDGE CASE: may be used as fuel blending component]",
-  "27079100",   "Creosote oils [EDGE CASE: can be combusted for energy]",
-  "27079911",   "Crude light oils of which >= 90% by volume distils at up to 200 deg C [EDGE CASE: combustible]",
-  "27079919",   "Other crude oils from coal-tar distillation [EDGE CASE: combustible]",
-  "27079999",   "Other oils and products of high-temperature coal-tar distillation, n.e.s. [EDGE CASE: residual category; may include combustible fractions]",
-
-  # ---------------------------------------------------------------------------
-  # 2708 — Pitch and pitch coke from coal tar or other mineral tars
-  # ---------------------------------------------------------------------------
-  "27082000",   "Pitch coke [EDGE CASE: analogous to petroleum coke; can be burned in kilns/furnaces, though also used for electrodes]",
-
-  # ---------------------------------------------------------------------------
-  # 2709 — Petroleum oils and oils obtained from bituminous minerals, crude
-  # ---------------------------------------------------------------------------
-  "27090010",   "Petroleum oils, crude: natural gas condensates",
-  "27090090",   "Petroleum oils and oils obtained from bituminous minerals, crude: other",
-
-  # ---------------------------------------------------------------------------
-  # 2710 — Petroleum oils (other than crude), preparations >= 70% petroleum
-  #         oils, waste oils
-  #   Excluded: lubricating oils (2710 19 71 – 2710 19 99)
-  # ---------------------------------------------------------------------------
-
-  # -- Light oils and preparations (for specific process / chemical transf.) --
-  "27101211",   "Light oils and preparations for undergoing a specific process",
-  "27101215",   "Light oils and preparations for undergoing chemical transformation",
-
-  # -- Light oils — special spirits --
-  "27101221",   "White spirit [EDGE CASE: primarily solvent; combustible in industrial settings]",
-  "27101225",   "Other special spirits [EDGE CASE: primarily solvents; combustible]",
-
-  # -- Light oils — motor spirit / gasoline --
-  "27101231",   "Aviation spirit (avgas)",
-  "27101241",   "Motor spirit (gasoline), unleaded (RON < 95)",
-  "27101245",   "Motor spirit (gasoline), unleaded (RON >= 95 and < 98)",
-  "27101249",   "Motor spirit (gasoline), unleaded (RON >= 98)",
-  "27101250",   "Motor spirit (gasoline), leaded (lead > 0.013 g/l)",
-
-  # -- Light oils — jet fuel & other --
-  "27101270",   "Spirit-type jet fuel",
-  "27101290",   "Other light oils and preparations [includes naphtha — EDGE CASE: naphtha is primarily feedstock but combustible]",
-
-  # -- Medium oils --
-  "27101911",   "Medium oils and preparations for undergoing a specific process",
-  "27101915",   "Medium oils and preparations for undergoing chemical transformation",
-  "27101921",   "Kerosene: jet fuel (kerosene-type)",
-  "27101925",   "Kerosene: other (heating kerosene / lamp oil)",
-  "27101929",   "Other medium oils and preparations",
-
-  # -- Heavy oils — gas oils (diesel / heating oil) --
-  "27101931",   "Gas oils for undergoing a specific process",
-  "27101935",   "Gas oils for undergoing chemical transformation",
-  "27101943",   "Gas oils for other purposes, sulphur content <= 0.001% by weight",
-  "27101946",   "Gas oils for other purposes, sulphur content > 0.001% and <= 0.002% by weight",
-  "27101947",   "Gas oils for other purposes, sulphur content > 0.002% and <= 0.1% by weight",
-  "27101948",   "Gas oils for other purposes, sulphur content > 0.1% by weight",
-
-  # -- Heavy oils — fuel oils --
-  "27101951",   "Fuel oils for undergoing a specific process",
-  "27101955",   "Fuel oils for undergoing chemical transformation",
-  "27101962",   "Fuel oils for other purposes, sulphur content <= 0.1% by weight",
-  "27101966",   "Fuel oils for other purposes, sulphur content > 0.1% and <= 0.5% by weight",
-  "27101967",   "Fuel oils for other purposes, sulphur content > 0.5% by weight",
-
-  # -- Petroleum oils containing biodiesel — gas oils --
-  "27102011",   "Gas oils containing biodiesel, sulphur content <= 0.001% by weight",
-  "27102016",   "Gas oils containing biodiesel, sulphur content > 0.001% and <= 0.1% by weight",
-  "27102019",   "Gas oils containing biodiesel, sulphur content > 0.1% by weight",
-
-  # -- Petroleum oils containing biodiesel — fuel oils --
-  "27102032",   "Fuel oils containing biodiesel, sulphur content <= 0.5% by weight",
-  "27102038",   "Fuel oils containing biodiesel, sulphur content > 0.5% by weight",
-
-  # -- Petroleum oils containing biodiesel — other --
-  "27102090",   "Other petroleum oils containing biodiesel",
-
-  # -- Waste oils --
-  "27109100",   "Waste oils containing polychlorinated biphenyls (PCBs), polychlorinated terphenyls (PCTs) or polybrominated biphenyls (PBBs) [EDGE CASE: hazardous waste; combustion in authorised incinerators]",
-  "27109900",   "Other waste oils [EDGE CASE: commonly burned in waste-oil heaters / authorised installations]",
-
-  # ---------------------------------------------------------------------------
-  # 2711 — Petroleum gases and other gaseous hydrocarbons
-  # ---------------------------------------------------------------------------
-
-  # -- Liquefied --
-  "27111100",   "Natural gas, liquefied (LNG)",
-  "27111211",   "Propane, purity >= 99%, for use as a power or heating fuel",
-  "27111219",   "Propane, purity >= 99%, for other purposes",
-  "27111291",   "Other propane, for undergoing a specific process",
-  "27111293",   "Other propane, for undergoing chemical transformation",
-  "27111294",   "Other propane, purity > 90% but < 99%, for other purposes",
-  "27111297",   "Other propane, other, for other purposes",
-  "27111310",   "Butanes, for undergoing a specific process",
-  "27111330",   "Butanes, for undergoing chemical transformation",
-  "27111391",   "Butanes, purity > 90% but < 95%, for other purposes",
-  "27111397",   "Butanes, other, for other purposes",
-  "27111400",   "Ethylene, propylene, butylene and butadiene [EDGE CASE: primarily petrochemical feedstock; combustible]",
-  "27111900",   "Other liquefied petroleum gases (LPG)",
-
-  # -- In gaseous state --
-  "27112100",   "Natural gas in gaseous state",
-  "27112900",   "Other petroleum gases and gaseous hydrocarbons in gaseous state",
-
-  # ---------------------------------------------------------------------------
-  # 2713 — Petroleum coke, petroleum bitumen and other residues
-  #   Excluded: 2713 20 00 (petroleum bitumen)
-  # ---------------------------------------------------------------------------
-  "27131100",   "Petroleum coke, not calcined",
-  "27131200",   "Petroleum coke, calcined",
-  "27139090",   "Other residues of petroleum oils or of oils obtained from bituminous minerals [EDGE CASE: may be burned as fuel in industrial settings]",
-
-  # ---------------------------------------------------------------------------
-  # 2714 — Bituminous or oil-shale and tar sands; natural bitumen, asphaltites
-  #   Excluded: 2714 90 00 (natural bitumen/asphalt, asphaltites, asphaltic rocks)
-  # ---------------------------------------------------------------------------
-  "27141000",   "Bituminous or oil-shale and tar sands [NOTE: fossil fuel resource; can be processed and combusted for energy]"
+  ~cn_code,     ~description
+  # <<< PASTE ROWS HERE >>>
 )
 
 # ====================
