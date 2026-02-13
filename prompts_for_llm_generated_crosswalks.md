@@ -16,7 +16,7 @@ knowledge — not recall arbitrary alphanumeric codes from memory.
 ## Prompt 1 — CN8 fossil fuel codes for stationary combustion (script 18)
 
 **Corresponding script:** `preprocess/18_build_cn8_fossil_fuel_list.R`
-**Output object:** `cn8digit_codes_for_fossil_fuels` (columns: `cn_code`, `description`)
+**Output object:** `cn8digit_codes_for_fossil_fuels` (columns: `cn_code`, `description`, `edge_case`)
 
 **Authoritative source for CN8 codes:** Commission Implementing Regulation
 (EU) 2021/1832, Annex I (Combined Nomenclature applicable from 1 January 2022).
@@ -183,35 +183,25 @@ INPUT — All CN8 codes in Chapter 27:
 CLASSIFICATION CRITERIA:
 
 Include codes for:
-  - Solid fossil fuels: coal (anthracite, bituminous, sub-bituminous),
-    lignite, coke, semi-coke, briquettes
-  - Liquid fossil fuels: crude oil, fuel oils, gas oils / diesel,
-    kerosene (heating), naphtha, LPG, petroleum coke, and other
-    petroleum products burned for heat or power in STATIONARY
-    installations
-  - Gaseous fossil fuels: natural gas, petroleum gases (propane, butane,
-    ethylene, etc.) in gaseous or liquefied form
-  - Peat and peat products
+  - Solid, liquid, and gaseous fossil fuels (including peat) that
+    could be combusted for energy in stationary installations
 
 Exclude codes for:
-  - Electricity (2716)
-  - Transport fuels: motor gasoline / motor spirit (27101231–27101250),
-    aviation gasoline (27101231), jet fuels — both gasoline-type
-    (27101270) and kerosene-type (27101921)
-  - Products primarily NOT fuels: lubricating oils, greases, paraffin
-    wax, petroleum jelly, bitumen / asphalt, mineral waxes
-  - Mineral tar pitch (27081000) — used as binder, not fuel
+  - Electricity
+  - Transport fuels
+  - Products primarily used for non-energy purposes
 
 Edge cases: If a product (e.g. white spirit, certain naphtha grades,
 waste oils) is sometimes burned for energy in industrial settings but
-primarily used as a solvent or feedstock, INCLUDE it and note the
-ambiguity in the description column with "[EDGE CASE: ...]".
+primarily used as a solvent or feedstock, INCLUDE it but flag it as
+an edge case.
 
-OUTPUT FORMAT: Return an R tribble() with exactly two columns:
+OUTPUT FORMAT: Return an R tribble() with exactly three columns:
   - cn_code: character, the 8-digit CN code (e.g., "27011100")
   - description: character, the CN 2022 product description
-    (use the descriptions provided above; append edge-case notes
-    in square brackets where applicable)
+    (use the descriptions provided above)
+  - edge_case: logical, TRUE if the product is an edge case
+    (borderline energy/non-energy use), FALSE otherwise
 
 Group the codes by HS4 heading and include a brief R comment above
 each group.

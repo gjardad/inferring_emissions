@@ -162,33 +162,22 @@
 # │ CLASSIFICATION CRITERIA:                                              │
 # │                                                                       │
 # │ Include codes for:                                                    │
-# │   - Solid fossil fuels: coal, lignite, coke, semi-coke, briquettes  │
-# │   - Liquid fossil fuels: crude oil, fuel oils, gas oils / diesel,   │
-# │     kerosene (heating), naphtha, LPG, petroleum coke, and other     │
-# │     petroleum products burned for heat or power in STATIONARY        │
-# │     installations                                                     │
-# │   - Gaseous fossil fuels: natural gas, petroleum gases (propane,    │
-# │     butane, ethylene, etc.) in gaseous or liquefied form             │
-# │   - Peat and peat products                                           │
+# │   - Solid, liquid, and gaseous fossil fuels (including peat) that   │
+# │     could be combusted for energy in stationary installations        │
 # │                                                                       │
 # │ Exclude codes for:                                                    │
-# │   - Electricity (2716)                                                │
-# │   - Transport fuels: motor gasoline / motor spirit (27101231–        │
-# │     27101250), aviation gasoline (27101231), jet fuels — both        │
-# │     gasoline-type (27101270) and kerosene-type (27101921)            │
-# │   - Products primarily NOT fuels: lubricating oils, greases,         │
-# │     paraffin wax, petroleum jelly, bitumen / asphalt, mineral waxes │
-# │   - Mineral tar pitch (27081000) — used as binder, not fuel          │
+# │   - Electricity                                                      │
+# │   - Transport fuels                                                  │
+# │   - Products primarily used for non-energy purposes                  │
 # │                                                                       │
 # │ Edge cases: If a product (e.g. white spirit, naphtha grades, waste  │
 # │ oils) is sometimes burned for energy but primarily used as solvent   │
-# │ or feedstock, INCLUDE it and note "[EDGE CASE: ...]" in the         │
-# │ description.                                                          │
+# │ or feedstock, INCLUDE it but flag it as an edge case.                │
 # │                                                                       │
-# │ OUTPUT FORMAT: Return an R tribble() with exactly two columns:       │
+# │ OUTPUT FORMAT: Return an R tribble() with exactly three columns:     │
 # │   - cn_code: character, 8-digit CN code (e.g., "27011100")          │
-# │   - description: character, CN 2022 product description (append     │
-# │     edge-case notes in square brackets where applicable)             │
+# │   - description: character, CN 2022 product description              │
+# │   - edge_case: logical, TRUE if borderline energy/non-energy use     │
 # │                                                                       │
 # │ Group codes by HS4 heading with a brief R comment above each group. │
 # │ Do not include any codes outside Chapter 27.                          │
@@ -237,12 +226,109 @@ library(tibble)
 #
 # Run the prompt documented above in a fresh Claude Opus 4.6 conversation,
 # then replace this placeholder with the resulting tribble().
-# The output should be an R tribble with columns: cn_code, description
+# The output should be an R tribble with columns: cn_code, description, edge_case
 # =============================================================================
 
 cn8digit_codes_for_fossil_fuels <- tribble(
-  ~cn_code,     ~description
-  # <<< PASTE ROWS HERE >>>
+  ~cn_code,     ~description,                                                                      ~edge_case,
+
+  # --- 2701: Coal ---
+  "27011100",   "Anthracite, whether or not pulverised, but not agglomerated",                      FALSE,
+  "27011210",   "Coking coal, whether or not pulverised, but not agglomerated",                     FALSE,
+  "27011290",   "Other bituminous coal, whether or not pulverised, but not agglomerated",           FALSE,
+  "27011900",   "Other coal (incl. sub-bituminous), whether or not pulverised, but not agglomerated", FALSE,
+  "27012000",   "Briquettes, ovoids and similar solid fuels manufactured from coal",                FALSE,
+
+  # --- 2702: Lignite ---
+  "27021000",   "Lignite, whether or not pulverised, but not agglomerated",                         FALSE,
+  "27022000",   "Agglomerated lignite",                                                             FALSE,
+
+  # --- 2703: Peat ---
+  "27030000",   "Peat (including peat litter), whether or not agglomerated",                        FALSE,
+
+  # --- 2704: Coke and semi-coke ---
+  "27040010",   "Coke and semi-coke of coal",                                                       FALSE,
+  "27040030",   "Coke and semi-coke of lignite",                                                    FALSE,
+  "27040090",   "Other coke and semi-coke (incl. retort carbon)",                                   TRUE,
+
+  # --- 2705: Coal gas, water gas, producer gas ---
+  "27050000",   "Coal gas, water gas, producer gas and similar gases (other than petroleum gases)",  FALSE,
+
+  # --- 2706: Tar distilled from coal/lignite/peat ---
+  "27060000",   "Tar distilled from coal, lignite or peat, and other mineral tars",                 TRUE,
+
+  # --- 2707: High-temperature coal tar distillation products (edge cases — primarily chemical/feedstock use) ---
+  "27075000",   "Other aromatic hydrocarbon mixtures (>= 65% by vol. distils at 250°C)",            TRUE,
+  "27079100",   "Creosote oils",                                                                    TRUE,
+  "27079911",   "Crude light oils (>= 90% by vol. distils at up to 200°C)",                         TRUE,
+  "27079919",   "Other crude light oils",                                                           TRUE,
+  "27079999",   "Other products of distillation of high-temperature coal tar",                      TRUE,
+
+  # --- 2708: Pitch and pitch coke ---
+  "27082000",   "Pitch coke",                                                                       TRUE,
+
+  # --- 2709: Crude petroleum oils ---
+  "27090010",   "Natural gas condensates",                                                          FALSE,
+  "27090090",   "Other crude petroleum oils",                                                       FALSE,
+
+  # --- 2710: Petroleum oils (not crude) — stationary-use fractions ---
+  # Light oils — edge cases (naphtha-range, often feedstock/solvent)
+  "27101211",   "Light oils for undergoing a specific process",                                     TRUE,
+  "27101221",   "White spirit",                                                                     TRUE,
+  "27101225",   "Other special spirits",                                                            TRUE,
+  "27101290",   "Other light oils and preparations",                                                TRUE,
+
+  # Medium oils — kerosene for heating
+  "27101911",   "Medium oils for undergoing a specific process",                                    TRUE,
+  "27101925",   "Other kerosene",                                                                   FALSE,
+  "27101929",   "Other medium oils and preparations",                                               TRUE,
+
+  # Gas oils (diesel/heating oil)
+  "27101931",   "Gas oils for undergoing a specific process",                                       TRUE,
+  "27101943",   "Gas oils, sulphur <= 0.001%",                                                      FALSE,
+  "27101946",   "Gas oils, sulphur > 0.001% and <= 0.002%",                                         FALSE,
+  "27101947",   "Gas oils, sulphur > 0.002% and <= 0.1%",                                           FALSE,
+  "27101948",   "Gas oils, sulphur > 0.1%",                                                         FALSE,
+
+  # Fuel oils (heavy fuel oil — classic stationary fuel)
+  "27101951",   "Fuel oils for undergoing a specific process",                                      TRUE,
+  "27101962",   "Fuel oils, sulphur <= 0.1%",                                                       FALSE,
+  "27101966",   "Fuel oils, sulphur > 0.1% and <= 0.5%",                                            FALSE,
+  "27101967",   "Fuel oils, sulphur > 0.5%",                                                        FALSE,
+
+  # Gas oils / fuel oils containing biodiesel
+  "27102011",   "Gas oils containing biodiesel, sulphur <= 0.001%",                                 FALSE,
+  "27102016",   "Gas oils containing biodiesel, sulphur > 0.001% and <= 0.1%",                      FALSE,
+  "27102019",   "Gas oils containing biodiesel, sulphur > 0.1%",                                    FALSE,
+  "27102032",   "Fuel oils containing biodiesel, sulphur <= 0.5%",                                  FALSE,
+  "27102038",   "Fuel oils containing biodiesel, sulphur > 0.5%",                                   FALSE,
+  "27102090",   "Other petroleum oils containing biodiesel",                                        TRUE,
+
+  # Waste oils
+  "27109100",   "Waste oils containing PCBs/PCTs/PBBs",                                            TRUE,
+  "27109900",   "Other waste oils",                                                                 TRUE,
+
+  # --- 2711: Petroleum gases and other gaseous hydrocarbons ---
+  "27111100",   "Liquefied natural gas (LNG)",                                                      FALSE,
+  "27111211",   "Propane (purity >= 99%), for power or heating fuel",                               FALSE,
+  "27111219",   "Propane (purity >= 99%), for other purposes",                                      TRUE,
+  "27111291",   "Propane (purity > 90% but < 99%), for specific process",                           TRUE,
+  "27111294",   "Propane (purity > 90% but < 99%), for other purposes",                             TRUE,
+  "27111297",   "Other propane",                                                                    TRUE,
+  "27111310",   "Butanes, for undergoing a specific process",                                       TRUE,
+  "27111391",   "Butanes (purity > 90% but < 95%), for other purposes",                             TRUE,
+  "27111397",   "Other butanes",                                                                    TRUE,
+  "27111900",   "Other liquefied petroleum gases (LPG)",                                            FALSE,
+  "27112100",   "Natural gas in gaseous state",                                                     FALSE,
+  "27112900",   "Other petroleum gases and gaseous hydrocarbons in gaseous state",                  TRUE,
+
+  # --- 2713: Petroleum coke and residues ---
+  "27131100",   "Petroleum coke, not calcined",                                                     FALSE,
+  "27131200",   "Petroleum coke, calcined",                                                         TRUE,
+  "27139090",   "Other residues of petroleum oils",                                                 TRUE,
+
+  # --- 2714: Bituminous minerals ---
+  "27141000",   "Bituminous or oil-shale and tar sands",                                            TRUE
 )
 
 # ====================
