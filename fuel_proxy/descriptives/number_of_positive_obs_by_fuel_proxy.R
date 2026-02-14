@@ -31,7 +31,7 @@ library(jsonlite)   # for serializing mods (optional)
 # -----------------------
 # CONFIG - adjust if needed
 # -----------------------
-cache_dir <- PROXY_CACHE_DIR
+cache_dir <- CACHE_DIR
 
 # default path to saved loocv training sample (adjust if you save elsewhere)
 loocv_rdata_candidates <- c(

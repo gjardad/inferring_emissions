@@ -44,12 +44,7 @@ sample_tag <- "all"
 # -----------------------
 # Paths + outputs
 # -----------------------
-output_dir <- OUTPUT_DIR
-proxy_cache_dir <- PROXY_CACHE_DIR
-metrics_path_rds <- METRICS_PATH_RDS
-metrics_path_csv <- METRICS_PATH_CSV
-
-if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
 # -----------------------
 # 1) PPML benchmarks
@@ -125,7 +120,7 @@ ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
 )
 
 cat("=== PPML with proxy loop (sector RE) ===\n")
-proxy_files <- list.files(proxy_cache_dir, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
+proxy_files <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
 cat("Found", length(proxy_files), "proxy files\n")
 
 ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
@@ -179,8 +174,8 @@ ppml_metrics_all <- rbindlist(c(ppml_metrics, list(ppml_proxy_metrics)), fill = 
 
 append_metrics_log(
   ppml_metrics_all,
-  rds_path = metrics_path_rds,
-  csv_path = metrics_path_csv,
+  rds_path = METRICS_PATH_RDS,
+  csv_path = METRICS_PATH_CSV,
   dedup = TRUE
 )
 

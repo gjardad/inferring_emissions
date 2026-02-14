@@ -128,7 +128,7 @@ ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
 )
 
 # --- PPML with proxy loop (sector RE) ---
-proxy_files <- list.files(proxy_cache_dir, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
+proxy_files <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
 
 ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
   obj <- readRDS(proxy_file)
@@ -180,8 +180,8 @@ ppml_metrics_all <- rbindlist(c(ppml_metrics, list(ppml_proxy_metrics)), fill = 
 
 append_metrics_log(
   ppml_metrics_all,
-  rds_path = metrics_path_rds,
-  csv_path = metrics_path_csv,
+  rds_path = METRICS_PATH_RDS,
+  csv_path = METRICS_PATH_CSV,
   dedup = TRUE
 )
 
@@ -198,7 +198,7 @@ base <- prep_hurdle_base_DT(
   revenue_var = "revenue"
 )
 
-step1_cache_dir <- file.path(output_dir, "cache_step1")
+step1_cache_dir <- file.path(OUTPUT_DIR, "cache_step1")
 if (!dir.exists(step1_cache_dir)) dir.create(step1_cache_dir, recursive = TRUE)
 
 phat_paths <- lapply(proxy_files, function(proxy_file) {
@@ -254,13 +254,13 @@ step1_high <- step1_metrics[
 topk_step1 <- rbindlist(list(step1_low, step1_high), fill = TRUE)
 step1_pairs <- unique(topk_step1[, .(proxy_tag_ext, threshold_value = threshold)])
 
-saveRDS(step1_metrics, file.path(output_dir, "step1_metrics_threshold_all.rds"))
-write.csv(step1_metrics, file.path(output_dir, "step1_metrics_threshold_all.csv"), row.names = FALSE)
+saveRDS(step1_metrics, file.path(OUTPUT_DIR, "step1_metrics_threshold_all.rds"))
+write.csv(step1_metrics, file.path(OUTPUT_DIR, "step1_metrics_threshold_all.csv"), row.names = FALSE)
 
 # -----------------------
 # 3) Preprocess step 2
 # -----------------------
-step2_cache_dir <- file.path(output_dir, "cache_step2")
+step2_cache_dir <- file.path(OUTPUT_DIR, "cache_step2")
 if (!dir.exists(step2_cache_dir)) dir.create(step2_cache_dir, recursive = TRUE)
 
 muhat_paths <- lapply(proxy_files, function(proxy_file) {
@@ -329,8 +329,8 @@ setorder(step2_metrics, RMSE)
 
 topk_step2 <- step2_metrics[1:min(5, .N)]
 
-saveRDS(step2_metrics, file.path(output_dir, "step2_metrics_all_from_precompute.rds"))
-write.csv(step2_metrics, file.path(output_dir, "step2_metrics_all_from_precompute.csv"), row.names = FALSE)
+saveRDS(step2_metrics, file.path(OUTPUT_DIR, "step2_metrics_all_from_precompute.rds"))
+write.csv(step2_metrics, file.path(OUTPUT_DIR, "step2_metrics_all_from_precompute.csv"), row.names = FALSE)
 
 # -----------------------
 # 4) Evaluate hurdle on topK x topK
@@ -365,13 +365,13 @@ metrics_hurdle_topk <- evaluate_hurdle_triples(
   progress_every = 50
 )
 
-saveRDS(metrics_hurdle_topk, file.path(output_dir, "hurdle_metrics_topk_triples.rds"))
-write.csv(metrics_hurdle_topk, file.path(output_dir, "hurdle_metrics_topk_triples.csv"), row.names = FALSE)
+saveRDS(metrics_hurdle_topk, file.path(OUTPUT_DIR, "hurdle_metrics_topk_triples.rds"))
+write.csv(metrics_hurdle_topk, file.path(OUTPUT_DIR, "hurdle_metrics_topk_triples.csv"), row.names = FALSE)
 
 best_tbl <- metrics_hurdle_topk[variant == "raw" & is.finite(RMSE)]
 setorder(best_tbl, RMSE)
 
 best_combo <- best_tbl[1]
 if (nrow(best_combo) > 0) {
-  saveRDS(best_combo, file.path(output_dir, "best_hurdle_combo_topk_raw.rds"))
+  saveRDS(best_combo, file.path(OUTPUT_DIR, "best_hurdle_combo_topk_raw.rds"))
 }

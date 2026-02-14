@@ -18,8 +18,7 @@ INT_DATA <- file.path(DATA_DIR, "intermediate")
 UTILS_DIR <- file.path(REPO_DIR, "fuel_proxy", "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "fuel_proxy", "models")
 
-PROXY_CACHE_DIR <- file.path(REPO_DIR, "fuel_proxy", "proxies", "cache")
-AUX_CACHE_DIR <- file.path(INT_DATA, "cache")
+CACHE_DIR <- file.path(INT_DATA, "cache")
 METRICS_PATH_RDS <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
 METRICS_PATH_CSV <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 

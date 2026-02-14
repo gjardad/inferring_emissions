@@ -6,7 +6,7 @@
 #   Results are cached to proxies/cache as .rds files.
 #
 # INPUTS (via aux):
-#   - aux <- load_aux()   (requires aux_*.rds in AUX_CACHE_DIR)
+#   - aux <- load_aux()   (requires aux_*.rds in CACHE_DIR)
 #
 # OUTPUT:
 #   - Writes: proxy_*.rds to proxies/cache/
@@ -39,7 +39,7 @@ source(file.path(REPO_DIR, "fuel_proxy", "proxies", "define_proxy_grid.R"))
 stopifnot(exists("proxy_grid"))
 
 # Cache directory
-if (!dir.exists(PROXY_CACHE_DIR)) dir.create(PROXY_CACHE_DIR, recursive = TRUE)
+if (!dir.exists(CACHE_DIR)) dir.create(CACHE_DIR, recursive = TRUE)
 
 tic("build_proxies")
 
@@ -73,7 +73,7 @@ for (k in seq_len(nrow(grid))) {
   mods <- lapply(mods, function(x) if (length(x) == 1) x[[1]] else x)
 
   nm  <- make_proxy_name(mods)
-  out_path <- file.path(PROXY_CACHE_DIR, paste0(nm, ".rds"))
+  out_path <- file.path(CACHE_DIR, paste0(nm, ".rds"))
 
   if (file.exists(out_path)) next
 
