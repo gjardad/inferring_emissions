@@ -197,18 +197,81 @@ library(stringr)
 # (Volume 2, Energy, Chapter 2, Tables 2.2 and 2.3).
 # =============================================================================
 
-# =============================================================================
-# <<< PASTE LLM OUTPUT HERE >>>
-#
-# Run the prompt documented above in a fresh Claude Opus 4.6 conversation,
-# then replace this placeholder with the resulting tribble().
-# The output should be an R tribble with columns:
-#   siec_code, siec_name, ipcc_fuel, mapping_quality, notes
-# =============================================================================
-
 siec_to_ipcc <- tribble(
-  ~siec_code, ~siec_name, ~ipcc_fuel, ~mapping_quality, ~notes
-  # <<< PASTE ROWS HERE >>>
+  ~siec_code,                ~siec_name,                                    ~ipcc_fuel,                              ~mapping_quality, ~notes,
+
+  # Solid fossil fuels
+  "C0110",                   "Anthracite",                                   "Anthracite",                            "exact",          NA_character_,
+  "C0121",                   "Coking coal",                                  "Coking Coal",                           "exact",          NA_character_,
+  "C0129",                   "Other bituminous coal",                        "Other Bituminous Coal",                 "exact",          NA_character_,
+  "C0210",                   "Sub-bituminous coal",                          "Sub-Bituminous Coal",                   "exact",          NA_character_,
+  "C0220",                   "Lignite",                                      "Lignite",                               "exact",          NA_character_,
+  "C0311",                   "Coke oven coke",                               "Coke Oven Coke and Lignite Coke",       "approx",         "IPCC category also includes lignite coke",
+  "C0312",                   "Gas coke",                                     "Gas Coke",                              "exact",          NA_character_,
+  "C0320",                   "Patent fuel",                                  "Patent Fuel",                           "exact",          NA_character_,
+  "C0330",                   "Brown coal briquettes",                        "Brown Coal Briquettes",                 "exact",          NA_character_,
+  "C0340",                   "Coal tar",                                     "Coal Tar",                              "exact",          NA_character_,
+
+  # Manufactured gases
+  "C0350",                   "Coke oven gas",                                "Coke Oven Gas",                         "exact",          NA_character_,
+  "C0360",                   "Gas works gas",                                "Gas Works Gas",                         "exact",          NA_character_,
+  "C0371",                   "Blast furnace gas",                            "Blast Furnace Gas",                     "exact",          NA_character_,
+  "C0372",                   "Basic oxygen steel furnace gas",               "Oxygen Steel Furnace Gas",              "exact",          NA_character_,
+  "C0379",                   "Other recovered gases",                        "Blast Furnace Gas",                     "approx",         "No direct IPCC match; mapped to Blast Furnace Gas as closest manufactured gas category",
+
+  # Natural gas
+  "G3000",                   "Natural gas",                                  "Natural Gas",                           "exact",          NA_character_,
+
+  # Oil — crude and feedstocks
+  "O4100_TOT",               "Crude oil",                                    "Crude Oil",                             "exact",          NA_character_,
+  "O4200",                   "Natural gas liquids",                          "Natural Gas Liquids",                   "exact",          NA_character_,
+  "O4300",                   "Refinery feedstocks",                          "Refinery Feedstocks",                   "exact",          NA_character_,
+  "O4500",                   "Other hydrocarbons",                           "Other Petroleum Products",              "approx",         "SIEC is a broad residual category; mapped to IPCC residual liquid fossil fuel",
+
+  # Oil products
+  "O4610",                   "Refinery gas",                                 "Refinery Gas",                          "exact",          NA_character_,
+  "O4620",                   "Ethane",                                       "Ethane",                                "exact",          NA_character_,
+  "O4630",                   "Liquefied petroleum gases",                    "Liquefied Petroleum Gases",             "exact",          NA_character_,
+  "O4640",                   "Naphtha",                                      "Naphtha",                               "exact",          NA_character_,
+  "O4651",                   "Aviation gasoline",                            "Aviation Gasoline",                     "exact",          NA_character_,
+  "O4652",                   "Motor gasoline",                               "Motor Gasoline",                        "exact",          NA_character_,
+  "O4652XR5210B",            "Motor gasoline (excl. biofuel portion)",       "Motor Gasoline",                        "approx",         "Fossil portion only; biofuel portion excluded by SIEC definition",
+  "O4653",                   "Gasoline-type jet fuel",                       "Jet Gasoline",                          "exact",          NA_character_,
+  "O4661",                   "Kerosene-type jet fuel",                       "Jet Kerosene",                          "exact",          NA_character_,
+  "O4661XR5230B",            "Kerosene-type jet fuel (excl. biofuel portion)", "Jet Kerosene",                        "approx",         "Fossil portion only; biofuel portion excluded by SIEC definition",
+  "O4669",                   "Other kerosene",                               "Other Kerosene",                        "exact",          NA_character_,
+  "O4671",                   "Gas oil and diesel oil",                       "Gas/Diesel Oil",                        "exact",          NA_character_,
+  "O4671XR5220B",            "Gas oil and diesel oil (excl. biofuel portion)", "Gas/Diesel Oil",                      "approx",         "Fossil portion only; biofuel portion excluded by SIEC definition",
+  "O4680",                   "Fuel oil",                                     "Residual Fuel Oil",                     "exact",          NA_character_,
+  "O4691",                   "White spirit and SBP industrial spirits",      "White Spirit and SBP",                  "exact",          NA_character_,
+  "O4692",                   "Lubricants",                                   "Lubricants",                            "exact",          "Primarily non-energy use",
+  "O4693",                   "Paraffin waxes",                               "Paraffin Waxes",                        "exact",          "Primarily non-energy use",
+  "O4694",                   "Petroleum coke",                               "Petroleum Coke",                        "exact",          NA_character_,
+  "O4695",                   "Bitumen",                                      "Bitumen",                               "exact",          "Primarily non-energy use",
+  "O4699",                   "Other oil products n.e.c.",                    "Other Petroleum Products",              "exact",          NA_character_,
+
+  # Oil shale
+  "S2000",                   "Oil shale and oil sands",                      "Oil Shale and Tar Sands",               "exact",          NA_character_,
+
+  # Peat
+  "P1100",                   "Peat",                                         "Peat",                                  "exact",          NA_character_,
+  "P1200",                   "Peat products",                                "Peat",                                  "approx",         "IPCC has single Peat category; peat products (briquettes etc.) mapped here",
+
+  # Biofuels — solid
+  "R5110-5150_W6000RI",      "Primary solid biofuels",                       "Wood / Wood Waste",                     "approx",         "SIEC aggregate covers wood, vegetal waste, animal waste etc.; Wood / Wood Waste is the dominant component. Other Primary Solid Biomass may also apply",
+  "R5160",                   "Charcoal",                                     "Charcoal",                              "exact",          NA_character_,
+
+  # Biofuels — liquid
+  "R5210B",                  "Biogasoline (blended)",                        "Biogasoline",                           "approx",         "SIEC refers to biofuel portion in blended gasoline",
+  "R5210P",                  "Biogasoline (pure)",                           "Biogasoline",                           "exact",          NA_character_,
+  "R5220B",                  "Biodiesels (blended)",                         "Biodiesels",                            "approx",         "SIEC refers to biofuel portion in blended diesel",
+  "R5220P",                  "Biodiesels (pure)",                            "Biodiesels",                            "exact",          NA_character_,
+  "R5230B",                  "Bio jet kerosene (blended)",                   "Other Liquid Biofuels",                 "approx",         "No specific IPCC bio jet kerosene category; mapped to Other Liquid Biofuels",
+  "R5230P",                  "Bio jet kerosene (pure)",                      "Other Liquid Biofuels",                 "approx",         "No specific IPCC bio jet kerosene category; mapped to Other Liquid Biofuels",
+  "R5290",                   "Other liquid biofuels",                        "Other Liquid Biofuels",                 "exact",          NA_character_,
+
+  # Biofuels — gaseous
+  "R5300",                   "Biogases",                                     "Other Biogas",                          "approx",         "SIEC aggregates all biogases; IPCC distinguishes Landfill Gas, Sludge Gas, Other Biogas. Mapped to Other Biogas as broadest category"
 )
 
 # Clean up whitespace
