@@ -1552,7 +1552,6 @@ REFERENCE — SIEC v1.0 codes (from Eurostat SIEC codelist):
     O4661   Kerosene-type jet fuel
     O4669   Other kerosene
     O4671   Gas oil and diesel oil
-    O4672   Heavy gas oil
     O4680   Fuel oil
     O4691   White spirit and SBP
     O4692   Lubricants
@@ -1581,6 +1580,8 @@ INPUT — HS codes to map (Chapter 27, at 4- or 6-digit level):
     271012  Light petroleum oils (HS 2012+ edition, replaces 271011)
     271019  Other petroleum oils (medium/heavy)
     271020  Petroleum oils containing biodiesel
+    271091  Waste oils containing PCBs/PCTs/PBBs
+    271099  Other waste oils
     271111  LNG
     271112  Liquefied propane
     271113  Liquefied butanes
@@ -1594,7 +1595,10 @@ INPUT — HS codes to map (Chapter 27, at 4- or 6-digit level):
     271311  Petroleum coke, not calcined
     271312  Petroleum coke, calcined
     271320  Petroleum bitumen
+    271390  Other residues of petroleum oils
     271410  Bituminous or oil-shale and tar sands
+    271490  Natural bitumen, asphaltites, asphaltic rocks
+    271500  Bituminous mixtures
     280410  Hydrogen (sometimes bundled with other hydrocarbons)
     220720  Denatured ethyl alcohol (additive/oxygenate)
     290511  Methanol (additive/oxygenate)
