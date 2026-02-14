@@ -14,7 +14,7 @@
 
 # It creates two data sets:
 # 1. NCVs by fuel by SIEC code
-# 2. NCVs by fuel by HS code (# Obs: I do NOT trust hs_to_siec_map)
+# 2. NCVs by fuel by HS code (# Uses hs_to_siec_map to translate SIEC-level NCVs to HS-level)
 
 # It contains information directly obtained from Table 4.1 in the UN IRES, 2018
 
@@ -54,8 +54,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
     remove = TRUE
   ) %>% 
   mutate(
-    siec_code = sub("^[A-Za-z]", "", siec_fullcode),
-    siec_code = gsub("\\D+$", "", siec_code),
+    siec_code = str_trim(siec_fullcode),
     value = value %>%
       gsub("\\.", "", .) %>%     # remove all dots
       as.numeric() / 1000        # correct decimal placement
@@ -72,15 +71,15 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
   years <- 1990:2023
 
   # IRES default NCVs in GJ/tonne (only where IRES actually gives a default)
-  # 0313, 4500, 4672 -> NA for now
+  # C0313, O4500 -> NA for now
 
   ncv_ires <- tibble::tibble(
-    siec_code     = c("0312", "0313", "0314",
-                      "1110", "1120", "1210", "1290",
-                      "3000", "4500", "4620", "4672"),
-    siec_fullcode = c("C0312", NA,      "C0314",
-                      "P1100", "P1100", "P1200", "P1200",
-                      "G3000", "O4500", "O4620", NA),
+    siec_code     = c("C0312", "C0313", "C0314",
+                      "P1110", "P1120", "P1210", "P1290",
+                      "G3000", "O4500", "O4620"),
+    siec_fullcode = c("C0312", "C0313", "C0314",
+                      "P1110", "P1120", "P1210", "P1290",
+                      "G3000", "O4500", "O4620"),
     siec_name     = c("Gas coke",
                       "Coke breeze",
                       "Semi cokes",
@@ -90,21 +89,19 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
                       "Other peat products",
                       "Natural gas",
                       "Other hydrocarbons",
-                      "Ethane",
-                      "Heavy gas oil"),
+                      "Ethane"),
     # IRES default values (GJ/tonne)
     ncv_gj_per_t  = c(
-      28.2,   # 0312 Gas coke
-      NA,     # 0313 Coke breeze (no IRES default)
-      28.2,   # 0314 Semi cokes
-      9.76,   # 1110 Sod peat
-      9.76,   # 1120 Milled peat
-      9.76,   # 1210 Peat briquettes
-      9.76,   # 1290 Other peat products
-      48.0,   # 3000 Natural gas
-      NA,     # 4500 Other hydrocarbons (no IRES default)
-      46.4,   # 4620 Ethane
-      NA      # 4672 Heavy gas oil (no IRES default)
+      28.2,   # C0312 Gas coke
+      NA,     # C0313 Coke breeze (no IRES default)
+      28.2,   # C0314 Semi cokes
+      9.76,   # P1110 Sod peat
+      9.76,   # P1120 Milled peat
+      9.76,   # P1210 Peat briquettes
+      9.76,   # P1290 Other peat products
+      48.0,   # G3000 Natural gas
+      NA,     # O4500 Other hydrocarbons (no IRES default)
+      46.4    # O4620 Ethane
     )
   )
   
@@ -147,7 +144,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
 # ====================================================================  
 # Create version of data set by fuel following HS categories --------
   
-  # Obs: I do NOT trust hs_to_siec_map
+  # Uses hs_to_siec_map to translate SIEC-level NCVs to HS-level
 # ====================================================================
   
   hs_siec_ncv <- hs_to_siec_map %>%
