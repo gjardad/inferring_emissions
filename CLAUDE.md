@@ -1,15 +1,33 @@
 # Inferring Emissions
 
 ## What this project is
-PhD thesis chapter comparing regression models for predicting firm-year-level GHG
-emissions out-of-sample in Belgium. The core exercise is Leave-One-Firm-Out Cross
-Validation (LOOCV) across different model specifications and fuel-consumption proxies.
+PhD thesis chapter on predicting firm-year-level GHG emissions for firms not
+regulated by the EU ETS in Belgium. Emissions are observed only for EU ETS firms;
+the goal is to predict them for the rest of the economy. Two alternative approaches
+are explored — both exploit B2B transaction data and the fact that nearly all fuel
+supply in Belgium comes from imports, but they differ in how they use that information.
 
-## Key idea
-Firm-level fuel consumption is unobserved. Since nearly all fuel supply in Belgium
-comes from imports, we identify fuel importers in customs data, then trace downstream
-purchases via business-to-business (B2B) transaction data to construct firm-level fuel
-consumption proxies. Different proxy variants apply different tweaks to this pipeline.
+## Two approaches (`fuel_proxy/` vs `fuel_suppliers/`)
+
+### `fuel_proxy/` — Fuel-consumption proxies
+Identify fuel importers from customs (CN8) data, then trace their downstream sales
+through B2B transactions to construct firm-level fuel-consumption proxies. Different
+proxy variants apply different tweaks to this pipeline. Proxies enter as covariates
+in PPML and hurdle regression models evaluated via Leave-One-Firm-Out CV (LOOCV).
+
+### `fuel_suppliers/` — Fuel-supplier identification
+Rather than building proxies from pre-identified importers, identify which firms
+are fuel suppliers directly from the data. The logic: firms whose B2B sales to
+downstream buyers are positively and consistently correlated with those buyers'
+emissions are likely selling fuel. This uses penalised regression (elastic net)
+where each candidate supplier gets its own coefficient; the sparsity penalty
+shrinks non-fuel-suppliers to zero. Ground truth on the LHS comes from EU ETS
+emissions plus confirmed zeros for non-ETS firms in NACE 19 and 24 (where NIR
+data shows EU ETS covers ~100% of fuel-combustion emissions).
+
+Both approaches share common inputs (B2B data, customs data on fuel importers,
+EU ETS emissions) but are ultimately substitutes — one will be chosen to produce
+the final emission predictions.
 
 ## Data sources (all Belgium, not stored in this repo)
 - **B2B transactions**: near-universe of firms, 2002-2022
@@ -40,7 +58,7 @@ fuel_suppliers/      Everything for the fuel-supplier identification exercise (T
 paper/               LaTeX source for the paper (git submodule)
 
 
-## Regression models
+## Regression models (fuel_proxy)
 
 All models are evaluated via Leave-One-Firm-Out CV (LOFOCV): hold out one
 firm (all its years), train on the rest, predict the held-out firm. After
@@ -100,5 +118,5 @@ are working from so that the correct paths are used.
 ## Conventions
 - Preprocessing scripts are numbered to indicate execution order
 - Descriptive scripts are also numbered
-- Helper functions live in `fuel_proxy/utils/` and are sourced where needed
+- Helper functions live in `fuel_proxy/utils/` or `fuel_suppliers/utils/` and are sourced where needed
 - `paths.R` (at repo root) must be sourced at the top of every script to set path constants
