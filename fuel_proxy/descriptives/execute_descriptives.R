@@ -21,9 +21,7 @@
 #     -> price_dispersion_by_cn4.tex
 #
 #   nace_sector_support_tables.R
-#     -> sector_coverage.tex
-#     -> histogram_firms_per_nace5d.pdf
-#     -> histogram_firms_per_nace2d.pdf
+#     -> sector_support.tex
 #
 #   nace_sectors_totally_covered_by_euets.R
 #     -> (no file output; builds nace_coverage data frame)
