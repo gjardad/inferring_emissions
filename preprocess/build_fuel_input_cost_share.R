@@ -65,7 +65,8 @@ fuel <- amount_spent_on_fuel_by_firm_year %>%
   rename(
     vat = vat_j_ano,
     fuel_spend = amount_spent_on_fuel_excl_euets_importers
-  )
+  ) %>%
+  select(vat, year, fuel_spend)
 
 euets_flag <- firm_year_belgian_euets %>%
   mutate(euets = 1L) %>%
