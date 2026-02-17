@@ -1,21 +1,27 @@
 ###############################################################################
-# 05_analysis/06_share_c19_c24_regulated_by_euets.R
+# fuel_proxy/descriptives/share_c19_c24_regulated_by_euets.R
 #
 # PURPOSE
-#   Compute share of activity/emissions in C19 and C24 sectors covered by the EU ETS.
+#   Show that non-ETS firms in sectors C19 and C24 represent a meaningful
+#   share of economic activity, motivating the use of non-regulated firms
+#   for out-of-sample prediction.
 #
-# WHERE THIS FILE BELONGS
-#   loocv_pipeline/05_analysis/06_share_c19_c24_regulated_by_euets.R
+#   Table contents (for C19 and C24):
+#     1) Number of distinct firms: ETS vs non-ETS
+#     2) Revenue share: ETS vs non-ETS
+#     3) Value-added share: ETS vs non-ETS
+#     4) Median firm revenue: ETS vs non-ETS (shows non-ETS are not tiny)
+#
+# INPUTS
+#   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
+#   - PROC_DATA/firm_year_belgian_euets.RData
+#
+# OUTPUTS (to OUTPUT_DIR)
+#   - ets_share_c19_c24.tex
 ###############################################################################
 
-#### HEADER -------
-
-# Check share of value added in sectors C19, C24 which are not regulated by EUETS
-
-#####################
-
 # ====================
-# Define paths ------------------
+# Define paths -------
 # ====================
 
 if (tolower(Sys.info()[["user"]]) == "jardang") {
@@ -28,141 +34,126 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 }
 source(file.path(REPO_DIR, "paths.R"))
 
-
-# -------------
-## Setup ------
-# -------------
-
-
-library(tidyverse)
-library(tidyr)
 library(dplyr)
+library(tidyr)
+library(knitr)
+library(kableExtra)
 
-# ------------
-# Load data --
-# ------------
+# ==================
+# Load data --------
+# ==================
 
-load(paste0(PROC_DATA,"/annual_accounts_selected_sample.RData"))
+load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
+load(file.path(PROC_DATA, "firm_year_belgian_euets.RData"))
 
-load(paste0(PROC_DATA,"/firm_year_belgian_euets.RData"))
+euets_flag <- firm_year_belgian_euets %>%
+  mutate(euets = 1L) %>%
+  select(vat, year, euets)
 
-load(paste0(PROC_DATA,"/installation_year_in_belgium.RData"))
-
-# ----------------------------
-# Clean and generate data ----
-# ----------------------------
-
-firm_year_belgian_euets$is_euets <- 1
-
-df <- df_annual_accounts_selected_sample %>% 
-  left_join(
-    firm_year_belgian_euets %>% 
-      select(vat, year, is_euets),
-    by = c("vat_ano" = "vat", "year")
-  ) %>% 
-  select(
-    vat_ano, year,
-    turnover_VAT, v_0001023, v_0009800,
-    nace5d, is_euets
-  ) %>% 
-  rename(
-    revenue     = turnover_VAT,
-    wage_bill   = v_0001023,
-    value_added = v_0009800
-  ) %>% 
+df <- df_annual_accounts_selected_sample_key_variables %>%
+  left_join(euets_flag, by = c("vat", "year")) %>%
   mutate(
+    euets  = coalesce(euets, 0L),
     nace2d = substr(nace5d, 1, 2),
-    is_euets = if_else(is.na(is_euets), 0L, is_euets)
-  )
+    group  = if_else(euets == 1, "ETS", "non-ETS")
+  ) %>%
+  filter(nace2d %in% c("19", "24"))
 
-# Share of output regulated by EUETS, by sector-year
-euets_shares_nace2d <- df %>%
-  group_by(nace2d, year) %>%
+
+# =====================================================================
+# 1) FIRM COUNTS
+# =====================================================================
+
+firm_counts <- df %>%
+  group_by(nace2d, group) %>%
+  summarise(n_firms = n_distinct(vat), .groups = "drop") %>%
+  pivot_wider(names_from = group, values_from = n_firms, values_fill = 0) %>%
+  mutate(total = ETS + `non-ETS`,
+         pct_non_ets = round(`non-ETS` / total * 100, 1)) %>%
+  rename(sector = nace2d)
+
+
+# =====================================================================
+# 2) REVENUE AND VALUE-ADDED SHARES (pooled across years)
+# =====================================================================
+
+shares <- df %>%
+  group_by(nace2d, group) %>%
   summarise(
-    # totals
-    revenue_total     = sum(revenue, na.rm = TRUE),
-    value_added_total = sum(value_added, na.rm = TRUE),
-    wage_bill_total   = sum(wage_bill, na.rm = TRUE),
-    
-    # ETS-covered totals
-    revenue_euets     = sum(revenue[is_euets == 1], na.rm = TRUE),
-    value_added_euets = sum(value_added[is_euets == 1], na.rm = TRUE),
-    wage_bill_euets   = sum(wage_bill[is_euets == 1], na.rm = TRUE),
-    
-    # shares
-    share_revenue_euets =
-      revenue_euets / revenue_total,
-    
-    share_value_added_euets =
-      value_added_euets / value_added_total,
-    
-    share_wage_bill_euets =
-      wage_bill_euets / wage_bill_total,
-    
+    total_revenue     = sum(revenue, na.rm = TRUE),
+    total_value_added = sum(value_added, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  group_by(nace2d) %>%
+  mutate(
+    revenue_share = round(total_revenue / sum(total_revenue) * 100, 1),
+    va_share      = round(total_value_added / sum(total_value_added) * 100, 1)
+  ) %>%
+  ungroup()
+
+
+# =====================================================================
+# 3) MEDIAN FIRM REVENUE (across firm-years)
+# =====================================================================
+
+median_size <- df %>%
+  filter(!is.na(revenue), revenue > 0) %>%
+  group_by(nace2d, group) %>%
+  summarise(
+    median_revenue = median(revenue, na.rm = TRUE),
     .groups = "drop"
   )
 
-# Number of firms regulated by EUETS, by sector-year
-firms_by_sector_year <- df %>%
-  group_by(nace2d, year) %>%
+
+# =====================================================================
+# Combine into one table
+# =====================================================================
+
+summary_table <- shares %>%
+  left_join(median_size, by = c("nace2d", "group")) %>%
+  select(sector = nace2d, group,
+         n_firm_years = total_revenue,  # placeholder, replace below
+         revenue_share, va_share, median_revenue)
+
+# Actually rebuild cleanly
+summary_table <- df %>%
+  group_by(nace2d, group) %>%
   summarise(
-    n_firms_total = n_distinct(vat_ano),
-    n_firms_euets = n_distinct(vat_ano[is_euets == 1]),
-    n_firms_non_euets = n_distinct(vat_ano[is_euets == 0]),
-    share_firms_euets = n_firms_euets / n_firms_total,
+    n_firms            = n_distinct(vat),
+    n_firm_years       = n(),
+    total_revenue      = sum(revenue, na.rm = TRUE),
+    total_value_added  = sum(value_added, na.rm = TRUE),
+    median_revenue     = median(revenue[revenue > 0], na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  arrange(nace2d, year)
-
-# Number of installations regulated by EUETS, by sector-year
-# 1) Build firm-year NACE5d evidence from annual accounts (unique vat_ano-year)
-aa_nace <- df_annual_accounts_selected_sample %>%
-  transmute(
-    vat_ano = str_trim(as.character(vat_ano)),
-    year,
-    nace5d = str_trim(as.character(nace5d))
-  ) %>%
+  group_by(nace2d) %>%
   mutate(
-    nace5d = na_if(nace5d, ""),
-    vat_ano = na_if(vat_ano, "")
+    revenue_share_pct = round(total_revenue / sum(total_revenue) * 100, 1),
+    va_share_pct      = round(total_value_added / sum(total_value_added) * 100, 1)
   ) %>%
-  distinct(vat_ano, year, nace5d) %>%
-  group_by(vat_ano, year) %>%
-  summarise(nace5d = first(na.omit(nace5d)), .groups = "drop")
+  ungroup() %>%
+  select(sector = nace2d, group, n_firms, n_firm_years,
+         revenue_share_pct, va_share_pct, median_revenue)
 
-# 2) Join installation-year info to firm-year nace5d
-inst_with_nace <- installation_year_in_belgium %>%
-  mutate(
-    vat_ano = str_trim(as.character(vat_ano)),
-    nace_id = str_trim(as.character(nace_id)),
-    installation_id = str_trim(as.character(installation_id))
-  ) %>%
-  left_join(aa_nace, by = c("vat_ano", "year")) %>%
-  mutate(
-    # NACE2d from installation-level nace_id
-    nace2d_from_install = if_else(!is.na(nace_id) & nchar(nace_id) >= 3,
-                                  substr(nace_id, 1, 2),
-                                  NA_character_),
-    
-    # NACE2d from firm accounts nace5d (same logic)
-    nace2d_from_accounts = if_else(!is.na(nace5d),
-                                   substr(nace5d, 1, 2),
-                                   NA_character_)
-  )
-
-install_counts_by_sector_year <- inst_with_nace %>%
-  select(installation_id, year, nace2d_from_install, nace2d_from_accounts) %>%
-  pivot_longer(
-    cols = c(nace2d_from_install, nace2d_from_accounts),
-    names_to = "classification",
-    values_to = "nace2d"
-  ) %>%
-  filter(!is.na(nace2d)) %>%
-  group_by(classification, nace2d, year) %>%
-  summarise(
-    n_installations = n_distinct(installation_id),
-    .groups = "drop"
-  ) %>%
-  arrange(classification, nace2d, year)
+cat("\n=== ETS vs NON-ETS IN SECTORS C19 AND C24 ===\n")
+print(as.data.frame(summary_table), row.names = FALSE)
 
 
+# =====================================================================
+# Save
+# =====================================================================
+
+writeLines(
+  summary_table %>%
+    mutate(median_revenue = round(median_revenue)) %>%
+    kable(format = "latex",
+          col.names = c("Sector", "Group", "Firms", "Firm-years",
+                        "Revenue share (\\%)", "VA share (\\%)",
+                        "Median revenue"),
+          booktabs = TRUE, escape = FALSE,
+          align = c("l", "l", rep("r", 5))) %>%
+    kable_styling(latex_options = "hold_position"),
+  file.path(OUTPUT_DIR, "ets_share_c19_c24.tex")
+)
+
+cat("\nSaved to", file.path(OUTPUT_DIR, "ets_share_c19_c24.tex"), "\n")

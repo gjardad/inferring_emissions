@@ -18,7 +18,7 @@
 #   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
 #
 # OUTPUTS
-#   - OUTPUT_DIR/sector_coverage.csv
+#   - OUTPUT_DIR/sector_coverage.tex
 #   - OUTPUT_DIR/histogram_firms_per_nace5d.pdf
 #   - OUTPUT_DIR/histogram_firms_per_nace2d.pdf
 ###############################################################################
@@ -39,6 +39,8 @@ source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
 library(ggplot2)
+library(knitr)
+library(kableExtra)
 
 # ==================
 # Load data --------
@@ -138,9 +140,16 @@ p_2d <- ggplot(firms_per_2d, aes(x = n_firms)) +
 # Save outputs
 # =====================================================================
 
-write.csv(coverage_table,
-          file.path(OUTPUT_DIR, "sector_coverage.csv"),
-          row.names = FALSE)
+writeLines(
+  coverage_table %>%
+    kable(format = "latex",
+          col.names = c("Level", "In deployment", "In training",
+                        "Covered", "Coverage (\\%)"),
+          booktabs = TRUE, escape = FALSE,
+          align = c("l", rep("r", 4))) %>%
+    kable_styling(latex_options = "hold_position"),
+  file.path(OUTPUT_DIR, "sector_coverage.tex")
+)
 
 ggsave(file.path(OUTPUT_DIR, "histogram_firms_per_nace5d.pdf"),
        p_5d, width = 7, height = 4.5)

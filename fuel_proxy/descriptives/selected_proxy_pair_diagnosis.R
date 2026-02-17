@@ -20,7 +20,7 @@
 #
 # OUTPUTS (to OUTPUT_DIR, one set per proxy)
 #   - selected_proxy_{step}_regression.txt
-#   - selected_proxy_{step}_summary_stats.csv
+#   - selected_proxy_{step}_summary_stats.tex
 #   - selected_proxy_{step}_density_C19.pdf
 #   - selected_proxy_{step}_density_C24.pdf
 ###############################################################################
@@ -41,6 +41,8 @@ source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
 library(ggplot2)
+library(knitr)
+library(kableExtra)
 
 # =====================================================================
 # PROXY NAMES — edit these to match the selected hurdle pair
@@ -146,9 +148,19 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
   cat("\n=== SUMMARY STATS:", step_label, "===\n")
   print(as.data.frame(summary_stats), row.names = FALSE)
 
-  stats_file <- file.path(OUTPUT_DIR,
-                           paste0("selected_proxy_", step_tag, "_summary_stats.csv"))
-  write.csv(summary_stats, stats_file, row.names = FALSE)
+  writeLines(
+    summary_stats %>%
+      mutate(across(where(is.numeric), ~round(., 4))) %>%
+      kable(format = "latex",
+            col.names = c("Group", "N", "Share proxy $> 0$ (\\%)",
+                          "Mean proxy", "Median proxy",
+                          "Mean asinh", "Median asinh"),
+            booktabs = TRUE, escape = FALSE,
+            align = c("l", rep("r", 6))) %>%
+      kable_styling(latex_options = "hold_position"),
+    file.path(OUTPUT_DIR,
+              paste0("selected_proxy_", step_tag, "_summary_stats.tex"))
+  )
 
   # ------------------------------------------------------------------
   # 3) Kernel density of asinh(proxy) for C19 and C24

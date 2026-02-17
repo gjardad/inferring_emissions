@@ -17,7 +17,7 @@
 #
 # OUTPUTS (to OUTPUT_DIR)
 #   - benchmark_proxy_regression.txt
-#   - benchmark_proxy_summary_stats.csv
+#   - benchmark_proxy_summary_stats.tex
 #   - benchmark_proxy_density_C19.pdf
 #   - benchmark_proxy_density_C24.pdf
 ###############################################################################
@@ -39,6 +39,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(ggplot2)
 library(scales)
+library(knitr)
+library(kableExtra)
 
 # ==================
 # Load data --------
@@ -103,9 +105,16 @@ summary_stats <- df %>%
 cat("\n=== SUMMARY STATS: BENCHMARK FUEL PROXY BY ETS STATUS ===\n")
 print(as.data.frame(summary_stats), row.names = FALSE)
 
-write.csv(summary_stats,
-          file.path(OUTPUT_DIR, "benchmark_proxy_summary_stats.csv"),
-          row.names = FALSE)
+writeLines(
+  summary_stats %>%
+    kable(format = "latex",
+          col.names = c("Group", "N", "Share proxy $> 0$ (\\%)",
+                        "Mean cost share", "Median cost share"),
+          booktabs = TRUE, escape = FALSE,
+          align = c("l", rep("r", 4))) %>%
+    kable_styling(latex_options = "hold_position"),
+  file.path(OUTPUT_DIR, "benchmark_proxy_summary_stats.tex")
+)
 
 
 # =====================================================================

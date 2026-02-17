@@ -15,9 +15,9 @@
 #   - PROC_DATA/firm_cncode_year_physical_qty.RData
 #
 # OUTPUTS (to OUTPUT_DIR)
-#   - tier_breakdown.csv
-#   - pseudo_ground_truth_test.csv
-#   - price_dispersion_by_cn4.csv
+#   - tier_breakdown.tex
+#   - pseudo_ground_truth_test.tex
+#   - price_dispersion_by_cn4.tex
 ###############################################################################
 
 # ====================
@@ -40,6 +40,8 @@ source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
 library(tidyr)
+library(knitr)
+library(kableExtra)
 
 load(paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
@@ -63,9 +65,16 @@ tier_breakdown <- fuel_qty %>%
 cat("\n=== TIER BREAKDOWN ===\n")
 print(tier_breakdown, n = 20)
 
-write.csv(tier_breakdown,
-          file.path(OUTPUT_DIR, "tier_breakdown.csv"),
-          row.names = FALSE)
+writeLines(
+  tier_breakdown %>%
+    mutate(qty_source = as.character(qty_source)) %>%
+    kable(format = "latex",
+          col.names = c("Imputation tier", "N", "\\%"),
+          booktabs = TRUE, escape = FALSE,
+          align = c("l", "r", "r")) %>%
+    kable_styling(latex_options = "hold_position"),
+  file.path(OUTPUT_DIR, "tier_breakdown.tex")
+)
 
 # By CN4
 tier_by_cn4 <- fuel_qty %>%
@@ -145,9 +154,18 @@ cat("\n=== PSEUDO GROUND-TRUTH TEST (on tier-1 obs) ===\n")
 cat("ratio = deflated_qty / true_weight  (ideal = 1)\n\n")
 print(as.data.frame(error_summary), row.names = FALSE)
 
-write.csv(error_summary,
-          file.path(OUTPUT_DIR, "pseudo_ground_truth_test.csv"),
-          row.names = FALSE)
+writeLines(
+  error_summary %>%
+    mutate(across(where(is.numeric), ~round(., 2))) %>%
+    kable(format = "latex",
+          col.names = c("Tier", "N", "Median ratio", "P25", "P75",
+                        "MAPE", "Median APE",
+                        "Within 10\\%", "Within 25\\%", "Within 50\\%"),
+          booktabs = TRUE, escape = FALSE,
+          align = c("l", rep("r", 9))) %>%
+    kable_styling(latex_options = c("hold_position", "scale_down")),
+  file.path(OUTPUT_DIR, "pseudo_ground_truth_test.tex")
+)
 
 # Breakdown by CN4 for tier 2 vs tier 3c (best vs coarsest deflator)
 error_by_cn4 <- function(true_qty, defl_qty, cncode, tier_label) {
@@ -232,6 +250,13 @@ dispersion_by_cn4 <- price_dispersion %>%
   )
 print(dispersion_by_cn4, n = 30)
 
-write.csv(dispersion_by_cn4,
-          file.path(OUTPUT_DIR, "price_dispersion_by_cn4.csv"),
-          row.names = FALSE)
+writeLines(
+  dispersion_by_cn4 %>%
+    kable(format = "latex",
+          col.names = c("CN4", "N cells", "Median firms",
+                        "Median SD(log p)", "Median IQR(log p)"),
+          booktabs = TRUE,
+          align = c("l", rep("r", 4))) %>%
+    kable_styling(latex_options = "hold_position"),
+  file.path(OUTPUT_DIR, "price_dispersion_by_cn4.tex")
+)

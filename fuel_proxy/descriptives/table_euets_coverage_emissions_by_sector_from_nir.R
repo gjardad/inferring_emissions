@@ -86,7 +86,7 @@ df_table_short <- df_table %>%
 library(knitr)
 library(kableExtra)
 
-df_table_short %>%
+tex_output <- df_table_short %>%
   kable(
     format = "latex",
     col.names = c("Category", "Share in 2024", "Share in 2025"),
@@ -94,4 +94,7 @@ df_table_short %>%
     align = c("l", "r", "r")
   ) %>%
   kable_styling(latex_options = "hold_position")
+
+writeLines(tex_output, file.path(OUTPUT_DIR, "euets_coverage_by_sector.tex"))
+cat("\nSaved to", file.path(OUTPUT_DIR, "euets_coverage_by_sector.tex"), "\n")
 
