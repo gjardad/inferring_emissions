@@ -4,8 +4,9 @@
 # PURPOSE
 #   Diagnostics for the benchmark fuel proxy (monetary amount purchased from
 #   fuel importers). Three analyses:
-#     1) Regression: log(emissions) ~ log(revenue) + asinh(fuel_proxy)
-#        + year FE + sector FE, on ETS emitters (emissions > 0).
+#     1) Regressions (log-log, ETS emitters with emissions > 0 and proxy > 0):
+#        (1) log(emissions) ~ log(fuel_proxy) + year FE + sector FE
+#        (2) log(emissions) ~ log(fuel_proxy) + log(revenue) + year FE + sector FE
 #     2) Summary stats by ETS status: share with proxy > 0, mean/median
 #        fuel proxy input cost share.
 #     3) Kernel density of fuel proxy input cost share for sectors C19
@@ -16,7 +17,7 @@
 #   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
 #
 # OUTPUTS (to OUTPUT_DIR)
-#   - benchmark_proxy_regression.txt
+#   - benchmark_proxy_regression.tex
 #   - benchmark_proxy_summary_stats.tex
 #   - benchmark_proxy_density_C19.pdf
 #   - benchmark_proxy_density_C24.pdf
@@ -58,32 +59,74 @@ df <- fuel_input_cost_share %>%
 
 
 # =====================================================================
-# 1) REGRESSION: benchmark proxy predicts emissions after controls
+# 1) REGRESSIONS: benchmark proxy predicts emissions (log-log)
 # =====================================================================
 
 reg_data <- df %>%
   filter(euets == 1, emissions > 0,
          !is.na(revenue), revenue > 0,
-         !is.na(fuel_spend))
+         !is.na(fuel_spend), fuel_spend > 0)
 
-model <- lm(log(emissions) ~ log(revenue) + asinh(fuel_spend)
-             + factor(year) + factor(nace2d),
-             data = reg_data)
+# (1) log(emissions) ~ log(fuel_spend) + year FE + sector FE
+model1 <- lm(log(emissions) ~ log(fuel_spend)
+              + factor(year) + factor(nace2d),
+              data = reg_data)
 
-reg_summary <- summary(model)
+# (2) log(emissions) ~ log(fuel_spend) + log(revenue) + year FE + sector FE
+model2 <- lm(log(emissions) ~ log(fuel_spend) + log(revenue)
+              + factor(year) + factor(nace2d),
+              data = reg_data)
 
-cat("\n=== REGRESSION: log(emissions) ~ log(revenue) + asinh(fuel_spend) + year FE + sector FE ===\n")
-cat("N =", nobs(model), "\n")
-print(reg_summary)
+s1 <- summary(model1)
+s2 <- summary(model2)
 
-# Save regression output
-reg_file <- file.path(OUTPUT_DIR, "benchmark_proxy_regression.txt")
-sink(reg_file)
-cat("Benchmark fuel proxy regression\n")
-cat("Sample: ETS firms with emissions > 0\n")
-cat("N =", nobs(model), "\n\n")
-print(reg_summary)
-sink()
+cat("\n=== REGRESSION (1): log(emissions) ~ log(fuel_spend) + FEs ===\n")
+cat("N =", nobs(model1), "\n")
+print(s1)
+
+cat("\n=== REGRESSION (2): log(emissions) ~ log(fuel_spend) + log(revenue) + FEs ===\n")
+cat("N =", nobs(model2), "\n")
+print(s2)
+
+# Helper: extract coefficient + std error with significance stars
+fmt_coef <- function(model_summary, var_name) {
+  ct <- coef(model_summary)
+  if (!var_name %in% rownames(ct)) return(c("", ""))
+  est   <- ct[var_name, "Estimate"]
+  se    <- ct[var_name, "Std. Error"]
+  pv    <- ct[var_name, "Pr(>|t|)"]
+  stars <- if (pv < 0.01) "***" else if (pv < 0.05) "**" else if (pv < 0.1) "*" else ""
+  c(sprintf("%.4f%s", est, stars),
+    sprintf("(%.4f)", se))
+}
+
+fuel1 <- fmt_coef(s1, "log(fuel_spend)")
+fuel2 <- fmt_coef(s2, "log(fuel_spend)")
+rev1  <- c("", "")
+rev2  <- fmt_coef(s2, "log(revenue)")
+
+# Build LaTeX table
+tex_lines <- c(
+  "\\begin{tabular}{lcc}",
+  "\\toprule",
+  "& (1) & (2) \\\\",
+  "\\hline",
+  sprintf("Revenue & %s & %s \\\\", rev1[1], rev2[1]),
+  sprintf("& %s & %s \\\\", rev1[2], rev2[2]),
+  sprintf("Fuel consumption & %s & %s \\\\", fuel1[1], fuel2[1]),
+  sprintf("& %s & %s \\\\", fuel1[2], fuel2[2]),
+  "\\hline \\hline",
+  "Sector FE & Y & Y \\\\",
+  "Year FE & Y & Y \\\\",
+  sprintf("$R^2$ & %.4f & %.4f \\\\", s1$r.squared, s2$r.squared),
+  sprintf("Adj.\\ $R^2$ & %.4f & %.4f \\\\", s1$adj.r.squared, s2$adj.r.squared),
+  sprintf("$N$ & %d & %d \\\\", nobs(model1), nobs(model2)),
+  "\\bottomrule",
+  "\\end{tabular}"
+)
+
+writeLines(tex_lines, file.path(OUTPUT_DIR, "benchmark_proxy_regression.tex"))
+cat("\nSaved regression table to", file.path(OUTPUT_DIR, "benchmark_proxy_regression.tex"), "\n")
 
 
 # =====================================================================
@@ -108,10 +151,10 @@ print(as.data.frame(summary_stats), row.names = FALSE)
 writeLines(
   summary_stats %>%
     kable(format = "latex",
-          col.names = c("Group", "N", "Share proxy $> 0$ (\\%)",
+          col.names = c("ETS status", "N", "Share proxy $> 0$ (\\%)",
                         "Mean cost share", "Median cost share"),
           booktabs = TRUE, escape = FALSE,
-          align = c("l", rep("r", 4))) %>%
+          align = c("l", rep("c", 4))) %>%
     kable_styling(latex_options = "hold_position"),
   file.path(OUTPUT_DIR, "benchmark_proxy_summary_stats.tex")
 )
