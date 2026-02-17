@@ -6,8 +6,8 @@
 #
 # DATA SOURCE
 #   Annex XII xlsx files downloaded from EIONET:
-#   2024: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envzfqxiw/
-#   2025: https://cdr.eionet.europa.eu/be/eu/govreg/inventory/envz9p5nw/index_html
+#   2024: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envzaasda/
+#   2025: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envz4jzgg/
 #
 # WHERE THIS FILE BELONGS
 #   loocv_pipeline/05_analysis/07_table_euets_coverage_emissions_by_sector_from_nir.R

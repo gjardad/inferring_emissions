@@ -4,6 +4,11 @@
 # PURPOSE
 #   Identify NACE sectors whose emissions are entirely covered by the EU ETS.
 #
+# DATA SOURCE
+#   Annex XII xlsx files downloaded from EIONET:
+#   2024: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envzaasda/
+#   2025: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envz4jzgg/
+#
 # WHERE THIS FILE BELONGS
 #   loocv_pipeline/05_analysis/05_nace_sectors_totally_covered_by_euets.R
 ###############################################################################
