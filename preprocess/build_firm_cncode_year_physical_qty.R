@@ -4,7 +4,7 @@
 # PURPOSE
 #   Construct firm–CNcode–year physical quantities for imported fuels.
 #   Hierarchy: (1) customs weight if reliable, (2) CN8-year internal median
-#   deflation, (3a-c) progressively coarser internal unit value deflation.
+#   deflation, (3a-b) progressively coarser dispersion-gated deflation.
 #
 # INPUTS
 #   - data/processed/fuel_imported_by_firm_year.RData
@@ -63,9 +63,8 @@ load(paste0(PROC_DATA,"/fuel_imported_by_firm_year.RData"))
 #   1. Use reported weight if CN8-year price distribution is well-behaved
 #      (p90/p10 <= 30) and firm is not an outlier
 #   2. Deflate value using CN8-year internal median price (p90/p10 <= 30)
-#   3a. Deflate value using CN8-year winsorized median (>= 3 firms, no p90/p10 gate)
-#   3b. Deflate value using CN6-year median from winsorized pool (>= 5 firms)
-#   3c. Deflate value using CN4-year median from winsorized pool (>= 10 firms)
+#   3a. Deflate value using CN6-year median price (p90/p10 < 50, >= 5 firms)
+#   3b. Deflate value using CN4-year median price (p90/p10 < 100, >= 10 firms)
 # ---------------------------------------------
 
 # clean it
@@ -170,43 +169,36 @@ fuel_qty <- df %>%
   )
 
 # ======================================
-# Tier 3: Internal unit value cascade --
+# Tier 3: Dispersion-gated deflation --
 # ======================================
 
-# Build winsorized observation pool: for each CN8-year with >= 3 firms,
-# trim observations outside [p10, p90] of price_eur_per_kg
-winsorized_pool <- df_price_firm %>%
-  group_by(cncode, year) %>%
-  filter(n_distinct(vat_ano) >= 3) %>%
-  mutate(
-    p10 = quantile(price_eur_per_kg, 0.10, na.rm = TRUE),
-    p90 = quantile(price_eur_per_kg, 0.90, na.rm = TRUE)
-  ) %>%
-  filter(price_eur_per_kg >= p10, price_eur_per_kg <= p90) %>%
-  ungroup() %>%
-  select(vat_ano, cncode, year, price_eur_per_kg)
-
-# Tier 3a: CN8-year winsorized median
-cn8_year_relaxed <- winsorized_pool %>%
-  group_by(cncode, year) %>%
-  summarise(price_cn8_relaxed = median(price_eur_per_kg, na.rm = TRUE),
-            .groups = "drop")
-
-# Tier 3b: CN6-year median from winsorized pool (>= 5 firms)
-cn6_year_price <- winsorized_pool %>%
+# Tier 3a: CN6-year median price (p90/p10 < 50, >= 5 firms)
+cn6_year_price <- df_price_firm %>%
   mutate(cn6 = substr(cncode, 1, 6)) %>%
   group_by(cn6, year) %>%
-  filter(n_distinct(vat_ano) >= 5) %>%
-  summarise(price_cn6 = median(price_eur_per_kg, na.rm = TRUE),
-            .groups = "drop")
+  summarise(
+    n_firms   = n_distinct(vat_ano),
+    p10       = quantile(price_eur_per_kg, 0.10, na.rm = TRUE),
+    p90       = quantile(price_eur_per_kg, 0.90, na.rm = TRUE),
+    price_cn6 = median(price_eur_per_kg, na.rm = TRUE),
+    .groups   = "drop"
+  ) %>%
+  filter(n_firms >= 5, p90 / p10 < 50) %>%
+  select(cn6, year, price_cn6)
 
-# Tier 3c: CN4-year median from winsorized pool (>= 10 firms)
-cn4_year_price <- winsorized_pool %>%
+# Tier 3b: CN4-year median price (p90/p10 < 100, >= 10 firms)
+cn4_year_price <- df_price_firm %>%
   mutate(cn4 = substr(cncode, 1, 4)) %>%
   group_by(cn4, year) %>%
-  filter(n_distinct(vat_ano) >= 10) %>%
-  summarise(price_cn4 = median(price_eur_per_kg, na.rm = TRUE),
-            .groups = "drop")
+  summarise(
+    n_firms   = n_distinct(vat_ano),
+    p10       = quantile(price_eur_per_kg, 0.10, na.rm = TRUE),
+    p90       = quantile(price_eur_per_kg, 0.90, na.rm = TRUE),
+    price_cn4 = median(price_eur_per_kg, na.rm = TRUE),
+    .groups   = "drop"
+  ) %>%
+  filter(n_firms >= 10, p90 / p10 < 100) %>%
+  select(cn4, year, price_cn4)
 
 # Merge fallback prices and apply cascade
 fuel_qty <- fuel_qty %>%
@@ -214,23 +206,20 @@ fuel_qty <- fuel_qty %>%
     cn6 = substr(cncode, 1, 6),
     cn4 = substr(cncode, 1, 4)
   ) %>%
-  left_join(cn8_year_relaxed, by = c("cncode", "year")) %>%
   left_join(cn6_year_price, by = c("cn6", "year")) %>%
   left_join(cn4_year_price, by = c("cn4", "year")) %>%
   mutate(
     quantity = case_when(
       !is.na(fuel_qty_kg) ~ fuel_qty_kg,
-      !is.na(imports_value) & !is.na(price_cn8_relaxed) ~ imports_value / price_cn8_relaxed,
-      !is.na(imports_value) & !is.na(price_cn6)         ~ imports_value / price_cn6,
-      !is.na(imports_value) & !is.na(price_cn4)         ~ imports_value / price_cn4,
+      !is.na(imports_value) & !is.na(price_cn6) ~ imports_value / price_cn6,
+      !is.na(imports_value) & !is.na(price_cn4) ~ imports_value / price_cn4,
       TRUE ~ NA_real_
     ),
     quantity_units = "kg",
     qty_source = case_when(
       qty_source %in% c("weight_direct", "value_deflated") ~ qty_source,
-      !is.na(imports_value) & !is.na(price_cn8_relaxed) ~ "deflated_cn8_relaxed",
-      !is.na(imports_value) & !is.na(price_cn6)         ~ "deflated_cn6",
-      !is.na(imports_value) & !is.na(price_cn4)         ~ "deflated_cn4",
+      !is.na(imports_value) & !is.na(price_cn6) ~ "deflated_cn6",
+      !is.na(imports_value) & !is.na(price_cn4) ~ "deflated_cn4",
       TRUE ~ "missing"
     )
   ) %>%
