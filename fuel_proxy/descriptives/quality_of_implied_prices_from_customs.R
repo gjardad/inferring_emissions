@@ -14,8 +14,10 @@
 # INPUTS
 #   - PROC_DATA/firm_cncode_year_physical_qty.RData
 #
-# OUTPUTS
-#   - Console tables and summary statistics (no files saved by default)
+# OUTPUTS (to OUTPUT_DIR)
+#   - tier_breakdown.csv
+#   - pseudo_ground_truth_test.csv
+#   - price_dispersion_by_cn4.csv
 ###############################################################################
 
 # ====================
@@ -60,6 +62,10 @@ tier_breakdown <- fuel_qty %>%
 
 cat("\n=== TIER BREAKDOWN ===\n")
 print(tier_breakdown, n = 20)
+
+write.csv(tier_breakdown,
+          file.path(OUTPUT_DIR, "tier_breakdown.csv"),
+          row.names = FALSE)
 
 # By CN4
 tier_by_cn4 <- fuel_qty %>%
@@ -139,6 +145,10 @@ cat("\n=== PSEUDO GROUND-TRUTH TEST (on tier-1 obs) ===\n")
 cat("ratio = deflated_qty / true_weight  (ideal = 1)\n\n")
 print(as.data.frame(error_summary), row.names = FALSE)
 
+write.csv(error_summary,
+          file.path(OUTPUT_DIR, "pseudo_ground_truth_test.csv"),
+          row.names = FALSE)
+
 # Breakdown by CN4 for tier 2 vs tier 3c (best vs coarsest deflator)
 error_by_cn4 <- function(true_qty, defl_qty, cncode, tier_label) {
   df <- tibble(true_qty = true_qty, defl_qty = defl_qty,
@@ -210,7 +220,7 @@ print(as.data.frame(dispersion_overall), row.names = FALSE)
 
 # By CN4
 cat("\n--- Price dispersion by CN4 ---\n")
-price_dispersion %>%
+dispersion_by_cn4 <- price_dispersion %>%
   mutate(cn4 = substr(cncode, 1, 4)) %>%
   group_by(cn4) %>%
   summarise(
@@ -219,5 +229,9 @@ price_dispersion %>%
     median_sd_log  = round(median(sd_log_price, na.rm = TRUE), 3),
     median_iqr_log = round(median(iqr_log_price, na.rm = TRUE), 3),
     .groups = "drop"
-  ) %>%
-  print(n = 30)
+  )
+print(dispersion_by_cn4, n = 30)
+
+write.csv(dispersion_by_cn4,
+          file.path(OUTPUT_DIR, "price_dispersion_by_cn4.csv"),
+          row.names = FALSE)
