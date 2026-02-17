@@ -33,7 +33,7 @@
 #     -> ets_share_c19_c24.tex
 #
 #   benchmark_fuel_proxy_diagnosis.R
-#     -> benchmark_proxy_regression.txt
+#     -> benchmark_proxy_regression.tex
 #     -> benchmark_proxy_summary_stats.tex
 #     -> benchmark_proxy_density_C19.pdf
 #     -> benchmark_proxy_density_C24.pdf
@@ -42,7 +42,7 @@
 #     -> (console only)
 #
 #   selected_proxy_pair_diagnosis.R
-#     -> selected_proxy_{step}_regression.txt
+#     -> selected_proxy_{step}_regression.tex
 #     -> selected_proxy_{step}_summary_stats.tex
 #     -> selected_proxy_{step}_density_C19.pdf
 #     -> selected_proxy_{step}_density_C24.pdf
