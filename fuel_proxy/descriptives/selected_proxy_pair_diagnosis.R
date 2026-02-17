@@ -6,20 +6,22 @@
 #   pair selected by the hurdle CV procedure. Runs the three analyses for
 #   each proxy in the pair (extensive-margin and intensive-margin).
 #
-#   1) Regression: log(emissions) ~ log(revenue) + asinh(proxy)
-#      + year FE + sector FE, on ETS emitters (emissions > 0).
+#   1) Regressions (log-log, ETS emitters with emissions > 0 and proxy > 0):
+#      (1) log(emissions) ~ log(fuel_proxy) + year FE + sector FE
+#      (2) log(emissions) ~ log(fuel_proxy) + log(revenue) + year FE + sector FE
 #   2) Summary stats by ETS status: share with proxy > 0, mean/median
-#      proxy value.
-#   3) Kernel density of asinh(proxy) for sectors C19 and C24, split by
-#      ETS / non-ETS.
+#      proxy input cost share.
+#   3) Kernel density of proxy input cost share for sectors C19 and C24,
+#      split by ETS / non-ETS.
 #
 # INPUTS
 #   - Proxy .rds files from CACHE_DIR (names set in PROXY NAMES below)
 #   - PROC_DATA/loocv_training_sample.RData
 #   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
+#   - PROC_DATA/fuel_input_cost_share.RData (for total_costs denominator)
 #
 # OUTPUTS (to OUTPUT_DIR, one set per proxy)
-#   - selected_proxy_{step}_regression.txt
+#   - selected_proxy_{step}_regression.tex
 #   - selected_proxy_{step}_summary_stats.tex
 #   - selected_proxy_{step}_density_C19.pdf
 #   - selected_proxy_{step}_density_C24.pdf
@@ -41,6 +43,7 @@ source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
 library(ggplot2)
+library(scales)
 library(knitr)
 library(kableExtra)
 
@@ -66,6 +69,7 @@ proxy_config <- list(
 
 load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
+load(file.path(PROC_DATA, "fuel_input_cost_share.RData"))
 
 # Build deployment-wide frame with revenue + sector + ETS status
 deploy <- df_annual_accounts_selected_sample_key_variables %>%
@@ -74,7 +78,11 @@ deploy <- df_annual_accounts_selected_sample_key_variables %>%
     loocv_training_sample %>% select(vat, year, euets, emissions),
     by = c("vat", "year")
   ) %>%
-  mutate(euets = coalesce(euets, 0L))
+  mutate(euets = coalesce(euets, 0L)) %>%
+  left_join(
+    fuel_input_cost_share %>% select(vat, year, total_costs),
+    by = c("vat", "year")
+  )
 
 
 # =====================================================================
@@ -99,34 +107,83 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
     mutate(buyer_id = as.character(vat)) %>%
     left_join(proxy_dt %>% select(buyer_id, year, fuel_proxy),
               by = c("buyer_id", "year")) %>%
-    mutate(fuel_proxy = coalesce(fuel_proxy, 0))
+    mutate(
+      fuel_proxy = coalesce(fuel_proxy, 0),
+      proxy_cost_share = case_when(
+        fuel_proxy == 0 ~ 0,
+        !is.na(total_costs) & total_costs > 0 ~ fuel_proxy / total_costs,
+        TRUE ~ NA_real_
+      )
+    )
 
   # ------------------------------------------------------------------
-  # 1) Regression (ETS emitters only)
+  # 1) Regressions (log-log, ETS emitters only)
   # ------------------------------------------------------------------
   reg_data <- df %>%
     filter(euets == 1, emissions > 0,
-           !is.na(revenue), revenue > 0)
+           !is.na(revenue), revenue > 0,
+           fuel_proxy > 0)
 
-  model <- lm(log(emissions) ~ log(revenue) + asinh(fuel_proxy)
-               + factor(year) + factor(nace2d),
-               data = reg_data)
+  # (1) log(emissions) ~ log(fuel_proxy) + year FE + sector FE
+  model1 <- lm(log(emissions) ~ log(fuel_proxy)
+                + factor(year) + factor(nace2d),
+                data = reg_data)
 
-  reg_summary <- summary(model)
+  # (2) log(emissions) ~ log(fuel_proxy) + log(revenue) + year FE + sector FE
+  model2 <- lm(log(emissions) ~ log(fuel_proxy) + log(revenue)
+                + factor(year) + factor(nace2d),
+                data = reg_data)
 
-  cat("\n=== REGRESSION:", step_label, "===\n")
-  cat("N =", nobs(model), "\n")
-  print(reg_summary)
+  s1 <- summary(model1)
+  s2 <- summary(model2)
 
-  reg_file <- file.path(OUTPUT_DIR,
-                         paste0("selected_proxy_", step_tag, "_regression.txt"))
-  sink(reg_file)
-  cat(step_label, "\n")
-  cat("Proxy file:", proxy_file, "\n")
-  cat("Sample: ETS firms with emissions > 0\n")
-  cat("N =", nobs(model), "\n\n")
-  print(reg_summary)
-  sink()
+  cat("\n=== REGRESSION (1):", step_label, "===\n")
+  cat("N =", nobs(model1), "\n")
+  print(s1)
+
+  cat("\n=== REGRESSION (2):", step_label, "===\n")
+  cat("N =", nobs(model2), "\n")
+  print(s2)
+
+  # Helper: extract coefficient + std error with significance stars
+  fmt_coef <- function(model_summary, var_name) {
+    ct <- coef(model_summary)
+    if (!var_name %in% rownames(ct)) return(c("", ""))
+    est   <- ct[var_name, "Estimate"]
+    se    <- ct[var_name, "Std. Error"]
+    pv    <- ct[var_name, "Pr(>|t|)"]
+    stars <- if (pv < 0.01) "***" else if (pv < 0.05) "**" else if (pv < 0.1) "*" else ""
+    c(sprintf("%.4f%s", est, stars),
+      sprintf("(%.4f)", se))
+  }
+
+  fuel1 <- fmt_coef(s1, "log(fuel_proxy)")
+  fuel2 <- fmt_coef(s2, "log(fuel_proxy)")
+  rev1  <- c("", "")
+  rev2  <- fmt_coef(s2, "log(revenue)")
+
+  tex_lines <- c(
+    "\\begin{tabular}{lcc}",
+    "\\toprule",
+    "& (1) & (2) \\\\",
+    "\\hline",
+    sprintf("Revenue & %s & %s \\\\", rev1[1], rev2[1]),
+    sprintf("& %s & %s \\\\", rev1[2], rev2[2]),
+    sprintf("Fuel consumption & %s & %s \\\\", fuel1[1], fuel2[1]),
+    sprintf("& %s & %s \\\\", fuel1[2], fuel2[2]),
+    "\\hline \\hline",
+    "Sector FE & Y & Y \\\\",
+    "Year FE & Y & Y \\\\",
+    sprintf("$R^2$ & %.4f & %.4f \\\\", s1$r.squared, s2$r.squared),
+    sprintf("Adj.\\ $R^2$ & %.4f & %.4f \\\\", s1$adj.r.squared, s2$adj.r.squared),
+    sprintf("$N$ & %d & %d \\\\", nobs(model1), nobs(model2)),
+    "\\bottomrule",
+    "\\end{tabular}"
+  )
+
+  writeLines(tex_lines, file.path(OUTPUT_DIR,
+             paste0("selected_proxy_", step_tag, "_regression.tex")))
+  cat("\nSaved regression table for", step_tag, "\n")
 
   # ------------------------------------------------------------------
   # 2) Summary stats by ETS status
@@ -136,10 +193,8 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
     summarise(
       n_obs              = n(),
       share_proxy_positive = round(mean(fuel_proxy > 0, na.rm = TRUE) * 100, 1),
-      mean_proxy         = mean(fuel_proxy, na.rm = TRUE),
-      median_proxy       = median(fuel_proxy, na.rm = TRUE),
-      mean_asinh_proxy   = mean(asinh(fuel_proxy), na.rm = TRUE),
-      median_asinh_proxy = median(asinh(fuel_proxy), na.rm = TRUE),
+      mean_cost_share    = round(mean(proxy_cost_share, na.rm = TRUE), 4),
+      median_cost_share  = round(median(proxy_cost_share, na.rm = TRUE), 4),
       .groups = "drop"
     ) %>%
     mutate(group = if_else(euets == 1, "ETS", "non-ETS")) %>%
@@ -150,32 +205,33 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
 
   writeLines(
     summary_stats %>%
-      mutate(across(where(is.numeric), ~round(., 4))) %>%
       kable(format = "latex",
-            col.names = c("Group", "N", "Share proxy $> 0$ (\\%)",
-                          "Mean proxy", "Median proxy",
-                          "Mean asinh", "Median asinh"),
+            col.names = c("ETS status", "N", "Share proxy $> 0$ (\\%)",
+                          "Mean cost share", "Median cost share"),
             booktabs = TRUE, escape = FALSE,
-            align = c("l", rep("r", 6))) %>%
+            align = c("l", rep("c", 4))) %>%
       kable_styling(latex_options = "hold_position"),
     file.path(OUTPUT_DIR,
               paste0("selected_proxy_", step_tag, "_summary_stats.tex"))
   )
 
   # ------------------------------------------------------------------
-  # 3) Kernel density of asinh(proxy) for C19 and C24
+  # 3) Kernel density of proxy cost share for C19 and C24
   # ------------------------------------------------------------------
   plot_density <- function(df, sector_code, adjust = 1.1) {
     df_sector <- df %>%
-      filter(nace2d == sector_code) %>%
+      filter(nace2d == sector_code,
+             !is.na(proxy_cost_share)) %>%
       mutate(
         group = if_else(euets == 1, "EUETS", "Non-EUETS"),
         group = factor(group, levels = c("EUETS", "Non-EUETS"))
       )
 
-    ggplot(df_sector, aes(x = asinh(fuel_proxy),
+    ggplot(df_sector, aes(x = proxy_cost_share,
                           color = group, linetype = group)) +
       geom_density(linewidth = 1.05, adjust = adjust, key_glyph = "path") +
+      scale_x_continuous(labels = scales::percent_format(accuracy = 1),
+                         limits = c(0, NA)) +
       scale_color_manual(values = c("EUETS" = "black",
                                      "Non-EUETS" = "grey45")) +
       scale_linetype_manual(values = c("EUETS" = "solid",
