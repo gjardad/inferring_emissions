@@ -3,20 +3,17 @@
 #
 # PURPOSE
 #   Diagnose the quality of physical-quantity imputation from customs data.
-#   Three diagnostics:
-#     1) Tier breakdown: observation counts/shares by imputation tier
-#     2) Pseudo ground-truth test: for tier-1 obs (trusted customs weight),
-#        simulate what lower-tier deflation methods would have produced
-#        and report error distributions
-#     3) Within-CN8-year price dispersion: how noisy are the firm-level
-#        unit values that feed each tier's median deflator?
+#   Two outputs:
+#     1) Combined table: tier breakdown (observation counts/shares) plus
+#        pseudo ground-truth accuracy (for tier-1 obs, simulate lower-tier
+#        deflation and report error relative to trusted weight)
+#     2) Within-CN8-year price dispersion by CN4
 #
 # INPUTS
 #   - PROC_DATA/firm_cncode_year_physical_qty.RData
 #
 # OUTPUTS (to OUTPUT_DIR)
-#   - tier_breakdown.tex
-#   - pseudo_ground_truth_test.tex
+#   - tier_breakdown_and_accuracy.tex
 #   - price_dispersion_by_cn4.tex
 ###############################################################################
 
@@ -47,13 +44,20 @@ load(paste0(PROC_DATA, "/firm_cncode_year_physical_qty.RData"))
 
 
 # =====================================================================
-# 1) TIER BREAKDOWN
+# 1) TIER BREAKDOWN + PSEUDO GROUND-TRUTH (combined table)
 # =====================================================================
 
-tier_order <- c("weight_direct", "value_deflated",
-                "deflated_cn8_relaxed", "deflated_cn6", "deflated_cn4",
-                "missing")
+# Display labels
+tier_labels <- c(
+  weight_direct  = "Observed weight",
+  value_deflated = "CN8 deflated",
+  deflated_cn6   = "CN6 deflated",
+  deflated_cn4   = "CN4 deflated",
+  missing        = "Missing"
+)
+tier_order <- names(tier_labels)
 
+# --- Tier breakdown ---
 tier_breakdown <- fuel_qty %>%
   count(qty_source) %>%
   mutate(
@@ -65,18 +69,7 @@ tier_breakdown <- fuel_qty %>%
 cat("\n=== TIER BREAKDOWN ===\n")
 print(tier_breakdown, n = 20)
 
-writeLines(
-  tier_breakdown %>%
-    mutate(qty_source = as.character(qty_source)) %>%
-    kable(format = "latex",
-          col.names = c("Imputation tier", "N", "\\%"),
-          booktabs = TRUE, escape = FALSE,
-          align = c("l", "r", "r")) %>%
-    kable_styling(latex_options = "hold_position"),
-  file.path(OUTPUT_DIR, "tier_breakdown.tex")
-)
-
-# By CN4
+# By CN4 (console only)
 tier_by_cn4 <- fuel_qty %>%
   mutate(cn4 = substr(cncode, 1, 4)) %>%
   count(cn4, qty_source) %>%
@@ -87,17 +80,9 @@ tier_by_cn4 <- fuel_qty %>%
 cat("\n=== TIER BREAKDOWN BY CN4 ===\n")
 print(tier_by_cn4, n = 40)
 
-
-# =====================================================================
-# 2) PSEUDO GROUND-TRUTH TEST
-#
-#    For tier-1 observations (weight_direct), we trust imports_weight.
-#    We simulate what each lower tier's deflation would have produced:
-#      deflated_qty = imports_value / tier_median_price
-#    and compare to the trusted weight via ratio = deflated / true.
-#    A perfect deflator gives ratio = 1.
-# =====================================================================
-
+# --- Pseudo ground-truth test ---
+#     For tier-1 obs (weight_direct), simulate what lower-tier deflation
+#     would have produced and compare to the trusted weight.
 tier1 <- fuel_qty %>%
   filter(
     qty_source == "weight_direct",
@@ -105,69 +90,75 @@ tier1 <- fuel_qty %>%
     !is.na(imports_weight), imports_weight > 0
   ) %>%
   mutate(
-    true_qty = imports_weight,
-    defl_tier2  = if_else(!is.na(price_eur_per_kg)  & price_eur_per_kg  > 0,
-                          imports_value / price_eur_per_kg,  NA_real_),
-    defl_tier3a = if_else(!is.na(price_cn8_relaxed)  & price_cn8_relaxed  > 0,
-                          imports_value / price_cn8_relaxed,  NA_real_),
-    defl_tier3b = if_else(!is.na(price_cn6) & price_cn6 > 0,
+    true_qty    = imports_weight,
+    defl_tier2  = if_else(!is.na(price_eur_per_kg) & price_eur_per_kg > 0,
+                          imports_value / price_eur_per_kg, NA_real_),
+    defl_tier3a = if_else(!is.na(price_cn6) & price_cn6 > 0,
                           imports_value / price_cn6, NA_real_),
-    defl_tier3c = if_else(!is.na(price_cn4) & price_cn4 > 0,
+    defl_tier3b = if_else(!is.na(price_cn4) & price_cn4 > 0,
                           imports_value / price_cn4, NA_real_)
   )
 
 # Helper: summarise error for one deflation column
-summarise_defl_error <- function(true_qty, defl_qty, tier_label) {
+summarise_defl_error <- function(true_qty, defl_qty) {
   ok <- !is.na(defl_qty) & is.finite(defl_qty)
   if (sum(ok) == 0) {
-    return(tibble(tier = tier_label, n_obs = 0L,
-                  median_ratio = NA_real_, p25_ratio = NA_real_,
-                  p75_ratio = NA_real_, mape = NA_real_,
-                  median_ape = NA_real_, within_10pct = NA_real_,
+    return(tibble(median_ratio = NA_real_, mape = NA_real_,
                   within_25pct = NA_real_, within_50pct = NA_real_))
   }
   ratio <- defl_qty[ok] / true_qty[ok]
   ape   <- abs(ratio - 1) * 100
 
   tibble(
-    tier         = tier_label,
-    n_obs        = sum(ok),
     median_ratio = median(ratio),
-    p25_ratio    = quantile(ratio, 0.25),
-    p75_ratio    = quantile(ratio, 0.75),
     mape         = mean(ape),
-    median_ape   = median(ape),
-    within_10pct = mean(ape <= 10) * 100,
     within_25pct = mean(ape <= 25) * 100,
     within_50pct = mean(ape <= 50) * 100
   )
 }
 
 error_summary <- bind_rows(
-  summarise_defl_error(tier1$true_qty, tier1$defl_tier2,  "Tier 2  (CN8 quality-gated)"),
-  summarise_defl_error(tier1$true_qty, tier1$defl_tier3a, "Tier 3a (CN8 relaxed)"),
-  summarise_defl_error(tier1$true_qty, tier1$defl_tier3b, "Tier 3b (CN6)"),
-  summarise_defl_error(tier1$true_qty, tier1$defl_tier3c, "Tier 3c (CN4)")
+  summarise_defl_error(tier1$true_qty, tier1$defl_tier2)  %>% mutate(qty_source = "value_deflated"),
+  summarise_defl_error(tier1$true_qty, tier1$defl_tier3a) %>% mutate(qty_source = "deflated_cn6"),
+  summarise_defl_error(tier1$true_qty, tier1$defl_tier3b) %>% mutate(qty_source = "deflated_cn4")
 )
 
 cat("\n=== PSEUDO GROUND-TRUTH TEST (on tier-1 obs) ===\n")
 cat("ratio = deflated_qty / true_weight  (ideal = 1)\n\n")
 print(as.data.frame(error_summary), row.names = FALSE)
 
+# --- Build combined table ---
+fmt_acc <- function(x, digits = 1) {
+  if_else(is.na(x), "$-$", formatC(x, format = "f", digits = digits))
+}
+
+combined <- tier_breakdown %>%
+  mutate(tier = tier_labels[as.character(qty_source)]) %>%
+  left_join(error_summary, by = "qty_source") %>%
+  mutate(
+    median_ratio = fmt_acc(median_ratio, 2),
+    mape         = fmt_acc(mape, 1),
+    within_25pct = fmt_acc(within_25pct, 1),
+    within_50pct = fmt_acc(within_50pct, 1)
+  ) %>%
+  select(tier, n, pct, median_ratio, mape, within_25pct, within_50pct)
+
 writeLines(
-  error_summary %>%
-    mutate(across(where(is.numeric), ~round(., 2))) %>%
+  combined %>%
     kable(format = "latex",
-          col.names = c("Tier", "N", "Median ratio", "P25", "P75",
-                        "MAPE", "Median APE",
-                        "Within 10\\%", "Within 25\\%", "Within 50\\%"),
+          col.names = c("Tier", "N", "\\%",
+                        "Med.\\ ratio", "MAPE",
+                        "$\\leq$ 25\\%", "$\\leq$ 50\\%"),
           booktabs = TRUE, escape = FALSE,
-          align = c("l", rep("r", 9))) %>%
-    kable_styling(latex_options = c("hold_position", "scale_down")),
-  file.path(OUTPUT_DIR, "pseudo_ground_truth_test.tex")
+          align = c("l", rep("c", 6))) %>%
+    kable_styling(latex_options = "hold_position") %>%
+    add_header_above(c(" " = 3, "Accuracy of lower tiers" = 4)),
+  file.path(OUTPUT_DIR, "tier_breakdown_and_accuracy.tex")
 )
 
-# Breakdown by CN4 for tier 2 vs tier 3c (best vs coarsest deflator)
+cat("\nSaved combined table to", file.path(OUTPUT_DIR, "tier_breakdown_and_accuracy.tex"), "\n")
+
+# By-CN4 error diagnostics (console only)
 error_by_cn4 <- function(true_qty, defl_qty, cncode, tier_label) {
   df <- tibble(true_qty = true_qty, defl_qty = defl_qty,
                cn4 = substr(cncode, 1, 4)) %>%
@@ -188,11 +179,11 @@ error_by_cn4 <- function(true_qty, defl_qty, cncode, tier_label) {
     arrange(cn4)
 }
 
-cat("\n--- By CN4: Tier 2 (CN8 quality-gated median) ---\n")
+cat("\n--- By CN4: Tier 2 (CN8 deflated) ---\n")
 print(error_by_cn4(tier1$true_qty, tier1$defl_tier2, tier1$cncode, "Tier 2"), n = 30)
 
-cat("\n--- By CN4: Tier 3c (CN4 median) ---\n")
-print(error_by_cn4(tier1$true_qty, tier1$defl_tier3c, tier1$cncode, "Tier 3c"), n = 30)
+cat("\n--- By CN4: Tier 3b (CN4 deflated) ---\n")
+print(error_by_cn4(tier1$true_qty, tier1$defl_tier3b, tier1$cncode, "Tier 3b"), n = 30)
 
 
 # =====================================================================
@@ -256,7 +247,7 @@ writeLines(
           col.names = c("CN4", "N cells", "Median firms",
                         "Median SD(log p)", "Median IQR(log p)"),
           booktabs = TRUE,
-          align = c("l", rep("r", 4))) %>%
+          align = c("l", rep("c", 4))) %>%
     kable_styling(latex_options = "hold_position"),
   file.path(OUTPUT_DIR, "price_dispersion_by_cn4.tex")
 )
