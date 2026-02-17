@@ -136,7 +136,7 @@ plot_density_by_sector <- function(df, sector_code, adjust = 1.1) {
                        limits = c(0, NA)) +
     scale_color_manual(values = c("EUETS" = "black", "Non-EUETS" = "grey45")) +
     scale_linetype_manual(values = c("EUETS" = "solid", "Non-EUETS" = "dashed")) +
-    labs(x = "Fuel importer cost share", y = "Density",
+    labs(x = "Fuel proxy input cost share", y = "Density",
          color = NULL, linetype = NULL) +
     theme_classic(base_size = 13) +
     theme(

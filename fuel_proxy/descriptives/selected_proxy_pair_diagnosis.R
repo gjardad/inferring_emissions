@@ -180,7 +180,7 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
                                      "Non-EUETS" = "grey45")) +
       scale_linetype_manual(values = c("EUETS" = "solid",
                                         "Non-EUETS" = "dashed")) +
-      labs(x = "asinh(fuel proxy)", y = "Density",
+      labs(x = "Fuel proxy input cost share", y = "Density",
            color = NULL, linetype = NULL) +
       theme_classic(base_size = 13) +
       theme(
