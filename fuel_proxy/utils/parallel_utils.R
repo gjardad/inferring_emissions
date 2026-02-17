@@ -41,3 +41,19 @@ assign_kfold_groups <- function(ids, k = 10L, seed = 42L) {
     fold = sample(rep(seq_len(k), length.out = n))
   )
 }
+
+assign_sector_folds <- function(ids, sectors) {
+  stopifnot(length(ids) == length(sectors))
+  dt <- data.table::data.table(id = ids, sector = sectors)
+  firm_sector <- dt[, .(sector = names(which.max(table(sector)))), by = id]
+  sector_levels <- sort(unique(firm_sector$sector))
+  sector_to_fold <- data.table::data.table(
+    sector = sector_levels,
+    fold   = seq_along(sector_levels)
+  )
+  firm_sector <- merge(firm_sector, sector_to_fold, by = "sector", all.x = TRUE)
+  list(
+    fold_ids        = firm_sector[, .(id, fold)],
+    fold_sector_map = sector_to_fold
+  )
+}

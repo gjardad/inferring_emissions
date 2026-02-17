@@ -428,3 +428,213 @@ if (nrow(metrics_hurdle_topk) > 0 && "variant" %in% names(metrics_hurdle_topk)) 
 } else {
   cat("WARNING: No hurdle triple metrics available. Skipping best combo selection.\n")
 }
+
+# -----------------------
+# 5) LOSOCV: Leave-One-Sector-Out diagnostic for the best triple
+# -----------------------
+if (exists("best_combo") && nrow(best_combo) > 0) {
+
+  losocv_ext_tag   <- best_combo$proxy_tag_ext
+  losocv_int_tag   <- best_combo$proxy_tag_int
+  losocv_threshold <- best_combo$threshold_value
+
+  cat(sprintf("\n=== LOSOCV for best triple ===\n  ext = %s\n  thr = %.2f\n  int = %s\n",
+              losocv_ext_tag, losocv_threshold, losocv_int_tag))
+
+  # Load proxy tables for the best triple
+  load_proxy_by_name <- function(proxy_name, proxy_files) {
+    for (pf in proxy_files) {
+      obj <- readRDS(pf)
+      name <- if (is.list(obj) && !is.null(obj$name)) obj$name
+              else tools::file_path_sans_ext(basename(pf))
+      if (name == proxy_name) {
+        tbl <- if (is.list(obj) && !is.null(obj$proxy)) obj$proxy else obj
+        tbl <- as.data.table(tbl)
+        if ("buyer_id" %in% names(tbl) && !"vat" %in% names(tbl)) {
+          setnames(tbl, "buyer_id", "vat")
+        }
+        return(tbl)
+      }
+    }
+    stop("Proxy not found in cache: ", proxy_name)
+  }
+
+  losocv_proxy_ext_tbl <- load_proxy_by_name(losocv_ext_tag, proxy_files)
+  losocv_proxy_int_tbl <- load_proxy_by_name(losocv_int_tag, proxy_files)
+
+  # Sector-based fold assignment
+  sector_fold_result <- assign_sector_folds(
+    ids     = df_run$vat,
+    sectors = df_run$nace2d
+  )
+  losocv_fold_ids     <- sector_fold_result$fold_ids
+  fold_sector_map     <- sector_fold_result$fold_sector_map
+
+  cat(sprintf("Assigned %d firms to %d sector folds\n",
+              nrow(losocv_fold_ids), nrow(fold_sector_map)))
+
+  # Step 1: Extensive margin (logit)
+  cat("Running LOSOCV Step 1 (extensive margin)...\n")
+  losocv_phat_dt <- precompute_step1_ext(
+    base          = base,
+    proxy_ext_tbl = losocv_proxy_ext_tbl,
+    proxy_keys    = c("vat", "year"),
+    proxy_var     = "fuel_proxy",
+    partial_pooling = TRUE,
+    progress_every  = 1,
+    fold_ids      = losocv_fold_ids,
+    cl            = cl
+  )
+
+  # Step 2: Intensive margin (Poisson)
+  cat("Running LOSOCV Step 2 (intensive margin)...\n")
+  losocv_muhat_dt <- precompute_step2_int(
+    base          = base,
+    proxy_int_tbl = losocv_proxy_int_tbl,
+    proxy_keys    = c("vat", "year"),
+    proxy_var     = "fuel_proxy",
+    partial_pooling = TRUE,
+    progress_every  = 1,
+    fold_ids      = losocv_fold_ids,
+    cl            = cl
+  )
+
+  # Combine predictions
+  losocv_pred <- merge(
+    losocv_phat_dt[, .(id, year, sector, y_true, phat_raw)],
+    losocv_muhat_dt[, .(id, year, muhat_int_raw)],
+    by = c("id", "year"),
+    all.x = TRUE
+  )
+  losocv_pred[is.na(muhat_int_raw), muhat_int_raw := 0]
+  losocv_pred[, yhat_raw := pmax(as.numeric(phat_raw > losocv_threshold) * muhat_int_raw, 0)]
+
+  # Calibrate to sector-year totals
+  losocv_SYT <- copy(base$SYT)
+  losocv_cellN <- copy(base$full_cellN)
+
+  losocv_pred[, sector_key := as.character(sector)]
+  losocv_pred[, year_key   := as.integer(year)]
+
+  losocv_denom <- losocv_pred[, .(denom_full = sum(yhat_raw, na.rm = TRUE), n_full = .N),
+                               by = .(sector_key, year_key)]
+  losocv_denom <- merge(losocv_denom, losocv_SYT, by = c("sector_key", "year_key"), all.x = TRUE)
+
+  losocv_pred <- merge(losocv_pred, losocv_denom, by = c("sector_key", "year_key"), all.x = TRUE)
+  losocv_pred[is.na(denom_full), denom_full := 0]
+  losocv_pred[is.na(n_full), n_full := 1L]
+
+  losocv_pred <- merge(losocv_pred, losocv_cellN, by = c("sector_key", "year_key"), all.x = TRUE)
+  losocv_pred[is.na(N_full), N_full := 1L]
+
+  losocv_pred[, yhat_cal := NA_real_]
+  losocv_pred[is.finite(E_total) & E_total == 0, yhat_cal := 0]
+  losocv_pred[is.finite(E_total) & E_total > 0 & denom_full > 0,
+       yhat_cal := E_total * (yhat_raw / denom_full)]
+  losocv_pred[is.finite(E_total) & E_total > 0 &
+         (is.na(yhat_cal) | !is.finite(yhat_cal)) & n_full > 0,
+       yhat_cal := E_total / n_full]
+
+  # --- Aggregate metrics (drop singleton cells) ---
+  losocv_eval <- losocv_pred[N_full > 1]
+
+  losocv_m_raw <- calc_metrics(losocv_eval$y_true, losocv_eval$yhat_raw, fp_threshold = 0)
+  losocv_m_cal <- calc_metrics(losocv_eval$y_true, losocv_eval$yhat_cal, fp_threshold = 0)
+
+  losocv_metrics_from_cm <- function(m, variant_label) {
+    data.table(
+      variant             = variant_label,
+      proxy               = paste0("ext=", losocv_ext_tag, "|int=", losocv_int_tag),
+      eval_dropped_singletons = TRUE,
+      nRMSE               = m[["nrmse_sd"]],
+      RMSE                = m[["rmse"]],
+      MAE                 = m[["mae"]],
+      MAPE                = m[["mape"]],
+      MAPD_emitters       = m[["mapd_emitters"]],
+      FPR_nonemitters     = m[["fpr_nonemitters"]],
+      TPR_emitters        = m[["tpr_emitters"]],
+      PPV_precision       = m[["ppv_precision"]],
+      F1                  = m[["f1"]],
+      predicted_positive_rate = m[["predicted_positive_rate"]],
+      emitter_mass_captured   = m[["emitter_mass_captured"]],
+      med_yhat_nonemit    = m[["p50_pred_nonemit"]],
+      p90_yhat_nonemit    = m[["p90_pred_nonemit"]],
+      p95_yhat_nonemit    = m[["p95_pred_nonemit"]],
+      p99_yhat_nonemit    = m[["p99_pred_nonemit"]],
+      mean_yhat_nonemit   = m[["mean_pred_nonemit"]],
+      TP = m[["TP"]], FP = m[["FP"]], TN = m[["TN"]], FN = m[["FN"]],
+      spearman            = m[["spearman"]]
+    )
+  }
+
+  losocv_aggregate <- rbindlist(list(
+    losocv_metrics_from_cm(losocv_m_raw, "raw"),
+    losocv_metrics_from_cm(losocv_m_cal, "calibrated")
+  ), fill = TRUE)
+
+  losocv_aggregate[, model_family    := "hurdle"]
+  losocv_aggregate[, partial_pooling := "yes"]
+  losocv_aggregate[, step_tag        := "12"]
+  losocv_aggregate[, sample_tag      := sample_tag]
+  losocv_aggregate[, proxy_tag       := paste0("ext=", losocv_ext_tag, "|int=", losocv_int_tag)]
+  losocv_aggregate[, proxy_tag_ext   := losocv_ext_tag]
+  losocv_aggregate[, proxy_tag_int   := losocv_int_tag]
+  losocv_aggregate[, model_name      := "losocv_hurdle"]
+  losocv_aggregate[, threshold_value := losocv_threshold]
+  losocv_aggregate[, n_obs_est       := nrow(df_run)]
+  losocv_aggregate[, n_firms_est     := uniqueN(df_run$vat)]
+  losocv_aggregate[, run_ts          := format(Sys.time(), "%Y-%m-%d %H:%M:%S")]
+
+  append_metrics_log(
+    losocv_aggregate,
+    rds_path = METRICS_PATH_RDS,
+    csv_path = METRICS_PATH_CSV,
+    dedup = TRUE
+  )
+
+  cat("\n=== LOSOCV Aggregate Metrics ===\n")
+  print(losocv_aggregate[, .(variant, RMSE, nRMSE, spearman, FPR_nonemitters, TPR_emitters, F1)])
+
+  # --- Per-sector metrics ---
+  losocv_sectors <- sort(unique(losocv_pred$sector))
+
+  losocv_per_sector_list <- lapply(losocv_sectors, function(s) {
+    ps <- losocv_pred[sector == s]
+    ps_eval <- ps[N_full > 1]
+    if (nrow(ps_eval) == 0) ps_eval <- ps
+
+    m_raw_s <- calc_metrics(ps_eval$y_true, ps_eval$yhat_raw, fp_threshold = 0)
+    m_cal_s <- calc_metrics(ps_eval$y_true, ps_eval$yhat_cal, fp_threshold = 0)
+
+    rbindlist(list(
+      cbind(data.table(sector = s), losocv_metrics_from_cm(m_raw_s, "raw")),
+      cbind(data.table(sector = s), losocv_metrics_from_cm(m_cal_s, "calibrated"))
+    ), fill = TRUE)
+  })
+
+  losocv_per_sector <- rbindlist(losocv_per_sector_list, fill = TRUE)
+  losocv_per_sector[, `:=`(
+    model_name      = "losocv_hurdle",
+    proxy_tag_ext   = losocv_ext_tag,
+    proxy_tag_int   = losocv_int_tag,
+    threshold_value = losocv_threshold
+  )]
+
+  cat("\n=== LOSOCV Per-Sector Metrics (raw, ordered by RMSE) ===\n")
+  print(losocv_per_sector[variant == "raw"][order(RMSE),
+        .(sector, n = TP + FP + TN + FN, RMSE, nRMSE, spearman, FPR_nonemitters, TPR_emitters)])
+
+  # Save LOSOCV-specific outputs
+  saveRDS(losocv_aggregate, file.path(OUTPUT_DIR, "losocv_aggregate_metrics.rds"))
+  write.csv(losocv_aggregate, file.path(OUTPUT_DIR, "losocv_aggregate_metrics.csv"), row.names = FALSE)
+
+  saveRDS(losocv_per_sector, file.path(OUTPUT_DIR, "losocv_per_sector_metrics.rds"))
+  write.csv(losocv_per_sector, file.path(OUTPUT_DIR, "losocv_per_sector_metrics.csv"), row.names = FALSE)
+
+  saveRDS(losocv_pred, file.path(OUTPUT_DIR, "losocv_predictions.rds"))
+
+  cat(sprintf("\nLOSOCV results saved to %s\n", OUTPUT_DIR))
+
+} else {
+  cat("WARNING: No best hurdle combo available. Skipping LOSOCV.\n")
+}
