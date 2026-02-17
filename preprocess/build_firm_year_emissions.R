@@ -36,7 +36,7 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- dirname(normalizePath(sys.frame(1)$ofile, winslash = "/"))
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
   while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
@@ -56,7 +56,7 @@ library(dplyr) # even though dplyr is included in tidyverse, still need to load 
 
 load(paste0(PROC_DATA,"/installation_year_emissions.RData"))
 
-df_account <- read.csv(paste0(RAW_DATA,"/EUTL/account.csv"))
+df_account <- read.csv(paste0(RAW_DATA,"/EUTL/Oct_2024_version/account.csv"))
 
 # Clean data ------
 

@@ -27,7 +27,7 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- dirname(normalizePath(sys.frame(1)$ofile, winslash = "/"))
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
   while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
@@ -159,7 +159,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
   hs_siec_ncv <- hs_siec_ncv %>%
     group_by(hs_code, year) %>%
     mutate(
-      has_eurostat = any(ncv_type != "ires" & !is.na(value))
+      has_eurostat = any(ncv_type != "ires" & !is.na(ncv_mj_per_tonne))
     ) %>%
     ungroup() %>%
     # If there is a Eurostat NCV for this HS/year, drop the IRES ones
@@ -172,7 +172,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
     group_by(hs_code, year, ncv_type) %>%
     summarise(
       # average NCV across matching SIEC codes
-      value      = mean(value, na.rm = TRUE),
+      ncv_mj_per_tonne = mean(ncv_mj_per_tonne, na.rm = TRUE),
       unit       = dplyr::first(unit),
       siec_codes = paste(sort(unique(siec_code)), collapse = "; "),
       n_siec     = dplyr::n_distinct(siec_code),
@@ -223,7 +223,7 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
     group_modify(~ {
       df  <- .x
       yrs <- df$year
-      vals <- df$value
+      vals <- df$ncv_mj_per_tonne
       non_na <- which(!is.na(vals))
       
       if (length(non_na) == 0) {
@@ -239,11 +239,11 @@ ncv_by_fuel_siec_year <- read_csv(paste0(RAW_DATA, "/Eurostat/ncv_by_fuel_year.c
         }
       }
       
-      df$value <- vals
+      df$ncv_mj_per_tonne <- vals
       df
     }) %>%
     ungroup() %>% 
-    rename(ncv_value = value, ncv_unit = unit)
+    rename(ncv_value = ncv_mj_per_tonne, ncv_unit = unit)
 
 # Save it ------
 save(ncv_by_fuel_siec_year, file = paste0(PROC_DATA,"/ncv_by_fuel_siec_year.RData"))

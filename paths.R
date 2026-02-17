@@ -4,7 +4,13 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
   OUTPUT_DIR <- "X:/Documents/JARDANG/inferring_emissions_output"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
   DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
-  REPO_DIR <- normalizePath(dirname(sys.frame(sys.nframe())$ofile), winslash = "/")
+  REPO_DIR <- local({
+    for (i in sys.nframe():1) {
+      fn <- sys.frame(i)$ofile
+      if (!is.null(fn)) return(normalizePath(dirname(fn), winslash = "/"))
+    }
+    normalizePath(getwd(), winslash = "/")
+  })
   OUTPUT_DIR <- "C:/Users/jota_/Documents/inferring_emissions_output"
 } else {
   stop("Define directories for this user.")

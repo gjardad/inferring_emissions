@@ -21,7 +21,7 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- dirname(normalizePath(sys.frame(1)$ofile, winslash = "/"))
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
   while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
@@ -63,9 +63,7 @@ siec_used_for_energy <- df %>%
   distinct(siec_code, siec_name)
 
 
-# convert to HS codes ----
+# Save ----
 
-load(paste0(PROC_DATA,"/hs_to_siec_map.RData"))
+save(siec_used_for_energy, file = paste0(PROC_DATA, "/fuels_used_for_energy_across_sectors.RData"))
 
-hs_used_for_energy <- siec_used_for_energy %>% 
-  
