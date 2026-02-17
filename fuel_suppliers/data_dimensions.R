@@ -1,5 +1,5 @@
 ###############################################################################
-# fuel_suppliers/00_data_dimensions.R
+# fuel_suppliers/data_dimensions.R
 #
 # PURPOSE
 #   Compute key data dimensions for:
