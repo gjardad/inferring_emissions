@@ -71,30 +71,63 @@ df_table <- annexx_xii_2024 %>%
     share_2025 = sprintf("%.2f", share_2025)
   )
 
-df_table_short <- df_table %>%
-  filter(crf_code %in% c("1.A", "1.A.1", "1.A.2",
-                         "1.A.3", "1.A.4", "1.B",
-                         "2.A", "2.B", "2.C", "2D3", "2.H")) %>% 
-  select(
-    Category = crf_text,
-    share_2024,
-    share_2025
-  )
+# =====================================================================
+# Generate LaTeX table with hierarchical indentation
+# =====================================================================
 
-# Generate table ------
+# Row definitions: CRF code, text pattern (to disambiguate duplicates),
+#                  display label, indent level (0/1/2)
+row_defs <- list(
+  list(code = "1.A",   pattern = "total",      label = "Fuel combustion activities, total",                indent = 0),
+  list(code = "1.A",   pattern = "stationary",  label = "Fuel combustion activities, stationary combustion", indent = 1),
+  list(code = "1.A.1", pattern = NULL,          label = "Energy industries",                                indent = 2),
+  list(code = "1.A.2", pattern = NULL,          label = "Manufacturing industries and construction",        indent = 2),
+  list(code = "1.A.3", pattern = NULL,          label = "Transport",                                        indent = 2),
+  list(code = "1.A.4", pattern = NULL,          label = "Other sectors",                                    indent = 2),
+  list(code = "1.B",   pattern = NULL,          label = "Fugitive emissions from fuels",                    indent = 0),
+  list(code = NA,      pattern = NULL,          label = "Industrial processes",                              indent = 0),
+  list(code = "2.A",   pattern = NULL,          label = "Mineral products",                                  indent = 2),
+  list(code = "2.B",   pattern = NULL,          label = "Chemical industry",                                 indent = 2),
+  list(code = "2.C",   pattern = NULL,          label = "Metal production",                                  indent = 2),
+  list(code = "2D3",   pattern = NULL,          label = "Non-energy products from fuels and solvent use",    indent = 2),
+  list(code = "2.H",   pattern = NULL,          label = "Other",                                             indent = 2)
+)
 
-library(knitr)
-library(kableExtra)
+# Lookup helper: find value from df_table by code (+ optional text pattern)
+lookup_val <- function(code, pattern, col) {
+  if (is.na(code)) return(NA_character_)
+  rows <- df_table %>% filter(crf_code == code)
+  if (!is.null(pattern)) rows <- rows %>% filter(grepl(pattern, crf_text, ignore.case = TRUE))
+  if (nrow(rows) == 1) rows[[col]] else NA_character_
+}
 
-tex_output <- df_table_short %>%
-  kable(
-    format = "latex",
-    col.names = c("Category", "Share in 2024", "Share in 2025"),
-    booktabs = TRUE,
-    align = c("l", "r", "r")
-  ) %>%
-  kable_styling(latex_options = "hold_position")
+# Formatting helpers
+fmt_val <- function(x) if (is.na(x) || x %in% c("NaN", "NA")) "-" else x
 
-writeLines(tex_output, file.path(OUTPUT_DIR, "euets_coverage_by_sector.tex"))
+indent_tex <- function(level) {
+  switch(as.character(level),
+         "1" = "\\hspace{3mm}",
+         "2" = "\\hspace{6mm}",
+         "")
+}
+
+# Build LaTeX lines
+tex_lines <- c(
+  "\\begin{tabular}{lcc}",
+  "\\toprule",
+  "Category & 2024 (\\%) & 2025 (\\%)\\\\",
+  "\\midrule"
+)
+
+for (rd in row_defs) {
+  lbl <- paste0(indent_tex(rd$indent), rd$label)
+  v24 <- fmt_val(lookup_val(rd$code, rd$pattern, "share_2024"))
+  v25 <- fmt_val(lookup_val(rd$code, rd$pattern, "share_2025"))
+  tex_lines <- c(tex_lines, sprintf("%s & %s & %s \\\\", lbl, v24, v25))
+}
+
+tex_lines <- c(tex_lines, "\\bottomrule", "\\end{tabular}")
+
+writeLines(tex_lines, file.path(OUTPUT_DIR, "euets_coverage_by_sector.tex"))
 cat("\nSaved to", file.path(OUTPUT_DIR, "euets_coverage_by_sector.tex"), "\n")
 
