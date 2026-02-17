@@ -116,9 +116,9 @@ p <- ggplot(df_wide, aes(x = imports, y = supply)) +
     panel.grid        = element_blank(),
     axis.ticks        = element_blank(),
     axis.line         = element_line(color = "black", linewidth = 0.3),
-    axis.title.x      = element_text(size = 14, margin = margin(t = 10)),
-    axis.title.y      = element_text(size = 14, margin = margin(r = 10)),
-    axis.text         = element_text(size = 11)
+    axis.title.x      = element_text(size = 14, margin = margin(t = 15)),
+    axis.title.y      = element_text(size = 14, margin = margin(r = 15)),
+    axis.text         = element_blank()
   )
 
 ggsave(file.path(OUTPUT_DIR, "total_supply_vs_imports.png"),
