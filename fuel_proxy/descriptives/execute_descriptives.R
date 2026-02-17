@@ -16,8 +16,7 @@
 #     -> total_supply_vs_imports.png
 #
 #   quality_of_implied_prices_from_customs.R
-#     -> tier_breakdown.tex
-#     -> pseudo_ground_truth_test.tex
+#     -> tier_breakdown_and_accuracy.tex
 #     -> price_dispersion_by_cn4.tex
 #
 #   nace_sector_support_tables.R
