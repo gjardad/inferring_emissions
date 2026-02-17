@@ -61,69 +61,17 @@ df <- df_annual_accounts_selected_sample_key_variables %>%
 
 
 # =====================================================================
-# 1) FIRM COUNTS
+# Compute summary statistics
 # =====================================================================
 
-firm_counts <- df %>%
-  group_by(nace2d, group) %>%
-  summarise(n_firms = n_distinct(vat), .groups = "drop") %>%
-  pivot_wider(names_from = group, values_from = n_firms, values_fill = 0) %>%
-  mutate(total = ETS + `non-ETS`,
-         pct_non_ets = round(`non-ETS` / total * 100, 1)) %>%
-  rename(sector = nace2d)
 
-
-# =====================================================================
-# 2) REVENUE AND VALUE-ADDED SHARES (pooled across years)
-# =====================================================================
-
-shares <- df %>%
-  group_by(nace2d, group) %>%
-  summarise(
-    total_revenue     = sum(revenue, na.rm = TRUE),
-    total_value_added = sum(value_added, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  group_by(nace2d) %>%
-  mutate(
-    revenue_share = round(total_revenue / sum(total_revenue) * 100, 1),
-    va_share      = round(total_value_added / sum(total_value_added) * 100, 1)
-  ) %>%
-  ungroup()
-
-
-# =====================================================================
-# 3) MEDIAN FIRM REVENUE (across firm-years)
-# =====================================================================
-
-median_size <- df %>%
-  filter(!is.na(revenue), revenue > 0) %>%
-  group_by(nace2d, group) %>%
-  summarise(
-    median_revenue = median(revenue, na.rm = TRUE),
-    .groups = "drop"
-  )
-
-
-# =====================================================================
-# Combine into one table
-# =====================================================================
-
-summary_table <- shares %>%
-  left_join(median_size, by = c("nace2d", "group")) %>%
-  select(sector = nace2d, group,
-         n_firm_years = total_revenue,  # placeholder, replace below
-         revenue_share, va_share, median_revenue)
-
-# Actually rebuild cleanly
 summary_table <- df %>%
   group_by(nace2d, group) %>%
   summarise(
     n_firms            = n_distinct(vat),
-    n_firm_years       = n(),
     total_revenue      = sum(revenue, na.rm = TRUE),
     total_value_added  = sum(value_added, na.rm = TRUE),
-    median_revenue     = median(revenue[revenue > 0], na.rm = TRUE),
+    median_revenue     = round(median(revenue[revenue > 0], na.rm = TRUE)),
     .groups = "drop"
   ) %>%
   group_by(nace2d) %>%
@@ -132,11 +80,26 @@ summary_table <- df %>%
     va_share_pct      = round(total_value_added / sum(total_value_added) * 100, 1)
   ) %>%
   ungroup() %>%
-  select(sector = nace2d, group, n_firms, n_firm_years,
-         revenue_share_pct, va_share_pct, median_revenue)
+  select(nace2d, group, n_firms, revenue_share_pct, va_share_pct, median_revenue)
 
 cat("\n=== ETS vs NON-ETS IN SECTORS C19 AND C24 ===\n")
 print(as.data.frame(summary_table), row.names = FALSE)
+
+# Pivot to wide: one row per sector, ETS/non-ETS as sub-columns
+wide_table <- summary_table %>%
+  pivot_wider(
+    names_from = group,
+    values_from = c(n_firms, revenue_share_pct, va_share_pct, median_revenue)
+  ) %>%
+  mutate(sector = case_when(
+    nace2d == "19" ~ "Manufacture of coke and refined petroleum products",
+    nace2d == "24" ~ "Manufacture of basic metals"
+  )) %>%
+  select(sector,
+         `n_firms_ETS`, `n_firms_non-ETS`,
+         `revenue_share_pct_ETS`, `revenue_share_pct_non-ETS`,
+         `va_share_pct_ETS`, `va_share_pct_non-ETS`,
+         `median_revenue_ETS`, `median_revenue_non-ETS`)
 
 
 # =====================================================================
@@ -144,15 +107,21 @@ print(as.data.frame(summary_table), row.names = FALSE)
 # =====================================================================
 
 writeLines(
-  summary_table %>%
-    mutate(median_revenue = round(median_revenue)) %>%
+  wide_table %>%
     kable(format = "latex",
-          col.names = c("Sector", "Group", "Firms", "Firm-years",
-                        "Revenue share (\\%)", "VA share (\\%)",
-                        "Median revenue"),
+          col.names = c("Sector",
+                        "ETS", "non-ETS",
+                        "ETS", "non-ETS",
+                        "ETS", "non-ETS",
+                        "ETS", "non-ETS"),
           booktabs = TRUE, escape = FALSE,
-          align = c("l", "l", rep("r", 5))) %>%
-    kable_styling(latex_options = "hold_position"),
+          align = c("l", rep("c", 8))) %>%
+    kable_styling(latex_options = c("hold_position", "scale_down")) %>%
+    add_header_above(c(" " = 1,
+                       "Firms" = 2,
+                       "Revenue share (%)" = 2,
+                       "VA share (%)" = 2,
+                       "Median revenue" = 2)),
   file.path(OUTPUT_DIR, "ets_share_c19_c24.tex")
 )
 
