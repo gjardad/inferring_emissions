@@ -6,21 +6,18 @@
 #   the deployment population (all firms), at both NACE 5-digit and 2-digit
 #   levels. Motivates the choice of partial pooling for sector effects.
 #
-#   Three diagnostics:
-#     1) Sector coverage: how many NACE sectors in deployment data are
-#        represented in the training sample?
-#     2) Same at NACE 2-digit level.
-#     3) Distribution of number of firms per sector in training sample
-#        (histograms saved to OUTPUT_DIR).
+#   Two diagnostics combined into a single table:
+#     1) Distribution of firms per NACE sector in the training sample
+#        (binned: < 3, 3-10, > 10).
+#     2) Share of NACE sectors in deployment data that are represented
+#        in the training sample (sector coverage).
 #
 # INPUTS
 #   - PROC_DATA/firm_year_belgian_euets.RData
 #   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
 #
 # OUTPUTS
-#   - OUTPUT_DIR/sector_coverage.tex
-#   - OUTPUT_DIR/histogram_firms_per_nace5d.pdf
-#   - OUTPUT_DIR/histogram_firms_per_nace2d.pdf
+#   - OUTPUT_DIR/sector_support.tex
 ###############################################################################
 
 # ====================
@@ -38,7 +35,6 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
-library(ggplot2)
 library(knitr)
 library(kableExtra)
 
@@ -114,47 +110,49 @@ summary(firms_per_2d$n_firms)
 
 
 # =====================================================================
-# 3) HISTOGRAMS
+# 3) COMBINED TABLE: firms per sector and sector coverage
 # =====================================================================
 
-p_5d <- ggplot(firms_per_5d, aes(x = n_firms)) +
-  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
-  labs(
-    title = "Training sample: firms per NACE 5-digit sector",
-    x = "Number of distinct firms",
-    y = "Number of sectors"
-  ) +
-  theme_minimal()
+bins_2d <- c(
+  sum(firms_per_2d$n_firms < 3),
+  sum(firms_per_2d$n_firms >= 3 & firms_per_2d$n_firms <= 10),
+  sum(firms_per_2d$n_firms > 10)
+)
 
-p_2d <- ggplot(firms_per_2d, aes(x = n_firms)) +
-  geom_histogram(binwidth = 2, fill = "steelblue", color = "white") +
-  labs(
-    title = "Training sample: firms per NACE 2-digit sector",
-    x = "Number of distinct firms",
-    y = "Number of sectors"
-  ) +
-  theme_minimal()
+bins_5d <- c(
+  sum(firms_per_5d$n_firms < 3),
+  sum(firms_per_5d$n_firms >= 3 & firms_per_5d$n_firms <= 10),
+  sum(firms_per_5d$n_firms > 10)
+)
+
+combined_table <- data.frame(
+  nace_level   = c("2-digit codes", "5-digit codes"),
+  lt3          = c(bins_2d[1], bins_5d[1]),
+  mid          = c(bins_2d[2], bins_5d[2]),
+  gt10         = c(bins_2d[3], bins_5d[3]),
+  in_training  = c(covered_2d, covered_5d),
+  coverage_pct = c(round(covered_2d / deploy_2d * 100, 1),
+                   round(covered_5d / deploy_5d * 100, 1))
+)
+
+cat("\n=== COMBINED SECTOR SUPPORT TABLE ===\n")
+print(combined_table, row.names = FALSE)
 
 
 # =====================================================================
-# Save outputs
+# Save output
 # =====================================================================
 
 writeLines(
-  coverage_table %>%
+  combined_table %>%
     kable(format = "latex",
-          col.names = c("Level", "In deployment", "In training",
-                        "Covered", "Coverage (\\%)"),
+          col.names = c("NACE level", "$< 3$", "$3$--$10$", "$> 10$",
+                        "In training", "Coverage (\\%)"),
           booktabs = TRUE, escape = FALSE,
-          align = c("l", rep("r", 4))) %>%
-    kable_styling(latex_options = "hold_position"),
-  file.path(OUTPUT_DIR, "sector_coverage.tex")
+          align = c("l", rep("c", 5))) %>%
+    kable_styling(latex_options = "hold_position") %>%
+    add_header_above(c(" " = 1, "Firms per cell" = 3, "Sector coverage" = 2)),
+  file.path(OUTPUT_DIR, "sector_support.tex")
 )
-
-ggsave(file.path(OUTPUT_DIR, "histogram_firms_per_nace5d.pdf"),
-       p_5d, width = 7, height = 4.5)
-
-ggsave(file.path(OUTPUT_DIR, "histogram_firms_per_nace2d.pdf"),
-       p_2d, width = 7, height = 4.5)
 
 cat("\nSaved to", OUTPUT_DIR, "\n")
