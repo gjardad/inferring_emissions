@@ -18,7 +18,7 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- dirname(normalizePath(sys.frame(1)$ofile, winslash = "/"))
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
   while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
@@ -28,6 +28,7 @@ source(file.path(REPO_DIR, "paths.R"))
 # -----------------------
 # Source auxiliary code
 # -----------------------
+source_try(UTILS_DIR, "parallel_utils")
 source_try(UTILS_DIR, "calc_metrics")
 source_try(UTILS_DIR, "build_metrics_table")
 source_try(UTILS_DIR, "append_loocv_performance_metrics_log")
@@ -56,6 +57,18 @@ syt_run <- sector_year_totals_full
 sample_tag <- "all"
 
 # -----------------------
+# Persistent parallel cluster
+# -----------------------
+cl <- make_loocv_cluster()
+on.exit(stop_loocv_cluster(cl), add = TRUE)
+
+# -----------------------
+# K-fold CV: assign firms to folds
+# -----------------------
+fold_ids <- assign_kfold_groups(unique(df_run$vat), k = 10L, seed = 42L)
+cat(sprintf("Assigned %d firms to %d folds\n", nrow(fold_ids), max(fold_ids$fold)))
+
+# -----------------------
 # 1) PPML benchmarks
 # -----------------------
 ppml_metrics <- list()
@@ -77,7 +90,9 @@ ppml_out_fe <- poissonPP_lofo(
   partial_pooling = FALSE,
   fallback_equal_split = TRUE,
   progress_every = 50,
-  drop_singleton_cells_in_metrics = TRUE
+  drop_singleton_cells_in_metrics = TRUE,
+  fold_ids = fold_ids,
+  cl = cl
 )
 
 ppml_metrics[["ppml_woutfuelproxy_sectorFE"]] <- build_metrics_table(
@@ -111,7 +126,9 @@ ppml_out_re <- poissonPP_lofo(
   partial_pooling = TRUE,
   fallback_equal_split = TRUE,
   progress_every = 50,
-  drop_singleton_cells_in_metrics = TRUE
+  drop_singleton_cells_in_metrics = TRUE,
+  fold_ids = fold_ids,
+  cl = cl
 )
 
 ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
@@ -131,10 +148,13 @@ ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
 # --- PPML with proxy loop (sector RE) ---
 proxy_files <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
 
-ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
+ppml_proxy_metrics <- lapply(seq_along(proxy_files), function(j) {
+  proxy_file <- proxy_files[j]
   obj <- readRDS(proxy_file)
   proxy_tbl <- if (is.list(obj) && !is.null(obj$proxy)) obj$proxy else obj
   proxy_name <- if (is.list(obj) && !is.null(obj$name)) obj$name else tools::file_path_sans_ext(basename(proxy_file))
+
+  message(sprintf("PPML proxy %d/%d: %s", j, length(proxy_files), proxy_name))
 
   proxy_tbl <- as.data.table(proxy_tbl)
   if ("buyer_id" %in% names(proxy_tbl) && !"vat" %in% names(proxy_tbl)) {
@@ -157,7 +177,9 @@ ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
     partial_pooling = TRUE,
     fallback_equal_split = TRUE,
     progress_every = 50,
-    drop_singleton_cells_in_metrics = TRUE
+    drop_singleton_cells_in_metrics = TRUE,
+    fold_ids = fold_ids,
+    cl = cl
   )
 
   build_metrics_table(
@@ -202,7 +224,8 @@ base <- prep_hurdle_base_DT(
 step1_cache_dir <- file.path(OUTPUT_DIR, "cache_step1")
 if (!dir.exists(step1_cache_dir)) dir.create(step1_cache_dir, recursive = TRUE)
 
-phat_paths <- lapply(proxy_files, function(proxy_file) {
+phat_paths <- lapply(seq_along(proxy_files), function(j) {
+  proxy_file <- proxy_files[j]
   obj <- readRDS(proxy_file)
   proxy_tbl <- if (is.list(obj) && !is.null(obj$proxy)) obj$proxy else obj
   proxy_name <- if (is.list(obj) && !is.null(obj$name)) obj$name else tools::file_path_sans_ext(basename(proxy_file))
@@ -216,13 +239,16 @@ phat_paths <- lapply(proxy_files, function(proxy_file) {
   out_path <- file.path(step1_cache_dir, paste0("phat__", tag, ".rds"))
 
   if (!file.exists(out_path)) {
+    message(sprintf("Step1 proxy %d/%d: %s", j, length(proxy_files), proxy_name))
     phat_dt <- precompute_step1_ext(
       base = base,
       proxy_ext_tbl = proxy_tbl,
       proxy_keys = c("vat", "year"),
       proxy_var = "fuel_proxy",
       partial_pooling = TRUE,
-      progress_every = 50
+      progress_every = 50,
+      fold_ids = fold_ids,
+      cl = cl
     )
     saveRDS(list(proxy_name = proxy_name, phat_dt = phat_dt), out_path)
   }
@@ -264,7 +290,8 @@ write.csv(step1_metrics, file.path(OUTPUT_DIR, "step1_metrics_threshold_all.csv"
 step2_cache_dir <- file.path(OUTPUT_DIR, "cache_step2")
 if (!dir.exists(step2_cache_dir)) dir.create(step2_cache_dir, recursive = TRUE)
 
-muhat_paths <- lapply(proxy_files, function(proxy_file) {
+muhat_paths <- lapply(seq_along(proxy_files), function(j) {
+  proxy_file <- proxy_files[j]
   obj <- readRDS(proxy_file)
   proxy_tbl <- if (is.list(obj) && !is.null(obj$proxy)) obj$proxy else obj
   proxy_name <- if (is.list(obj) && !is.null(obj$name)) obj$name else tools::file_path_sans_ext(basename(proxy_file))
@@ -278,13 +305,16 @@ muhat_paths <- lapply(proxy_files, function(proxy_file) {
   out_path <- file.path(step2_cache_dir, paste0("muhat__", tag, ".rds"))
 
   if (!file.exists(out_path)) {
+    message(sprintf("Step2 proxy %d/%d: %s", j, length(proxy_files), proxy_name))
     muhat_dt <- precompute_step2_int(
       base = base,
       proxy_int_tbl = proxy_tbl,
       proxy_keys = c("vat", "year"),
       proxy_var = "fuel_proxy",
       partial_pooling = TRUE,
-      progress_every = 50
+      progress_every = 50,
+      fold_ids = fold_ids,
+      cl = cl
     )
     saveRDS(list(proxy_name = proxy_name, muhat_dt = muhat_dt), out_path)
   }
