@@ -37,6 +37,8 @@ source(file.path(REPO_DIR, "paths.R"))
 
 ## Setup ------
 
+library(dplyr)
+library(tidyr)
 
 # Import data --------
 

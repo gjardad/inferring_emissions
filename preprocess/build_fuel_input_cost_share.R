@@ -55,11 +55,11 @@ suppressPackageStartupMessages({
 })
 
 # ---- Load inputs ----
-load(file.path(DATA_PROC, "amount_spent_on_fuel_by_firm_year.RData"))
-load(file.path(DATA_PROC, "firm_year_belgian_euets.RData"))
-load(file.path(DATA_PROC, "firm_year_domestic_input_cost.RData"))
-load(file.path(DATA_PROC, "firm_year_total_imports.RData"))
-load(file.path(DATA_PROC, "annual_accounts_selected_sample_key_variables.RData"))
+load(file.path(PROC_DATA, "amount_spent_on_fuel_by_firm_year.RData"))
+load(file.path(PROC_DATA, "firm_year_belgian_euets.RData"))
+load(file.path(PROC_DATA, "firm_year_domestic_input_cost.RData"))
+load(file.path(PROC_DATA, "firm_year_total_imports.RData"))
+load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
 
 fuel <- amount_spent_on_fuel_by_firm_year %>%
   rename(
@@ -100,7 +100,7 @@ fuel_input_cost_share <- fuel %>%
 
 # ---- Save ----
 save(fuel_input_cost_share,
-     file = file.path(DATA_PROC, "fuel_input_cost_share.RData"))
+     file = file.path(PROC_DATA, "fuel_input_cost_share.RData"))
 
 message("Saved fuel_input_cost_share with ",
         nrow(fuel_input_cost_share), " rows.")
