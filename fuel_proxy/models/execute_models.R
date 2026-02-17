@@ -270,16 +270,34 @@ step1_metrics <- step1_threshold_metrics(
   progress_every = 50
 )
 
-step1_low <- step1_metrics[
-  FPR_nonemitters <= low_fpr_max
-][order(-emitter_mass_captured)][1:min(topk_per_band, .N)]
+cat(sprintf("Step1 metrics: %d rows, FPR range [%.3f, %.3f]\n",
+    nrow(step1_metrics),
+    min(step1_metrics$FPR_nonemitters, na.rm = TRUE),
+    max(step1_metrics$FPR_nonemitters, na.rm = TRUE)))
 
-step1_high <- step1_metrics[
-  FPR_nonemitters > low_fpr_max & FPR_nonemitters <= high_fpr_max
-][order(-emitter_mass_captured)][1:min(topk_per_band, .N)]
+step1_low <- head(
+  step1_metrics[FPR_nonemitters <= low_fpr_max][order(-emitter_mass_captured)],
+  topk_per_band
+)
+
+step1_high <- head(
+  step1_metrics[FPR_nonemitters > low_fpr_max & FPR_nonemitters <= high_fpr_max][order(-emitter_mass_captured)],
+  topk_per_band
+)
 
 topk_step1 <- rbindlist(list(step1_low, step1_high), fill = TRUE)
+
+# If no pairs qualify in the specified FPR bands, fall back to the topk overall
+if (nrow(topk_step1) == 0) {
+  cat("WARNING: No (proxy, threshold) pairs found in FPR bands. Falling back to top-K overall.\n")
+  topk_step1 <- head(
+    step1_metrics[order(-emitter_mass_captured)],
+    2 * topk_per_band
+  )
+}
+
 step1_pairs <- unique(topk_step1[, .(proxy_tag_ext, threshold_value = threshold)])
+cat(sprintf("Step1 pairs selected: %d\n", nrow(step1_pairs)))
 
 saveRDS(step1_metrics, file.path(OUTPUT_DIR, "step1_metrics_threshold_all.rds"))
 write.csv(step1_metrics, file.path(OUTPUT_DIR, "step1_metrics_threshold_all.csv"), row.names = FALSE)
@@ -358,7 +376,7 @@ step2_metrics <- rbindlist(lapply(muhat_paths, function(path) {
 
 setorder(step2_metrics, RMSE)
 
-topk_step2 <- step2_metrics[1:min(5, .N)]
+topk_step2 <- head(step2_metrics, 5)
 
 saveRDS(step2_metrics, file.path(OUTPUT_DIR, "step2_metrics_all_from_precompute.rds"))
 write.csv(step2_metrics, file.path(OUTPUT_DIR, "step2_metrics_all_from_precompute.csv"), row.names = FALSE)
@@ -399,10 +417,14 @@ metrics_hurdle_topk <- evaluate_hurdle_triples(
 saveRDS(metrics_hurdle_topk, file.path(OUTPUT_DIR, "hurdle_metrics_topk_triples.rds"))
 write.csv(metrics_hurdle_topk, file.path(OUTPUT_DIR, "hurdle_metrics_topk_triples.csv"), row.names = FALSE)
 
-best_tbl <- metrics_hurdle_topk[variant == "raw" & is.finite(RMSE)]
-setorder(best_tbl, RMSE)
+if (nrow(metrics_hurdle_topk) > 0 && "variant" %in% names(metrics_hurdle_topk)) {
+  best_tbl <- metrics_hurdle_topk[variant == "raw" & is.finite(RMSE)]
+  setorder(best_tbl, RMSE)
 
-best_combo <- best_tbl[1]
-if (nrow(best_combo) > 0) {
-  saveRDS(best_combo, file.path(OUTPUT_DIR, "best_hurdle_combo_topk_raw.rds"))
+  best_combo <- best_tbl[1]
+  if (nrow(best_combo) > 0) {
+    saveRDS(best_combo, file.path(OUTPUT_DIR, "best_hurdle_combo_topk_raw.rds"))
+  }
+} else {
+  cat("WARNING: No hurdle triple metrics available. Skipping best combo selection.\n")
 }
