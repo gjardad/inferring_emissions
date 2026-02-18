@@ -5,12 +5,15 @@
 #   Run all descriptive scripts in sequence. Each script sources paths.R
 #   independently, so this runner simply executes them one by one.
 #
-# NOTES
-#   - selected_proxy_pair_diagnosis.R will skip with a warning until the
-#     proxy placeholder filenames are replaced with actual proxy names.
+#   Section A (model-independent) can run without model outputs.
+#   Section B (model-dependent) requires execute_models.R to have been run
+#   first (needs metrics log, hurdle top-K results, LOSOCV output, and
+#   best_hurdle_combo_topk_raw.rds for proxy pair identification).
 #
 # OUTPUTS
 #   See individual scripts for their outputs. Summary:
+#
+#   --- Section A: Model-independent ---
 #
 #   total_supply_vs_imports_fossil_fuels.R
 #     -> total_supply_vs_imports.png
@@ -39,6 +42,16 @@
 #
 #   zero_fuel_share_diagnostics.R
 #     -> (console only)
+#
+#   revenue_emissions_heterogeneity_by_sector.R
+#     -> sector_revenue_emissions_heterogeneity.csv
+#     -> sector_elasticity_dotplot.pdf
+#     -> sector_elasticity_vs_emitter_share.pdf
+#
+#   --- Section B: Model-dependent ---
+#
+#   table_model_selection.R
+#     -> model_selection.tex
 #
 #   selected_proxy_pair_diagnosis.R
 #     -> selected_proxy_{step}_regression.tex
@@ -84,47 +97,44 @@ run_script <- function(script_name) {
 
 
 # =====================================================================
-# 1) Supply vs imports: Belgium relies on fuel imports
+# SECTION A: Model-independent descriptives
+#   (no model outputs needed — only preprocessed data)
 # =====================================================================
 
+# --- 1) Supply vs imports: Belgium relies on fuel imports ---
 run_script("total_supply_vs_imports_fossil_fuels.R")
 
-
-# =====================================================================
-# 2) Data quality: customs price imputation
-# =====================================================================
-
+# --- 2) Data quality: customs price imputation ---
 run_script("quality_of_implied_prices_from_customs.R")
 
-
-# =====================================================================
-# 3) Sector coverage and support tables
-# =====================================================================
-
+# --- 3) Sector coverage and support tables ---
 run_script("nace_sector_support_tables.R")
 
-
-# =====================================================================
-# 4) EU ETS coverage by sector (NIR-based)
-# =====================================================================
-
+# --- 4) EU ETS coverage by sector (NIR-based) ---
 run_script("nace_sectors_totally_covered_by_euets.R")
 run_script("table_euets_coverage_emissions_by_sector_from_nir.R")
 
-
-# =====================================================================
-# 5) C19 / C24 ETS vs non-ETS
-# =====================================================================
-
+# --- 5) C19 / C24 ETS vs non-ETS ---
 run_script("share_c19_c24_regulated_by_euets.R")
 
-
-# =====================================================================
-# 6) Fuel proxy diagnostics
-# =====================================================================
-
+# --- 6) Fuel proxy diagnostics (benchmark proxy) ---
 run_script("benchmark_fuel_proxy_diagnosis.R")
 run_script("zero_fuel_share_diagnostics.R")
+
+# --- 7) Revenue-emissions heterogeneity by sector ---
+run_script("revenue_emissions_heterogeneity_by_sector.R")
+
+
+# =====================================================================
+# SECTION B: Model-dependent descriptives
+#   (require execute_models.R outputs: metrics log, hurdle top-K,
+#    LOSOCV results, best_hurdle_combo_topk_raw.rds)
+# =====================================================================
+
+# --- 8) Model selection summary table ---
+run_script("table_model_selection.R")
+
+# --- 9) Selected proxy pair diagnostics (auto-detected from best triple) ---
 run_script("selected_proxy_pair_diagnosis.R")
 
 
