@@ -5,7 +5,8 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
+  while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
 }
@@ -14,6 +15,7 @@ source(file.path(REPO_DIR, "paths.R"))
 # -----------------------
 # Source auxiliary code
 # -----------------------
+source_try(UTILS_DIR, "parallel_utils")
 source_try(UTILS_DIR, "calc_metrics")
 source_try(UTILS_DIR, "build_metrics_table")
 source_try(UTILS_DIR, "append_loocv_performance_metrics_log")
@@ -42,14 +44,21 @@ syt_run <- sector_year_totals_full
 sample_tag <- "all"
 
 # -----------------------
+# Persistent parallel cluster
+# -----------------------
+cl <- make_loocv_cluster()
+on.exit(stop_loocv_cluster(cl), add = TRUE)
+
+# -----------------------
+# K-fold CV: assign firms to folds
+# -----------------------
+fold_ids <- assign_kfold_groups(unique(df_run$vat), k = 10L, seed = 42L)
+cat(sprintf("Assigned %d firms to %d folds\n", nrow(fold_ids), max(fold_ids$fold)))
+
+# -----------------------
 # Paths + outputs
 # -----------------------
-output_dir <- OUTPUT_DIR
-proxy_cache_dir <- PROXY_CACHE_DIR
-metrics_path_rds <- METRICS_PATH_RDS
-metrics_path_csv <- METRICS_PATH_CSV
-
-if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
 # -----------------------
 # 1) PPML benchmarks
@@ -73,7 +82,9 @@ ppml_out_fe <- poissonPP_lofo(
   partial_pooling = FALSE,
   fallback_equal_split = TRUE,
   progress_every = 50,
-  drop_singleton_cells_in_metrics = TRUE
+  drop_singleton_cells_in_metrics = TRUE,
+  fold_ids = fold_ids,
+  cl = cl
 )
 
 ppml_metrics[["ppml_woutfuelproxy_sectorFE"]] <- build_metrics_table(
@@ -107,7 +118,9 @@ ppml_out_re <- poissonPP_lofo(
   partial_pooling = TRUE,
   fallback_equal_split = TRUE,
   progress_every = 50,
-  drop_singleton_cells_in_metrics = TRUE
+  drop_singleton_cells_in_metrics = TRUE,
+  fold_ids = fold_ids,
+  cl = cl
 )
 
 ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
@@ -125,15 +138,16 @@ ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
 )
 
 cat("=== PPML with proxy loop (sector RE) ===\n")
-proxy_files <- list.files(proxy_cache_dir, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
+proxy_files <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
 cat("Found", length(proxy_files), "proxy files\n")
 
-ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
+ppml_proxy_metrics <- lapply(seq_along(proxy_files), function(j) {
+  proxy_file <- proxy_files[j]
   obj <- readRDS(proxy_file)
   proxy_tbl <- if (is.list(obj) && !is.null(obj$proxy)) obj$proxy else obj
   proxy_name <- if (is.list(obj) && !is.null(obj$name)) obj$name else tools::file_path_sans_ext(basename(proxy_file))
 
-  cat("  proxy:", proxy_name, "\n")
+  message(sprintf("PPML proxy %d/%d: %s", j, length(proxy_files), proxy_name))
   proxy_tbl <- as.data.table(proxy_tbl)
   if ("buyer_id" %in% names(proxy_tbl) && !"vat" %in% names(proxy_tbl)) {
     setnames(proxy_tbl, "buyer_id", "vat")
@@ -155,7 +169,9 @@ ppml_proxy_metrics <- lapply(proxy_files, function(proxy_file) {
     partial_pooling = TRUE,
     fallback_equal_split = TRUE,
     progress_every = 50,
-    drop_singleton_cells_in_metrics = TRUE
+    drop_singleton_cells_in_metrics = TRUE,
+    fold_ids = fold_ids,
+    cl = cl
   )
 
   build_metrics_table(
@@ -179,8 +195,8 @@ ppml_metrics_all <- rbindlist(c(ppml_metrics, list(ppml_proxy_metrics)), fill = 
 
 append_metrics_log(
   ppml_metrics_all,
-  rds_path = metrics_path_rds,
-  csv_path = metrics_path_csv,
+  rds_path = METRICS_PATH_RDS,
+  csv_path = METRICS_PATH_CSV,
   dedup = TRUE
 )
 
