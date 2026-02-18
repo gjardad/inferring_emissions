@@ -56,7 +56,7 @@ PROXY_DIR   <- file.path(REPO_DIR, "fuel_proxy", "proxies")
 # Helper: run a script in a clean environment
 # =====================================================================
 
-run_script <- function(script_path, label = NULL) {
+run_script <- function(script_path, label = NULL, stop_on_error = FALSE) {
   if (is.null(label)) label <- basename(script_path)
   cat("\n", strrep("=", 70), "\n")
   cat("  RUNNING:", label, "\n")
@@ -67,6 +67,9 @@ run_script <- function(script_path, label = NULL) {
     error = function(e) {
       cat("\n*** ERROR in", label, "***\n")
       cat(conditionMessage(e), "\n\n")
+      if (stop_on_error) {
+        stop(sprintf("Pipeline aborted: %s failed.\n%s", label, conditionMessage(e)))
+      }
     }
   )
   elapsed <- round(as.numeric(difftime(Sys.time(), t0, units = "secs")), 1)
@@ -194,9 +197,11 @@ run_script(pp("build_emissions_by_sector_year_from_nir.R"))
 # =====================================================================
 
 run_script(file.path(UTILS_DIR, "build_auxiliary_tables.R"),
-           label = "build_auxiliary_tables.R (fuel_proxy/utils)")
+           label = "build_auxiliary_tables.R (fuel_proxy/utils)",
+           stop_on_error = TRUE)
 run_script(file.path(PROXY_DIR, "build_proxies.R"),
-           label = "build_proxies.R (fuel_proxy/proxies)")
+           label = "build_proxies.R (fuel_proxy/proxies)",
+           stop_on_error = TRUE)
 
 
 # =====================================================================

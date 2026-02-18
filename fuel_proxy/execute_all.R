@@ -61,7 +61,7 @@ pipeline_start <- Sys.time()
 #                         (e.g. on RMD after an earlier full run).
 # =====================================================================
 
-SKIP_DTA_CONVERSION <- FALSE   # <-- change to TRUE to skip Phase 1
+SKIP_DTA_CONVERSION <- TRUE    # <-- change to TRUE to skip Phase 1
 
 
 # =====================================================================
