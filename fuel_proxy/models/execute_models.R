@@ -60,7 +60,6 @@ sample_tag <- "all"
 # Persistent parallel cluster
 # -----------------------
 cl <- make_loocv_cluster()
-on.exit(stop_loocv_cluster(cl), add = TRUE)
 
 # -----------------------
 # K-fold CV: assign firms to folds
@@ -638,3 +637,8 @@ if (exists("best_combo") && nrow(best_combo) > 0) {
 } else {
   cat("WARNING: No best hurdle combo available. Skipping LOSOCV.\n")
 }
+
+# -----------------------
+# Cleanup
+# -----------------------
+stop_loocv_cluster(cl)
