@@ -15,7 +15,8 @@
 #      split by ETS / non-ETS.
 #
 # INPUTS
-#   - Proxy .rds files from CACHE_DIR (names set in PROXY NAMES below)
+#   - OUTPUT_DIR/best_hurdle_combo_topk_raw.rds (auto-detected best triple)
+#   - Proxy .rds files from CACHE_DIR (resolved from best triple tags)
 #   - PROC_DATA/loocv_training_sample.RData
 #   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
 #   - PROC_DATA/fuel_input_cost_share.RData (for total_costs denominator)
@@ -48,19 +49,44 @@ library(knitr)
 library(kableExtra)
 
 # =====================================================================
-# PROXY NAMES — edit these to match the selected hurdle pair
+# PROXY NAMES — auto-detected from best hurdle triple
 # =====================================================================
+
+best_combo_path <- file.path(OUTPUT_DIR, "best_hurdle_combo_topk_raw.rds")
+if (!file.exists(best_combo_path)) {
+  warning("best_hurdle_combo_topk_raw.rds not found in ", OUTPUT_DIR,
+          " \u2014 skipping selected_proxy_pair_diagnosis.R")
+  return(invisible(NULL))
+}
+
+best_combo <- readRDS(best_combo_path)
+
+# Map proxy tags to cached .rds files
+find_proxy_file <- function(proxy_tag) {
+  candidates <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = FALSE)
+  match <- candidates[tools::file_path_sans_ext(candidates) == proxy_tag]
+  if (length(match) == 0) {
+    # Fallback: partial match
+    match <- candidates[grepl(proxy_tag, candidates, fixed = TRUE)]
+  }
+  if (length(match) == 0) stop("Cannot find proxy file for tag: ", proxy_tag)
+  match[1]
+}
 
 proxy_config <- list(
   extensive = list(
-    file = "proxy_PLACEHOLDER_EXTENSIVE.rds",
+    file  = find_proxy_file(best_combo$proxy_tag_ext),
     label = "Extensive margin proxy"
   ),
   intensive = list(
-    file = "proxy_PLACEHOLDER_INTENSIVE.rds",
+    file  = find_proxy_file(best_combo$proxy_tag_int),
     label = "Intensive margin proxy"
   )
 )
+
+cat("Selected proxy pair (from best hurdle triple):\n")
+cat("  Extensive:", proxy_config$extensive$file, "\n")
+cat("  Intensive:", proxy_config$intensive$file, "\n")
 
 
 # ==================
