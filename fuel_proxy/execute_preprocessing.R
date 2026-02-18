@@ -77,12 +77,18 @@ pp <- function(fname) file.path(PREPROC_DIR, fname)
 
 
 # =====================================================================
-# Phase 1: Raw data loading
+# Phase 1: Raw data loading  (.dta -> .RData conversion)
+#   Skipped when SKIP_DTA_CONVERSION is TRUE (e.g. files already exist
+#   on RMD from a previous run).
 # =====================================================================
 
-run_script(pp("build_annual_accounts.R"))
-run_script(pp("load_b2b_in_rdata.R"))
-run_script(pp("build_df_trade.R"))
+if (!isTRUE(SKIP_DTA_CONVERSION)) {
+  run_script(pp("build_annual_accounts.R"))
+  run_script(pp("load_b2b_in_rdata.R"))
+  run_script(pp("build_df_trade.R"))
+} else {
+  cat("\n  [Phase 1 skipped: SKIP_DTA_CONVERSION = TRUE]\n")
+}
 
 
 # =====================================================================

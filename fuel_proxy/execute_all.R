@@ -54,6 +54,17 @@ pipeline_start <- Sys.time()
 
 
 # =====================================================================
+# Pipeline flags
+#   SKIP_DTA_CONVERSION – skip Phase 1 of preprocessing (the slow
+#                         .dta -> .RData conversion).  Set to TRUE
+#                         when the .RData files already exist on disk
+#                         (e.g. on RMD after an earlier full run).
+# =====================================================================
+
+SKIP_DTA_CONVERSION <- FALSE   # <-- change to TRUE to skip Phase 1
+
+
+# =====================================================================
 # Stage 1: Preprocessing
 # =====================================================================
 
