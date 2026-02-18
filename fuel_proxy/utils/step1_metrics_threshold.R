@@ -52,7 +52,12 @@ step1_threshold_metrics <- function(base,
   }
 
   if (length(phat_paths) == 0 || length(thresholds) == 0) {
-    return(data.table())
+    return(data.table(
+      proxy_tag_ext = character(0), threshold = numeric(0), n = integer(0),
+      FPR_nonemitters = numeric(0), TPR_emitters = numeric(0),
+      PPV_precision = numeric(0), F1 = numeric(0),
+      predicted_positive_rate = numeric(0), emitter_mass_captured = numeric(0)
+    ))
   }
 
   # Standardize join keys once

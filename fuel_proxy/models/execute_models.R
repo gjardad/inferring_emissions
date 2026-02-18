@@ -147,6 +147,17 @@ ppml_metrics[["ppml_woutfuel_proxy_sectorRE"]] <- build_metrics_table(
 # --- PPML with proxy loop (sector RE) ---
 proxy_files <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = TRUE)
 
+if (length(proxy_files) == 0) {
+  stop(sprintf(paste0(
+    "No proxy .rds files found in CACHE_DIR:\n  %s\n",
+    "The preprocessing stage likely failed to build proxies.\n",
+    "Check execute_preprocessing.R output for errors in build_auxiliary_tables.R or build_proxies.R.\n",
+    "Tip: run build_proxies.R standalone and look for error messages."
+  ), CACHE_DIR))
+}
+
+cat(sprintf("Found %d proxy files in %s\n", length(proxy_files), CACHE_DIR))
+
 ppml_proxy_metrics <- lapply(seq_along(proxy_files), function(j) {
   proxy_file <- proxy_files[j]
   obj <- readRDS(proxy_file)
@@ -268,6 +279,14 @@ step1_metrics <- step1_threshold_metrics(
   thresholds = thresholds,
   progress_every = 50
 )
+
+if (nrow(step1_metrics) == 0) {
+  stop(sprintf(paste0(
+    "step1_threshold_metrics returned 0 rows (%d phat files were read).\n",
+    "Check that phat cache files in cache_step1/ have the expected structure:\n",
+    "  list(proxy_name = <string>, phat_dt = <data.table with id/year/phat_raw>)"
+  ), length(phat_paths)))
+}
 
 cat(sprintf("Step1 metrics: %d rows, FPR range [%.3f, %.3f]\n",
     nrow(step1_metrics),
