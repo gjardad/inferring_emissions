@@ -45,6 +45,8 @@ if (!dir.exists(CACHE_DIR)) dir.create(CACHE_DIR, recursive = TRUE)
 tic("build_proxies")
 
 aux <- load_aux()
+cat(sprintf("aux loaded: %d elements (%s)\n", length(aux), paste(names(aux), collapse = ", ")))
+stopifnot(is.list(aux), length(aux) > 0)
 
 grid <- proxy_grid
 
@@ -91,6 +93,11 @@ for (k in seq_len(nrow(grid))) {
     error = function(e) {
       message("FAILED proxy: ", nm)
       message("mods = ", paste0(names(mods), "=", unlist(mods), collapse = ", "))
+      message("build_fuel_proxy args: mods=list(", length(mods), "), aux=", class(aux)[1],
+              "(", length(aux), " elements)")
+      message("Traceback:")
+      calls <- sys.calls()
+      for (cl in rev(calls)) message("  ", deparse(cl, nlines = 1))
       stop(e)
     }
   )
