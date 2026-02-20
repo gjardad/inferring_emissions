@@ -8,6 +8,7 @@
 #     Step 3: Compare pooled vs within-buyer supplier selection
 #     Step 4: Validate selected suppliers against CN8 fuel importers
 #     Step 5: Build proxies from identified suppliers + group k-fold CV
+#     Step 6: Elastic net proxy diagnostics (regressions, summary stats, densities)
 #
 # INPUT  (consumed by the sourced scripts)
 #   {PROC_DATA}/b2b_selected_sample.RData
@@ -84,6 +85,15 @@ cat("\n",
     "##############################################################\n\n")
 
 source(file.path(SCRIPT_DIR, "build_proxy_and_cv.R"))
+
+
+# ── Step 6: Proxy diagnostics ────────────────────────────────────────────────
+cat("\n",
+    "##############################################################\n",
+    "# STEP 6: Elastic net proxy diagnostics                      #\n",
+    "##############################################################\n\n")
+
+source(file.path(SCRIPT_DIR, "descriptives", "elastic_net_proxy_diagnostics.R"))
 
 
 # ── Done ─────────────────────────────────────────────────────────────────────

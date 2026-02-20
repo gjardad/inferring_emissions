@@ -1,10 +1,10 @@
 ###############################################################################
-# fuel_proxy/descriptives/selected_proxy_pair_diagnosis.R
+# fuel_suppliers/descriptives/elastic_net_proxy_diagnostics.R
 #
 # PURPOSE
-#   Same diagnostics as benchmark_fuel_proxy_diagnosis.R but for the proxy
-#   pair selected by the hurdle CV procedure. Runs the three analyses for
-#   each proxy in the pair (extensive-margin and intensive-margin).
+#   Diagnostics for the fuel-consumption proxies built from elastic-net-
+#   identified suppliers (pooled and within-buyer). Same three analyses as
+#   fuel_proxy/descriptives/selected_proxy_pair_diagnostics.R:
 #
 #   1) Regressions (log-log, ETS emitters with emissions > 0 and proxy > 0):
 #      (1) log(emissions) ~ log(fuel_proxy) + year FE + sector FE
@@ -15,23 +15,21 @@
 #      split by ETS / non-ETS.
 #
 # INPUTS
-#   - OUTPUT_DIR/best_hurdle_combo_topk_raw.rds (auto-detected best triple)
-#   - Proxy .rds files from CACHE_DIR (resolved from best triple tags)
-#   - PROC_DATA/loocv_training_sample.RData
-#   - PROC_DATA/annual_accounts_selected_sample_key_variables.RData
-#   - PROC_DATA/fuel_input_cost_share.RData (for total_costs denominator)
+#   - {INT_DATA}/fuel_suppliers_elastic_net_results.RData
+#   - {PROC_DATA}/b2b_selected_sample.RData
+#   - {PROC_DATA}/loocv_training_sample.RData
+#   - {PROC_DATA}/annual_accounts_selected_sample_key_variables.RData
+#   - {PROC_DATA}/firm_year_domestic_input_cost.RData
+#   - {PROC_DATA}/firm_year_total_imports.RData
 #
-# OUTPUTS (to OUTPUT_DIR, one set per proxy)
-#   - selected_proxy_{step}_regression.tex
-#   - selected_proxy_{step}_summary_stats.tex
-#   - selected_proxy_{step}_density_C19.pdf
-#   - selected_proxy_{step}_density_C24.pdf
+# OUTPUTS (to OUTPUT_DIR, one set per proxy variant)
+#   - enet_proxy_{variant}_regression.tex
+#   - enet_proxy_{variant}_summary_stats.tex
+#   - enet_proxy_{variant}_density_C19.pdf
+#   - enet_proxy_{variant}_density_C24.pdf
 ###############################################################################
 
-# ====================
-# Define paths -------
-# ====================
-
+# ── Paths ────────────────────────────────────────────────────────────────────
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
@@ -48,56 +46,85 @@ library(scales)
 library(knitr)
 library(kableExtra)
 
-# =====================================================================
-# PROXY NAMES — auto-detected from best hurdle triple
-# =====================================================================
 
-best_combo_path <- file.path(OUTPUT_DIR, "best_hurdle_combo_topk_raw.rds")
-if (!file.exists(best_combo_path)) {
-  warning("best_hurdle_combo_topk_raw.rds not found in ", OUTPUT_DIR,
-          " \u2014 skipping selected_proxy_pair_diagnosis.R")
-  return(invisible(NULL))
+# ── Load data ────────────────────────────────────────────────────────────────
+
+cat("Loading elastic net results...\n")
+load(file.path(INT_DATA, "fuel_suppliers_elastic_net_results.RData"))
+
+cat("Loading B2B data...\n")
+load(file.path(PROC_DATA, "b2b_selected_sample.RData"))
+b2b <- df_b2b_selected_sample
+rm(df_b2b_selected_sample)
+
+cat("Loading LOOCV training sample...\n")
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+
+cat("Loading annual accounts...\n")
+load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
+
+cat("Loading domestic input costs...\n")
+load(file.path(PROC_DATA, "firm_year_domestic_input_cost.RData"))
+
+cat("Loading total imports...\n")
+load(file.path(PROC_DATA, "firm_year_total_imports.RData"))
+
+
+# ── Extract identified supplier sets ─────────────────────────────────────────
+suppliers_pooled <- supplier_summary_pooled %>%
+  filter(lambda == "min", coef > 0) %>%
+  distinct(vat_i_ano) %>%
+  pull(vat_i_ano)
+
+suppliers_fe <- supplier_summary_fe %>%
+  filter(lambda == "min", coef > 0) %>%
+  distinct(vat_i_ano) %>%
+  pull(vat_i_ano)
+
+cat("Identified suppliers (pooled):       ", length(suppliers_pooled), "\n")
+cat("Identified suppliers (within-buyer): ", length(suppliers_fe), "\n")
+
+
+# ── Build proxies from B2B ───────────────────────────────────────────────────
+build_proxy <- function(b2b_df, supplier_set) {
+  b2b_df %>%
+    filter(vat_i_ano %in% supplier_set) %>%
+    group_by(vat_j_ano, year) %>%
+    summarise(fuel_proxy = sum(corr_sales_ij, na.rm = TRUE), .groups = "drop") %>%
+    rename(vat = vat_j_ano)
 }
 
-best_combo <- readRDS(best_combo_path)
-
-# Map proxy tags to cached .rds files
-find_proxy_file <- function(proxy_tag) {
-  candidates <- list.files(CACHE_DIR, pattern = "^proxy_.*\\.rds$", full.names = FALSE)
-  match <- candidates[tools::file_path_sans_ext(candidates) == proxy_tag]
-  if (length(match) == 0) {
-    # Fallback: partial match
-    match <- candidates[grepl(proxy_tag, candidates, fixed = TRUE)]
-  }
-  if (length(match) == 0) stop("Cannot find proxy file for tag: ", proxy_tag)
-  match[1]
-}
+proxy_pooled <- build_proxy(b2b, suppliers_pooled)
+proxy_fe     <- build_proxy(b2b, suppliers_fe)
+rm(b2b)
 
 proxy_config <- list(
-  extensive = list(
-    file  = find_proxy_file(best_combo$proxy_tag_ext),
-    label = "Extensive margin proxy"
+  pooled = list(
+    proxy = proxy_pooled,
+    label = "Elastic net proxy (pooled)"
   ),
-  intensive = list(
-    file  = find_proxy_file(best_combo$proxy_tag_int),
-    label = "Intensive margin proxy"
+  within_buyer = list(
+    proxy = proxy_fe,
+    label = "Elastic net proxy (within-buyer)"
   )
 )
 
-cat("Selected proxy pair (from best hurdle triple):\n")
-cat("  Extensive:", proxy_config$extensive$file, "\n")
-cat("  Intensive:", proxy_config$intensive$file, "\n")
 
+# ── Build deployment-wide frame ──────────────────────────────────────────────
 
-# ==================
-# Load data --------
-# ==================
+# Build total_costs from domestic input costs + imports
+domestic_costs <- firm_year_domestic_input_cost %>%
+  select(vat, year, input_cost)
 
-load(file.path(PROC_DATA, "loocv_training_sample.RData"))
-load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
-load(file.path(PROC_DATA, "fuel_input_cost_share.RData"))
+imports <- firm_year_total_imports %>%
+  rename(vat = vat_ano) %>%
+  select(vat, year, total_imports)
 
-# Build deployment-wide frame with revenue + sector + ETS status
+total_costs_df <- domestic_costs %>%
+  left_join(imports, by = c("vat", "year")) %>%
+  mutate(total_costs = input_cost + coalesce(total_imports, 0)) %>%
+  select(vat, year, total_costs)
+
 deploy <- df_annual_accounts_selected_sample_key_variables %>%
   mutate(nace2d = substr(nace5d, 1, 2)) %>%
   left_join(
@@ -105,34 +132,20 @@ deploy <- df_annual_accounts_selected_sample_key_variables %>%
     by = c("vat", "year")
   ) %>%
   mutate(euets = coalesce(euets, 0L)) %>%
-  left_join(
-    fuel_input_cost_share %>% select(vat, year, total_costs),
-    by = c("vat", "year")
-  )
+  left_join(total_costs_df, by = c("vat", "year"))
 
 
-# =====================================================================
-# Run diagnostics for each proxy in the pair
-# =====================================================================
+# ── Diagnostics function ────────────────────────────────────────────────────
 
-run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
+run_proxy_diagnostics <- function(proxy_dt, variant_tag, variant_label) {
 
-  proxy_path <- file.path(CACHE_DIR, proxy_file)
-  if (!file.exists(proxy_path)) {
-    warning("Proxy file not found: ", proxy_path, " — skipping ", step_tag)
-    return(invisible(NULL))
-  }
-
-  px <- readRDS(proxy_path)
-  proxy_dt <- px$proxy %>%
-    mutate(buyer_id = as.character(buyer_id),
-           year = as.integer(year))
+  cat(sprintf("\n%s\n  %s\n%s\n",
+              strrep("=", 60), variant_label, strrep("=", 60)))
 
   # Merge proxy into deployment frame
   df <- deploy %>%
-    mutate(buyer_id = as.character(vat)) %>%
-    left_join(proxy_dt %>% select(buyer_id, year, fuel_proxy),
-              by = c("buyer_id", "year")) %>%
+    left_join(proxy_dt %>% select(vat, year, fuel_proxy),
+              by = c("vat", "year")) %>%
     mutate(
       fuel_proxy = coalesce(fuel_proxy, 0),
       proxy_cost_share = case_when(
@@ -150,6 +163,11 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
            !is.na(revenue), revenue > 0,
            fuel_proxy > 0)
 
+  if (nrow(reg_data) < 10) {
+    cat("  Too few observations for regressions (", nrow(reg_data), "). Skipping.\n")
+    return(invisible(NULL))
+  }
+
   # (1) log(emissions) ~ log(fuel_proxy) + year FE + sector FE
   model1 <- lm(log(emissions) ~ log(fuel_proxy)
                 + factor(year) + factor(nace2d),
@@ -163,11 +181,11 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
   s1 <- summary(model1)
   s2 <- summary(model2)
 
-  cat("\n=== REGRESSION (1):", step_label, "===\n")
+  cat("\n=== REGRESSION (1):", variant_label, "===\n")
   cat("N =", nobs(model1), "\n")
   print(s1)
 
-  cat("\n=== REGRESSION (2):", step_label, "===\n")
+  cat("\n=== REGRESSION (2):", variant_label, "===\n")
   cat("N =", nobs(model2), "\n")
   print(s2)
 
@@ -208,8 +226,8 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
   )
 
   writeLines(tex_lines, file.path(OUTPUT_DIR,
-             paste0("selected_proxy_", step_tag, "_regression.tex")))
-  cat("\nSaved regression table for", step_tag, "\n")
+             paste0("enet_proxy_", variant_tag, "_regression.tex")))
+  cat("\nSaved regression table for", variant_tag, "\n")
 
   # ------------------------------------------------------------------
   # 2) Summary stats by ETS status
@@ -226,7 +244,7 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
     mutate(group = if_else(euets == 1, "ETS", "non-ETS")) %>%
     select(group, everything(), -euets)
 
-  cat("\n=== SUMMARY STATS:", step_label, "===\n")
+  cat("\n=== SUMMARY STATS:", variant_label, "===\n")
   print(as.data.frame(summary_stats), row.names = FALSE)
 
   writeLines(
@@ -238,7 +256,7 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
             align = c("l", rep("c", 4))) %>%
       kable_styling(latex_options = "hold_position"),
     file.path(OUTPUT_DIR,
-              paste0("selected_proxy_", step_tag, "_summary_stats.tex"))
+              paste0("enet_proxy_", variant_tag, "_summary_stats.tex"))
   )
 
   # ------------------------------------------------------------------
@@ -252,6 +270,11 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
         group = if_else(euets == 1, "EUETS", "Non-EUETS"),
         group = factor(group, levels = c("EUETS", "Non-EUETS"))
       )
+
+    if (nrow(df_sector) < 5) {
+      cat("  Too few obs for density plot in sector", sector_code, "\n")
+      return(NULL)
+    }
 
     ggplot(df_sector, aes(x = proxy_cost_share,
                           color = group, linetype = group)) +
@@ -277,25 +300,24 @@ run_proxy_diagnostics <- function(proxy_file, step_tag, step_label) {
       )
   }
 
-  p_c19 <- plot_density(df, "19")
-  p_c24 <- plot_density(df, "24")
+  for (sec in c("19", "24")) {
+    p <- plot_density(df, sec)
+    if (!is.null(p)) {
+      ggsave(file.path(OUTPUT_DIR,
+                        paste0("enet_proxy_", variant_tag, "_density_C", sec, ".pdf")),
+             p, width = 7.5, height = 4.8, dpi = 300)
+    }
+  }
 
-  ggsave(file.path(OUTPUT_DIR,
-                    paste0("selected_proxy_", step_tag, "_density_C19.pdf")),
-         p_c19, width = 7.5, height = 4.8, dpi = 300)
-  ggsave(file.path(OUTPUT_DIR,
-                    paste0("selected_proxy_", step_tag, "_density_C24.pdf")),
-         p_c24, width = 7.5, height = 4.8, dpi = 300)
-
-  cat("Saved outputs for", step_tag, "to", OUTPUT_DIR, "\n")
+  cat("Saved outputs for", variant_tag, "to", OUTPUT_DIR, "\n")
 }
 
 
-# =====================================================================
-# Execute
-# =====================================================================
+# ── Execute ──────────────────────────────────────────────────────────────────
 
-for (step in names(proxy_config)) {
-  cfg <- proxy_config[[step]]
-  run_proxy_diagnostics(cfg$file, step, cfg$label)
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
+
+for (variant in names(proxy_config)) {
+  cfg <- proxy_config[[variant]]
+  run_proxy_diagnostics(cfg$proxy, variant, cfg$label)
 }
