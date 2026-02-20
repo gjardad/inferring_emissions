@@ -9,7 +9,8 @@
 #     Step 4: Validate selected suppliers against CN8 fuel importers
 #     Step 5: Build proxies from identified suppliers + group k-fold CV
 #     Step 6: Elastic net proxy diagnostics (regressions, summary stats, densities)
-#     Step 7: Supplier selection diagnostics (CN8 baseline, NACE, stability, placebo)
+#     Step 7: Supplier selection diagnostics (CN8 validation, baseline,
+#             NACE profile, stability, placebo, within-firm test)
 #
 # INPUT  (consumed by the sourced scripts)
 #   {PROC_DATA}/b2b_selected_sample.RData
@@ -101,7 +102,8 @@ source(file.path(SCRIPT_DIR, "descriptives", "elastic_net_proxy_diagnostics.R"))
 cat("\n",
     "##############################################################\n",
     "# STEP 7: Supplier selection diagnostics                     #\n",
-    "#   (CN8 baseline, NACE profile, stability, placebo)         #\n",
+    "#   (CN8 validation, baseline, NACE, stability,              #\n",
+    "#    placebo, within-firm test)                               #\n",
     "##############################################################\n\n")
 
 source(file.path(SCRIPT_DIR, "descriptives", "execute_supplier_diagnostics.R"))
