@@ -6,8 +6,12 @@
 #   selected suppliers against a random baseline. Draw N random samples of the
 #   same size from eligible sellers and compute the same precision metrics.
 #
+#   Two CN8 tiers are tested:
+#     Broad  (Ch.27 excl. 2716): all Chapter 27 products except electricity.
+#     Strict (LLM-curated):     ~58 CN8 codes for stationary combustion fuels.
+#
 #   If random samples achieve similar precision, the validation is uninformative
-#   (i.e. nearly all firms in the economy are "fuel-linked").
+#   (i.e. nearly all firms in the economy are "fuel-linked" under that tier).
 #
 # INPUTS
 #   - {INT_DATA}/fuel_suppliers_elastic_net_results.RData
@@ -43,22 +47,7 @@ load(file.path(INT_DATA, "fuel_suppliers_cn8_validation.RData"))
 
 
 # ── Reference sets ───────────────────────────────────────────────────────────
-# eligible_sellers comes from elastic net results
 n_eligible <- length(eligible_sellers)
-
-# cn8_importers, downstream_buyers, fuel_linked come from cn8 validation
-n_cn8_importers    <- sum(eligible_sellers %in% cn8_importers)
-n_downstream       <- sum(eligible_sellers %in% downstream_buyers)
-n_fuel_linked      <- sum(eligible_sellers %in% fuel_linked)
-
-cat("\nEligible sellers:                     ", n_eligible, "\n")
-cat("  of which CN8 importers:             ", n_cn8_importers,
-    sprintf("(%.1f%%)\n", 100 * n_cn8_importers / n_eligible))
-cat("  of which 1-degree downstream:       ", n_downstream,
-    sprintf("(%.1f%%)\n", 100 * n_downstream / n_eligible))
-cat("  of which fuel-linked (union):       ", n_fuel_linked,
-    sprintf("(%.1f%%)\n", 100 * n_fuel_linked / n_eligible))
-
 
 # ── Elastic net actual selection (pooled) ────────────────────────────────────
 selected_pooled <- supplier_summary_pooled %>%
@@ -68,80 +57,112 @@ selected_pooled <- supplier_summary_pooled %>%
 
 n_selected <- length(selected_pooled)
 
-actual_cn8      <- sum(selected_pooled %in% cn8_importers)
-actual_downstream <- sum(selected_pooled %in% downstream_buyers)
-actual_linked   <- sum(selected_pooled %in% fuel_linked)
 
-cat("\n══════════════════════════════════════════════\n")
-cat("  Elastic net selection (pooled): ", n_selected, " suppliers\n")
-cat("══════════════════════════════════════════════\n")
-cat("  CN8 importers:         ", actual_cn8,
-    sprintf("(%.1f%%)\n", 100 * actual_cn8 / n_selected))
-cat("  1-degree downstream:   ", actual_downstream,
-    sprintf("(%.1f%%)\n", 100 * actual_downstream / n_selected))
-cat("  Fuel-linked:           ", actual_linked,
-    sprintf("(%.1f%%)\n", 100 * actual_linked / n_selected))
+# ── Helper: run baseline for one CN8 tier ────────────────────────────────────
+run_baseline <- function(tier_label, importers, ds_buyers, fl_set) {
 
+  n_imp_eligible <- sum(eligible_sellers %in% importers)
+  n_ds_eligible  <- sum(eligible_sellers %in% ds_buyers)
+  n_fl_eligible  <- sum(eligible_sellers %in% fl_set)
 
-# ── Random baseline ──────────────────────────────────────────────────────────
-cat("\nDrawing", N_DRAWS, "random samples of size", n_selected, "...\n")
+  cat(sprintf("\n%s\n  %s tier\n%s\n", strrep("=", 60), tier_label, strrep("=", 60)))
+  cat("Eligible sellers:                     ", n_eligible, "\n")
+  cat("  of which CN8 importers:             ", n_imp_eligible,
+      sprintf("(%.1f%%)\n", 100 * n_imp_eligible / n_eligible))
+  cat("  of which 1-degree downstream:       ", n_ds_eligible,
+      sprintf("(%.1f%%)\n", 100 * n_ds_eligible / n_eligible))
+  cat("  of which fuel-linked (union):       ", n_fl_eligible,
+      sprintf("(%.1f%%)\n", 100 * n_fl_eligible / n_eligible))
 
-random_results <- matrix(NA_real_, nrow = N_DRAWS, ncol = 3,
-                          dimnames = list(NULL,
-                                          c("cn8_importers", "downstream", "fuel_linked")))
+  # Elastic net actual
+  actual_cn8 <- sum(selected_pooled %in% importers)
+  actual_ds  <- sum(selected_pooled %in% ds_buyers)
+  actual_fl  <- sum(selected_pooled %in% fl_set)
 
-for (i in seq_len(N_DRAWS)) {
-  draw <- sample(eligible_sellers, n_selected, replace = FALSE)
-  random_results[i, "cn8_importers"] <- sum(draw %in% cn8_importers)
-  random_results[i, "downstream"]    <- sum(draw %in% downstream_buyers)
-  random_results[i, "fuel_linked"]   <- sum(draw %in% fuel_linked)
+  cat("\nElastic net selection (pooled):", n_selected, "suppliers\n")
+  cat("  CN8 importers:       ", actual_cn8,
+      sprintf("(%.1f%%)\n", 100 * actual_cn8 / n_selected))
+  cat("  1-degree downstream: ", actual_ds,
+      sprintf("(%.1f%%)\n", 100 * actual_ds / n_selected))
+  cat("  Fuel-linked:         ", actual_fl,
+      sprintf("(%.1f%%)\n", 100 * actual_fl / n_selected))
+
+  # Random draws
+  cat("\nDrawing", N_DRAWS, "random samples of size", n_selected, "...\n")
+
+  random_results <- matrix(NA_real_, nrow = N_DRAWS, ncol = 3,
+                           dimnames = list(NULL,
+                                           c("cn8_importers", "downstream", "fuel_linked")))
+
+  for (i in seq_len(N_DRAWS)) {
+    draw <- sample(eligible_sellers, n_selected, replace = FALSE)
+    random_results[i, "cn8_importers"] <- sum(draw %in% importers)
+    random_results[i, "downstream"]    <- sum(draw %in% ds_buyers)
+    random_results[i, "fuel_linked"]   <- sum(draw %in% fl_set)
+  }
+
+  random_df <- as.data.frame(random_results) %>%
+    mutate(across(everything(), ~ . / n_selected * 100))
+
+  summary_tbl <- data.frame(
+    tier        = tier_label,
+    metric      = c("CN8 importers (%)", "1-degree downstream (%)", "Fuel-linked (%)"),
+    elastic_net = round(c(actual_cn8, actual_ds, actual_fl) / n_selected * 100, 1),
+    random_mean = round(colMeans(random_df), 1),
+    random_p5   = round(apply(random_df, 2, quantile, 0.05), 1),
+    random_p95  = round(apply(random_df, 2, quantile, 0.95), 1),
+    p_value     = c(
+      mean(random_df$cn8_importers >= 100 * actual_cn8 / n_selected),
+      mean(random_df$downstream    >= 100 * actual_ds  / n_selected),
+      mean(random_df$fuel_linked   >= 100 * actual_fl  / n_selected)
+    ),
+    stringsAsFactors = FALSE
+  )
+
+  cat(sprintf("\n%-25s  Elastic net   Random mean   Random [5%%, 95%%]   p-value\n",
+              "Metric"))
+  cat(strrep("-", 85), "\n")
+  for (r in seq_len(nrow(summary_tbl))) {
+    cat(sprintf("%-25s  %8.1f%%     %8.1f%%     [%5.1f%%, %5.1f%%]    %.3f\n",
+                summary_tbl$metric[r],
+                summary_tbl$elastic_net[r],
+                summary_tbl$random_mean[r],
+                summary_tbl$random_p5[r],
+                summary_tbl$random_p95[r],
+                summary_tbl$p_value[r]))
+  }
+
+  summary_tbl
 }
 
-random_df <- as.data.frame(random_results) %>%
-  mutate(across(everything(), ~ . / n_selected * 100))  # convert to percentages
+
+# ══════════════════════════════════════════════════════════════════════════════
+#   Run baseline for BOTH tiers
+# ══════════════════════════════════════════════════════════════════════════════
+summary_broad <- run_baseline("broad",
+                              cn8_importers, downstream_buyers, fuel_linked)
+
+summary_strict <- run_baseline("strict",
+                               cn8_importers_strict, downstream_buyers_strict,
+                               fuel_linked_strict)
 
 
-# ── Summary ──────────────────────────────────────────────────────────────────
-cat("\n══════════════════════════════════════════════\n")
-cat("  Random baseline (", N_DRAWS, " draws of ", n_selected, " from ",
-    n_eligible, " eligible)\n", sep = "")
-cat("══════════════════════════════════════════════\n\n")
-
-summary_table <- data.frame(
-  metric = c("CN8 importers (%)", "1-degree downstream (%)", "Fuel-linked (%)"),
-  elastic_net = round(c(actual_cn8, actual_downstream, actual_linked) / n_selected * 100, 1),
-  random_mean = round(colMeans(random_df), 1),
-  random_p5   = round(apply(random_df, 2, quantile, 0.05), 1),
-  random_p95  = round(apply(random_df, 2, quantile, 0.95), 1),
-  p_value     = c(
-    mean(random_df$cn8_importers >= 100 * actual_cn8 / n_selected),
-    mean(random_df$downstream >= 100 * actual_downstream / n_selected),
-    mean(random_df$fuel_linked >= 100 * actual_linked / n_selected)
-  ),
-  stringsAsFactors = FALSE
-)
-
-cat(sprintf("%-25s  Elastic net   Random mean   Random [5%%, 95%%]   p-value\n",
-            "Metric"))
-cat(strrep("-", 85), "\n")
-for (r in seq_len(nrow(summary_table))) {
-  cat(sprintf("%-25s  %8.1f%%     %8.1f%%     [%5.1f%%, %5.1f%%]    %.3f\n",
-              summary_table$metric[r],
-              summary_table$elastic_net[r],
-              summary_table$random_mean[r],
-              summary_table$random_p5[r],
-              summary_table$random_p95[r],
-              summary_table$p_value[r]))
-}
-
-cat("\nInterpretation:\n")
+# ── Interpretation ─────────────────────────────────────────────────────────
+cat("\n\nInterpretation:\n")
 cat("  p-value = share of random draws with >= elastic net's precision.\n")
 cat("  If p-value is high, the elastic net does no better than random on that metric.\n")
 cat("  If p-value is low, the elastic net is selectively picking that category.\n")
+cat("  The STRICT tier is more discriminating because fewer eligible sellers are\n")
+cat("  fuel-linked, so random precision is lower and a significant result is\n")
+cat("  more meaningful.\n")
+
 
 # ── Save ─────────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
-write.csv(summary_table,
+
+summary_all <- bind_rows(summary_broad, summary_strict)
+
+write.csv(summary_all,
           file.path(OUTPUT_DIR, "enet_cn8_random_baseline.csv"),
           row.names = FALSE)
 cat("\nSaved to:", file.path(OUTPUT_DIR, "enet_cn8_random_baseline.csv"), "\n")
