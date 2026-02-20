@@ -32,7 +32,9 @@ precompute_step2_int <- function(base,
                                  proxy_keys=c("vat","year"),
                                  proxy_var="fuel_proxy",
                                  partial_pooling=TRUE,
-                                 progress_every=50) {
+                                 progress_every=50,
+                                 fold_ids=NULL,
+                                 cl=NULL) {
   suppressPackageStartupMessages({
     library(data.table)
     library(mgcv)
@@ -58,19 +60,23 @@ precompute_step2_int <- function(base,
   ids <- unique(DT$id__)
   nF  <- length(ids)
 
-  out <- vector("list", nF)
-  t0  <- Sys.time()
+  t0 <- Sys.time()
 
-  for (i in seq_along(ids)) {
-    heldout_id <- ids[i]
+  # Build fold list: K-fold when fold_ids provided, LOFOCV otherwise
+  if (!is.null(fold_ids)) {
+    fold_map <- fold_ids[id %in% ids]
+    fold_list <- split(fold_map$id, fold_map$fold)
+    nFolds <- length(fold_list)
+    cv_label <- sprintf("%d-fold", nFolds)
+  } else {
+    fold_list <- as.list(ids)
+    nFolds <- nF
+    cv_label <- "LOFOCV"
+  }
 
-    if (i %% progress_every == 0) {
-      dtm <- difftime(Sys.time(), t0, units = "mins")
-      message(sprintf("Step2 int LOFO %d/%d (elapsed %.1f min)", i, nF, as.numeric(dtm)))
-    }
-
-    train <- DT[id__ != heldout_id]
-    test  <- DT[id__ == heldout_id]
+  fold_fn <- function(heldout_ids) {
+    train <- DT[!id__ %in% heldout_ids]
+    test  <- DT[id__ %in% heldout_ids]
 
     train_emit <- train[emit__ == 1]
 
@@ -80,20 +86,16 @@ precompute_step2_int <- function(base,
       train_emit_df <- as.data.frame(train_emit)
       test_df       <- as.data.frame(test)
 
-      # lock factor levels
       train_emit_df$year__   <- factor(train_emit_df$year__,   levels = all_years)
       test_df$year__         <- factor(test_df$year__,         levels = all_years)
       train_emit_df$sector__ <- factor(train_emit_df$sector__, levels = all_sectors)
       test_df$sector__       <- factor(test_df$sector__,       levels = all_sectors)
 
-      # FE fallback for unseen sectors in test fold (matches hurdle.R)
       if (!isTRUE(partial_pooling)) {
         train_sectors_present <- unique(as.character(train_emit$sector__))
         ref_sector <- train_sectors_present[1]
-
         train_emit_df$sector__ <- stats::relevel(train_emit_df$sector__, ref = ref_sector)
         test_df$sector__       <- stats::relevel(test_df$sector__,       ref = ref_sector)
-
         test_sector_chr <- as.character(test_df$sector__)
         unseen_sector   <- !(test_sector_chr %in% train_sectors_present)
         if (any(unseen_sector)) {
@@ -112,11 +114,31 @@ precompute_step2_int <- function(base,
       muhat <- pmax(as.numeric(predict(mod_int, newdata = test_df, type = "response")), 0)
     }
 
-    out[[i]] <- data.table(
+    data.table::data.table(
       id = test$id__,
       year = test$year__,
       muhat_int_raw = muhat
     )
+  }
+
+  if (!is.null(cl)) {
+    parallel::clusterExport(cl, varlist = c(
+      "DT", "fml_int", "all_years", "all_sectors", "partial_pooling"
+    ), envir = environment())
+
+    message(sprintf("Step2 int: parallel %s (%d folds, %d workers)", cv_label, nFolds, length(cl)))
+    out <- parallel::parLapply(cl, fold_list, fold_fn)
+    dtm <- difftime(Sys.time(), t0, units = "mins")
+    message(sprintf("Step2 int done (%.1f min)", as.numeric(dtm)))
+  } else {
+    out <- vector("list", nFolds)
+    for (i in seq_along(fold_list)) {
+      if (nFolds <= 20 || i %% progress_every == 0) {
+        dtm <- difftime(Sys.time(), t0, units = "mins")
+        message(sprintf("Step2 int %s fold %d/%d (elapsed %.1f min)", cv_label, i, nFolds, as.numeric(dtm)))
+      }
+      out[[i]] <- fold_fn(fold_list[[i]])
+    }
   }
 
   data.table::rbindlist(out, use.names = TRUE, fill = TRUE)

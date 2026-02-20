@@ -132,7 +132,13 @@ evaluate_hurdle_triples <- function(base,
         FPR_nonemitters = m_raw[["fpr_nonemitters"]],
         TPR_emitters = m_raw[["tpr_emitters"]],
         PPV_precision = m_raw[["ppv_precision"]],
-        F1 = m_raw[["f1"]]
+        F1 = m_raw[["f1"]],
+        emitter_mass_captured = m_raw[["emitter_mass_captured"]],
+        n = m_raw[["n"]],
+        TP = m_raw[["TP"]],
+        FP = m_raw[["FP"]],
+        TN = m_raw[["TN"]],
+        FN = m_raw[["FN"]]
       ),
       data.table::data.table(
         variant = "calibrated",
@@ -145,7 +151,13 @@ evaluate_hurdle_triples <- function(base,
         FPR_nonemitters = m_cal[["fpr_nonemitters"]],
         TPR_emitters = m_cal[["tpr_emitters"]],
         PPV_precision = m_cal[["ppv_precision"]],
-        F1 = m_cal[["f1"]]
+        F1 = m_cal[["f1"]],
+        emitter_mass_captured = m_cal[["emitter_mass_captured"]],
+        n = m_cal[["n"]],
+        TP = m_cal[["TP"]],
+        FP = m_cal[["FP"]],
+        TN = m_cal[["TN"]],
+        FN = m_cal[["FN"]]
       )
     ), fill = TRUE)[, `:=`(proxy_tag_ext = proxy_tag_ext, proxy_tag_int = proxy_tag_int)]
   }

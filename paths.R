@@ -4,7 +4,13 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
   OUTPUT_DIR <- "X:/Documents/JARDANG/inferring_emissions_output"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
   DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
-  REPO_DIR <- "C:/Users/jota_/Documents/fuel_supplier"
+  REPO_DIR <- local({
+    for (i in sys.nframe():1) {
+      fn <- sys.frame(i)$ofile
+      if (!is.null(fn)) return(normalizePath(dirname(fn), winslash = "/"))
+    }
+    normalizePath(getwd(), winslash = "/")
+  })
   OUTPUT_DIR <- "C:/Users/jota_/Documents/inferring_emissions_output"
 } else {
   stop("Define directories for this user.")
@@ -18,8 +24,7 @@ INT_DATA <- file.path(DATA_DIR, "intermediate")
 UTILS_DIR <- file.path(REPO_DIR, "fuel_proxy", "utils")
 LOOCV_DIR <- file.path(REPO_DIR, "fuel_proxy", "models")
 
-PROXY_CACHE_DIR <- file.path(REPO_DIR, "fuel_proxy", "proxies", "cache")
-AUX_CACHE_DIR <- file.path(INT_DATA, "cache")
+CACHE_DIR <- file.path(INT_DATA, "cache")
 METRICS_PATH_RDS <- file.path(OUTPUT_DIR, "model_performance_metrics.rds")
 METRICS_PATH_CSV <- file.path(OUTPUT_DIR, "model_performance_metrics.csv")
 

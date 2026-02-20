@@ -25,11 +25,16 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
+  while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
 }
 source(file.path(REPO_DIR, "paths.R"))
+source_try(UTILS_DIR, "progress_utils")
+
+library(dplyr)
+library(stringr)
 
 tic("01_build_aux_tables")
 

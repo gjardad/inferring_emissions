@@ -67,7 +67,9 @@ poissonPP_lofo <- function(df,
                            fallback_equal_split = TRUE,
                            drop_singleton_cells_in_metrics = TRUE,
                            fp_threshold = 0,            # forwarded to calc_metrics()
-                           progress_every = 50) {
+                           progress_every = 50,
+                           fold_ids = NULL,
+                           cl = NULL) {
   
   suppressPackageStartupMessages({
     library(data.table)
@@ -172,9 +174,22 @@ poissonPP_lofo <- function(df,
   
   ids <- unique(DT$id__)
   nF  <- length(ids)
-  
-  preds_list <- vector("list", nF)
+
   t0 <- Sys.time()
+
+  # Build fold list: K-fold when fold_ids provided, LOFOCV otherwise
+  if (!is.null(fold_ids)) {
+    fold_map <- fold_ids[id %in% ids]
+    fold_list <- split(fold_map$id, fold_map$fold)
+    nFolds <- length(fold_list)
+    cv_label <- sprintf("%d-fold", nFolds)
+  } else {
+    fold_list <- as.list(ids)
+    nFolds <- nF
+    cv_label <- "LOFOCV"
+  }
+
+  preds_list <- vector("list", nFolds)
   
   # -----------------------
   # Formula builder
@@ -194,100 +209,84 @@ poissonPP_lofo <- function(df,
   fml <- as.formula(paste("y__ ~", rhs))
   
   # -----------------------
-  # LOFOCV loop
+  # LOFOCV loop (parallel when cl is provided)
   # -----------------------
-  for (i in seq_along(ids)) {
-    heldout_id <- ids[i]
-    
-    if (i %% progress_every == 0) {
-      dtm <- difftime(Sys.time(), t0, units = "mins")
-      message(sprintf(
-        "LOFOCV %d / %d (elapsed %.1f min) | proxy=%s | sector=%s",
-        i, nF, as.numeric(dtm), proxy_tag,
-        if (partial_pooling) "re" else "fe"
-      ))
-    }
-    
-    train <- copy(DT[id__ != heldout_id])
-    test  <- copy(DT[id__ == heldout_id])
-    
+  fold_fn <- function(heldout_ids) {
+    train <- data.table::copy(DT[!id__ %in% heldout_ids])
+    test  <- data.table::copy(DT[id__ %in% heldout_ids])
+
     train_df <- as.data.frame(train)
     test_df  <- as.data.frame(test)
-    
-    # lock factor levels
+
     train_df$year__   <- factor(train_df$year__,   levels = all_years)
     test_df$year__    <- factor(test_df$year__,    levels = all_years)
-    
     train_df$sector__ <- factor(train_df$sector__, levels = all_sectors)
     test_df$sector__  <- factor(test_df$sector__,  levels = all_sectors)
-    
-    # ------------------------------------------------------------------
-    # FE fallback for unseen sectors in test fold (singleton-sector case)
-    # If sector is absent from training, set its sector effect to 0 by
-    # mapping test sector to the training reference sector.
-    # ------------------------------------------------------------------
+
     if (!partial_pooling) {
       train_sectors_present <- unique(as.character(train$sector__))
       ref_sector <- train_sectors_present[1]
-      
       train_df$sector__ <- stats::relevel(train_df$sector__, ref = ref_sector)
       test_df$sector__  <- stats::relevel(test_df$sector__,  ref = ref_sector)
-      
       test_sector_chr <- as.character(test_df$sector__)
       unseen_sector   <- !(test_sector_chr %in% train_sectors_present)
-      
       if (any(unseen_sector)) {
         test_sector_chr[unseen_sector] <- ref_sector
         test_df$sector__ <- factor(test_sector_chr, levels = levels(train_df$sector__))
       }
     }
-    
+
     mod <- mgcv::gam(
       formula = fml,
       data    = train_df,
       family  = poisson(link = "log"),
       method  = "REML"
     )
-    
+
     train$yhat_raw <- pmax(as.numeric(predict(mod, newdata = train_df, type = "response")), 0)
     test$yhat_raw  <- pmax(as.numeric(predict(mod, newdata = test_df,  type = "response")), 0)
-    
-    # -----------------------
-    # Calibrate to sector-year totals (deployment-style)
-    # -----------------------
+
     denom_train <- train[, .(
       denom_train = sum(yhat_raw, na.rm = TRUE),
       n_train     = .N
     ), by = .(sector__, year__)]
-    setnames(denom_train, c("sector__", "year__"), c("sector_key", "year_key"))
-    
-    cell_info <- merge(denom_train, SYT,       by = c("sector_key", "year_key"), all.x = TRUE)
-    cell_info <- merge(cell_info,  full_cellN, by = c("sector_key", "year_key"), all.x = TRUE)
-    
-    test2 <- copy(test)
+    data.table::setnames(denom_train, c("sector__", "year__"), c("sector_key", "year_key"))
+
+    denom_test_dt <- test[, .(
+      denom_test = sum(yhat_raw, na.rm = TRUE),
+      n_test     = .N
+    ), by = .(sector__, year__)]
+    data.table::setnames(denom_test_dt, c("sector__", "year__"), c("sector_key", "year_key"))
+
+    cell_info <- merge(denom_train,  SYT,            by = c("sector_key", "year_key"), all.x = TRUE)
+    cell_info <- merge(cell_info,    full_cellN,      by = c("sector_key", "year_key"), all.x = TRUE)
+    cell_info <- merge(cell_info,    denom_test_dt,   by = c("sector_key", "year_key"), all.x = TRUE)
+
+    test2 <- data.table::copy(test)
     test2[, sector_key := sector__]
     test2[, year_key   := year__]
     test2 <- merge(test2, cell_info, by = c("sector_key", "year_key"), all.x = TRUE)
-    
+
     test2[is.na(denom_train), denom_train := 0]
     test2[is.na(n_train),     n_train := 0L]
+    test2[is.na(denom_test),  denom_test := 0]
+    test2[is.na(n_test),      n_test := 0L]
     test2[is.na(N_full),      N_full := 1L]
-    
-    # include test firm's own raw prediction in denom (deployment-style)
-    test2[, denom_full := denom_train + yhat_raw]
-    
+
+    test2[, denom_full := denom_train + denom_test]
+
     test2[is.finite(E_total) & E_total == 0, yhat_cal := 0]
     test2[is.finite(E_total) & E_total > 0 & denom_full > 0,
           yhat_cal := E_total * (yhat_raw / denom_full)]
-    
+
     if (fallback_equal_split) {
-      test2[, n_full_trainplus := n_train + 1L]
+      test2[, n_full_trainplus := n_train + n_test]
       test2[is.finite(E_total) & E_total > 0 &
               (is.na(yhat_cal) | !is.finite(yhat_cal)) & n_full_trainplus > 0,
             yhat_cal := E_total / n_full_trainplus]
     }
-    
-    preds_list[[i]] <- test2[, .(
+
+    test2[, .(
       id     = id__,
       year   = year__,
       sector = sector__,
@@ -296,6 +295,39 @@ poissonPP_lofo <- function(df,
       yhat_cal,
       N_full
     )]
+  }
+
+  if (!is.null(cl)) {
+    # --- Parallel execution ---
+    parallel::clusterExport(cl, varlist = c(
+      "DT", "fml", "all_years", "all_sectors",
+      "partial_pooling", "SYT", "full_cellN",
+      "fallback_equal_split"
+    ), envir = environment())
+
+    message(sprintf(
+      "%s parallel (%d folds, %d workers) | proxy=%s | sector=%s",
+      cv_label, nFolds, length(cl), proxy_tag,
+      if (partial_pooling) "re" else "fe"
+    ))
+
+    preds_list <- parallel::parLapply(cl, fold_list, fold_fn)
+
+    dtm <- difftime(Sys.time(), t0, units = "mins")
+    message(sprintf("%s done (%.1f min) | proxy=%s", cv_label, as.numeric(dtm), proxy_tag))
+  } else {
+    # --- Sequential execution ---
+    for (i in seq_along(fold_list)) {
+      if (nFolds <= 20 || i %% progress_every == 0) {
+        dtm <- difftime(Sys.time(), t0, units = "mins")
+        message(sprintf(
+          "%s fold %d / %d (elapsed %.1f min) | proxy=%s | sector=%s",
+          cv_label, i, nFolds, as.numeric(dtm), proxy_tag,
+          if (partial_pooling) "re" else "fe"
+        ))
+      }
+      preds_list[[i]] <- fold_fn(fold_list[[i]])
+    }
   }
   
   P <- data.table::rbindlist(preds_list, use.names = TRUE, fill = TRUE)
