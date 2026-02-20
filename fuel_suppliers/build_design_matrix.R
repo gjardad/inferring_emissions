@@ -42,7 +42,7 @@ library(Matrix)
 
 
 # ── Parameters ───────────────────────────────────────────────────────────────
-MIN_LHS_BUYERS <- 1L    # TODO: set back to 5 before running on RMD (lowered to 1 for local dev run on downsampled data)
+MIN_LHS_BUYERS <- 5L
 K_FOLDS        <- 10L   # number of CV folds (grouped by firm)
 
 
