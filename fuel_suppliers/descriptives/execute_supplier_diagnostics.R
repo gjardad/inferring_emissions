@@ -3,16 +3,18 @@
 #
 # PURPOSE
 #   Run all supplier-selection diagnostic scripts in one go:
-#     1) CN8 random baseline comparison
-#     2) NACE profile of selected suppliers
-#     3) Supplier selection stability (jackknife)
-#     4) Placebo test (shuffled emissions, revenue, shuffled within sector-year)
+#     1) CN8 validation (broad + strict tiers)
+#     2) CN8 random baseline comparison
+#     3) NACE profile of selected suppliers
+#     4) Supplier selection stability (jackknife)
+#     5) Placebo test (shuffled emissions, size variables, shuffled within sector-year)
+#     6) Within-firm signal test (firm FE + first differences)
 #
 # INPUTS
 #   All inputs are loaded by the individual scripts from {INT_DATA} and {PROC_DATA}.
 #
 # OUTPUTS
-#   All outputs are saved by the individual scripts to {OUTPUT_DIR}.
+#   All outputs are saved by the individual scripts to {OUTPUT_DIR} and {INT_DATA}.
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -26,44 +28,63 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 }
 source(file.path(REPO_DIR, "paths.R"))
 
-DIAG_DIR <- file.path(REPO_DIR, "fuel_suppliers", "descriptives")
-diag_t0 <- Sys.time()
+SCRIPT_DIR <- file.path(REPO_DIR, "fuel_suppliers")
+DIAG_DIR   <- file.path(SCRIPT_DIR, "descriptives")
+diag_t0    <- Sys.time()
 
 
-# ── 1) CN8 random baseline ──────────────────────────────────────────────────
+# ── 1) CN8 validation (broad + strict tiers) ─────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 1/4: CN8 random baseline comparison                        #\n",
+    "# 1/6: CN8 validation (broad + strict tiers)                 #\n",
+    "##############################################################\n\n")
+
+source(file.path(SCRIPT_DIR, "validate_against_cn8.R"))
+
+
+# ── 2) CN8 random baseline ──────────────────────────────────────────────────
+cat("\n",
+    "##############################################################\n",
+    "# 2/6: CN8 random baseline comparison                        #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "cn8_random_baseline.R"))
 
 
-# ── 2) NACE profile ─────────────────────────────────────────────────────────
+# ── 3) NACE profile ─────────────────────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 2/4: NACE profile of selected suppliers                    #\n",
+    "# 3/6: NACE profile of selected suppliers                    #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "selected_supplier_nace_profile.R"))
 
 
-# ── 3) Supplier selection stability ─────────────────────────────────────────
+# ── 4) Supplier selection stability ─────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 3/4: Supplier selection stability (jackknife)              #\n",
+    "# 4/6: Supplier selection stability (jackknife)              #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "supplier_selection_stability.R"))
 
 
-# ── 4) Placebo test ──────────────────────────────────────────────────────────
+# ── 5) Placebo test ──────────────────────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 4/4: Placebo test                                          #\n",
+    "# 5/6: Placebo test                                          #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "placebo_test.R"))
+
+
+# ── 6) Within-firm signal test ────────────────────────────────────────────────
+cat("\n",
+    "##############################################################\n",
+    "# 6/6: Within-firm signal test (firm FE + first differences) #\n",
+    "##############################################################\n\n")
+
+source(file.path(DIAG_DIR, "within_firm_signal_test.R"))
 
 
 # ── Done ─────────────────────────────────────────────────────────────────────
@@ -73,10 +94,12 @@ cat("\n",
     sprintf("# Supplier diagnostics complete. Total time: %s min\n", elapsed),
     "#\n",
     "# Outputs in:", OUTPUT_DIR, "\n",
+    "#   fuel_suppliers_cn8_validation.csv\n",
     "#   enet_cn8_random_baseline.csv\n",
     "#   enet_supplier_nace_profile.csv\n",
     "#   enet_supplier_stability.csv\n",
     "#   enet_placebo_test.csv\n",
     "#   enet_placebo_shuffled_detail.csv\n",
     "#   enet_placebo_within_sy_detail.csv\n",
+    "#   enet_within_firm_test.csv\n",
     "##############################################################\n")
