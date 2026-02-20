@@ -6,7 +6,8 @@
 #     1) CN8 random baseline comparison
 #     2) NACE profile of selected suppliers
 #     3) Supplier selection stability (jackknife)
-#     4) Placebo test (shuffled emissions, revenue, shuffled within sector-year)
+#     4) Placebo test (shuffled emissions, size variables, shuffled within sector-year)
+#     5) Within-firm signal test (firm FE + first differences)
 #
 # INPUTS
 #   All inputs are loaded by the individual scripts from {INT_DATA} and {PROC_DATA}.
@@ -33,7 +34,7 @@ diag_t0 <- Sys.time()
 # ── 1) CN8 random baseline ──────────────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 1/4: CN8 random baseline comparison                        #\n",
+    "# 1/5: CN8 random baseline comparison                        #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "cn8_random_baseline.R"))
@@ -42,7 +43,7 @@ source(file.path(DIAG_DIR, "cn8_random_baseline.R"))
 # ── 2) NACE profile ─────────────────────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 2/4: NACE profile of selected suppliers                    #\n",
+    "# 2/5: NACE profile of selected suppliers                    #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "selected_supplier_nace_profile.R"))
@@ -51,7 +52,7 @@ source(file.path(DIAG_DIR, "selected_supplier_nace_profile.R"))
 # ── 3) Supplier selection stability ─────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 3/4: Supplier selection stability (jackknife)              #\n",
+    "# 3/5: Supplier selection stability (jackknife)              #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "supplier_selection_stability.R"))
@@ -60,10 +61,19 @@ source(file.path(DIAG_DIR, "supplier_selection_stability.R"))
 # ── 4) Placebo test ──────────────────────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# 4/4: Placebo test                                          #\n",
+    "# 4/5: Placebo test                                          #\n",
     "##############################################################\n\n")
 
 source(file.path(DIAG_DIR, "placebo_test.R"))
+
+
+# ── 5) Within-firm signal test ────────────────────────────────────────────────
+cat("\n",
+    "##############################################################\n",
+    "# 5/5: Within-firm signal test (firm FE + first differences) #\n",
+    "##############################################################\n\n")
+
+source(file.path(DIAG_DIR, "within_firm_signal_test.R"))
 
 
 # ── Done ─────────────────────────────────────────────────────────────────────
@@ -79,4 +89,5 @@ cat("\n",
     "#   enet_placebo_test.csv\n",
     "#   enet_placebo_shuffled_detail.csv\n",
     "#   enet_placebo_within_sy_detail.csv\n",
+    "#   enet_within_firm_test.csv\n",
     "##############################################################\n")

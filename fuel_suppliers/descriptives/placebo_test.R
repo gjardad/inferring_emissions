@@ -6,17 +6,19 @@
 #   identifies a similar number/set of suppliers when predicting a placebo,
 #   the original signal may be spurious.
 #
-#   Three placebos:
+#   Four placebos:
 #     1) Fully shuffled emissions: permute y across all firm-years.
 #        Tests: is there any real signal?
-#     2) Revenue as LHS: replace emissions with log(revenue).
-#        Tests: is the signal just firm size?
+#     2) Size placebos (employment, value added, tangible assets):
+#        Tests: is the signal just firm size? These variables are NOT in the
+#        controls (only log_revenue is), so they provide a genuine test.
 #     3) Shuffled within sector-year: permute y within (nace2d, year) cells.
 #        Tests: is the signal firm-specific or just sector-driven?
 #
 # INPUTS
 #   - {INT_DATA}/fuel_suppliers_elastic_net_inputs.RData
 #   - {INT_DATA}/fuel_suppliers_elastic_net_results.RData
+#   - {PROC_DATA}/annual_accounts_selected_sample_key_variables.RData
 #
 # OUTPUTS (to console + OUTPUT_DIR)
 #   - enet_placebo_test.csv
@@ -46,6 +48,9 @@ load(file.path(INT_DATA, "fuel_suppliers_elastic_net_inputs.RData"))
 
 cat("Loading elastic net results...\n")
 load(file.path(INT_DATA, "fuel_suppliers_elastic_net_results.RData"))
+
+cat("Loading annual accounts (for size placebos)...\n")
+load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
 
 
 # ── Reference: real selection ────────────────────────────────────────────────
@@ -136,32 +141,51 @@ cat("  p-value (perm >= real):          ",
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# PLACEBO 2: Revenue as LHS
+# PLACEBO 2: Size variables as LHS (employment, value added, tangible assets)
 # ══════════════════════════════════════════════════════════════════════════════
 cat("\n", strrep("=", 60), "\n")
-cat("  PLACEBO 2: Revenue as LHS\n")
+cat("  PLACEBO 2: Size variables as LHS\n")
+cat("  (employment, value added, tangible assets)\n")
 cat(strrep("=", 60), "\n\n")
 
-# lhs$log_revenue is already in the inputs
-y_revenue <- lhs$log_revenue
+# Merge size variables from annual accounts into the LHS panel
+size_vars <- df_annual_accounts_selected_sample_key_variables %>%
+  select(vat, year, fte, value_added, capital) %>%
+  rename(tangible_assets = capital)
 
-cat("Running elastic net with revenue as LHS...\n")
-t0 <- Sys.time()
-rev_result <- run_enet(y_revenue, "revenue")
-elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
-cat(sprintf("  Done (%.1fs)\n", elapsed))
+lhs_with_size <- lhs %>%
+  left_join(size_vars, by = c("vat", "year"))
 
-cat("\nResults (revenue as LHS):\n")
-cat("  Suppliers selected (positive):   ", rev_result$n_positive, "\n")
-cat("  Suppliers selected (negative):   ", rev_result$n_negative, "\n")
-cat("  Overlap with real (emissions):   ", rev_result$overlap_with_real,
-    sprintf("(%.1f%% of real)\n", 100 * rev_result$overlap_with_real / length(real_selected)))
-cat("  Jaccard with real:               ", round(rev_result$jaccard_with_real, 3), "\n")
+# Define size placebos: use log(max(x, 1)) to handle zeros, matching log_revenue
+size_placebos <- list(
+  employment      = log(pmax(lhs_with_size$fte, 1)),
+  value_added     = log(pmax(lhs_with_size$value_added, 1)),
+  tangible_assets = log(pmax(lhs_with_size$tangible_assets, 1))
+)
 
-# Which real suppliers are NOT selected by revenue?
-real_not_revenue <- setdiff(real_selected, rev_result$selected)
-cat("  Real suppliers NOT in revenue:   ", length(real_not_revenue),
-    sprintf("(%.1f%% of real)\n", 100 * length(real_not_revenue) / length(real_selected)))
+size_results <- list()
+
+for (var_name in names(size_placebos)) {
+  y_size <- size_placebos[[var_name]]
+  n_valid <- sum(is.finite(y_size))
+  n_na    <- sum(!is.finite(y_size))
+
+  cat(sprintf("  Running elastic net with %s as LHS (%d valid, %d NA)...\n",
+              var_name, n_valid, n_na))
+
+  # Replace NA/Inf with 0 for glmnet
+  y_size[!is.finite(y_size)] <- 0
+
+  t0 <- Sys.time()
+  res <- run_enet(y_size, var_name)
+  elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
+
+  cat(sprintf("    Done (%.1fs): %d positive, %d negative, overlap = %d (Jaccard = %.3f)\n",
+              elapsed, res$n_positive, res$n_negative,
+              res$overlap_with_real, res$jaccard_with_real))
+
+  size_results[[var_name]] <- res
+}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -223,37 +247,48 @@ cat("\n\n", strrep("=", 60), "\n")
 cat("  SUMMARY\n")
 cat(strrep("=", 60), "\n\n")
 
-summary_df <- data.frame(
-  test = c("Real (emissions)", "Placebo: shuffled",
-           "Placebo: revenue", "Placebo: shuffled within sector-year"),
-  n_positive = c(
-    length(real_selected),
-    round(mean(perm_results$n_positive), 1),
-    rev_result$n_positive,
-    round(mean(perm_within_results$n_positive), 1)
-  ),
-  overlap_with_real = c(
-    length(real_selected),
-    round(mean(perm_results$overlap_with_real), 1),
-    rev_result$overlap_with_real,
-    round(mean(perm_within_results$overlap_with_real), 1)
-  ),
-  jaccard_with_real = c(
-    1.000,
-    round(mean(perm_results$jaccard_with_real), 3),
-    round(rev_result$jaccard_with_real, 3),
-    round(mean(perm_within_results$jaccard_with_real), 3)
-  ),
+summary_rows <- list(
+  data.frame(test = "Real (emissions)",
+             n_positive = length(real_selected),
+             overlap_with_real = length(real_selected),
+             jaccard_with_real = 1.000,
+             stringsAsFactors = FALSE),
+  data.frame(test = "Placebo: shuffled",
+             n_positive = round(mean(perm_results$n_positive), 1),
+             overlap_with_real = round(mean(perm_results$overlap_with_real), 1),
+             jaccard_with_real = round(mean(perm_results$jaccard_with_real), 3),
+             stringsAsFactors = FALSE)
+)
+
+for (var_name in names(size_results)) {
+  res <- size_results[[var_name]]
+  summary_rows[[length(summary_rows) + 1]] <- data.frame(
+    test = paste0("Placebo: ", var_name),
+    n_positive = res$n_positive,
+    overlap_with_real = res$overlap_with_real,
+    jaccard_with_real = round(res$jaccard_with_real, 3),
+    stringsAsFactors = FALSE
+  )
+}
+
+summary_rows[[length(summary_rows) + 1]] <- data.frame(
+  test = "Placebo: shuffled within sector-year",
+  n_positive = round(mean(perm_within_results$n_positive), 1),
+  overlap_with_real = round(mean(perm_within_results$overlap_with_real), 1),
+  jaccard_with_real = round(mean(perm_within_results$jaccard_with_real), 3),
   stringsAsFactors = FALSE
 )
+
+summary_df <- do.call(rbind, summary_rows)
 
 print(summary_df, row.names = FALSE)
 
 cat("\nInterpretation:\n")
 cat("  - Shuffled emissions should select ~0 suppliers. If it does, the real\n")
 cat("    signal is not an artifact of the data structure.\n")
-cat("  - Revenue tests whether the signal is about firm size. High overlap\n")
-cat("    means size confounding; low overlap means the signal is fuel-specific.\n")
+cat("  - Size placebos (employment, value added, assets) test whether the signal\n")
+cat("    is about firm size beyond what revenue captures. High overlap with the\n")
+cat("    real selection means size confounding; ~0 means the signal is fuel-specific.\n")
 cat("  - Shuffled within sector-year tests whether the signal is firm-specific\n")
 cat("    or just driven by sector composition. ~0 suppliers means firm-level signal.\n")
 
