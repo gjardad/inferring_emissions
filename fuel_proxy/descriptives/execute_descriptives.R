@@ -53,7 +53,7 @@
 #   table_model_selection.R
 #     -> model_selection.tex
 #
-#   selected_proxy_pair_diagnosis.R
+#   selected_proxy_pair_diagnostics.R
 #     -> selected_proxy_{step}_regression.tex
 #     -> selected_proxy_{step}_summary_stats.tex
 #     -> selected_proxy_{step}_density_C19.pdf
@@ -135,7 +135,7 @@ run_script("revenue_emissions_heterogeneity_by_sector.R")
 run_script("table_model_selection.R")
 
 # --- 9) Selected proxy pair diagnostics (auto-detected from best triple) ---
-run_script("selected_proxy_pair_diagnosis.R")
+run_script("selected_proxy_pair_diagnostics.R")
 
 
 # =====================================================================
