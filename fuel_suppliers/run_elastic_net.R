@@ -3,17 +3,21 @@
 #
 # PURPOSE
 #   Run elastic net (cv.glmnet) to identify fuel suppliers from B2B data.
-#   Four model variants: {lasso, elastic net} x {raw sales, asinh(sales)}.
+#   Two specifications: pooled (sector FE) and within-buyer (buyer FE).
+#   Four model variants per specification:
+#     {lasso, elastic net} x {raw sales, asinh(sales)}.
 #   CV uses group k-fold by firm (all years of a firm in the same fold).
 #
 # INPUT
 #   {INT_DATA}/fuel_suppliers_elastic_net_inputs.RData
-#     (produced by fuel_suppliers/01_build_design_matrix.R)
+#     (produced by fuel_suppliers/build_design_matrix.R)
 #
 # OUTPUT
 #   {INT_DATA}/fuel_suppliers_elastic_net_results.RData
-#     - cv.glmnet fit objects for each model variant
-#     - supplier_summary: tidy dataframe of identified suppliers & coefficients
+#     - cv.glmnet fit objects for each model variant & specification
+#     - supplier_summary_pooled / supplier_summary_fe: tidy dataframes
+#     - robustness_pooled / robustness_fe: cross-model selection counts
+#     - cv_summary: comparative CV performance table
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -36,17 +40,19 @@ library(dplyr)
 cat("Loading elastic net inputs...\n")
 load(file.path(INT_DATA, "fuel_suppliers_elastic_net_inputs.RData"))
 
-cat("Design matrix:", nrow(X_full_raw), "x", ncol(X_full_raw), "\n")
-cat("  Controls:", n_controls, "| Supplier cols:", ncol(X_full_raw) - n_controls, "\n")
-cat("  K-fold groups:", K_FOLDS, "\n\n")
+cat("Pooled design matrix:       ", nrow(X_full_raw), "x", ncol(X_full_raw),
+    "(", n_controls, "controls +", ncol(X_full_raw) - n_controls, "suppliers)\n")
+cat("Within-buyer design matrix: ", nrow(X_full_raw_fe), "x", ncol(X_full_raw_fe),
+    "(", n_controls_fe, "controls +", ncol(X_full_raw_fe) - n_controls_fe, "suppliers)\n")
+cat("K-fold groups:", K_FOLDS, "\n\n")
 
 
 # ── Helper: extract supplier coefficients ────────────────────────────────────
-extract_suppliers <- function(fit, s = "lambda.min") {
+extract_suppliers <- function(fit, n_ctrl, s = "lambda.min") {
   co <- coef(fit, s = s)
-  # Positions: 1 = intercept, 2:(n_controls+1) = controls,
-  #            (n_controls+2):end = supplier columns
-  supplier_idx <- (n_controls + 2):length(co)
+  # Positions: 1 = intercept, 2:(n_ctrl+1) = controls,
+  #            (n_ctrl+2):end = supplier columns
+  supplier_idx <- (n_ctrl + 2):length(co)
   vals <- co[supplier_idx]
   data.frame(
     vat_i_ano = eligible_sellers,
@@ -58,185 +64,155 @@ extract_suppliers <- function(fit, s = "lambda.min") {
 }
 
 
-# =============================================================================
-#   MODEL 1: Lasso (alpha = 1), raw sales
-# =============================================================================
-cat("═══ Model 1: Lasso, raw sales ═══\n")
-t0 <- Sys.time()
+# ── Helper: run one specification ────────────────────────────────────────────
+run_one_spec <- function(X_raw, X_asinh, pf, n_ctrl, spec_label) {
 
-fit_lasso_raw <- cv.glmnet(
-  x              = X_full_raw,
-  y              = y,
-  family         = "gaussian",
-  alpha          = 1,
-  penalty.factor = penalty_factor,
-  foldid         = foldid,
-  standardize    = TRUE
+  model_grid <- list(
+    list(alpha = 1,   X = X_raw,   label = "Lasso, raw sales"),
+    list(alpha = 1,   X = X_asinh, label = "Lasso, asinh sales"),
+    list(alpha = 0.5, X = X_raw,   label = "Elastic net (alpha=0.5), raw sales"),
+    list(alpha = 0.5, X = X_asinh, label = "Elastic net (alpha=0.5), asinh sales")
+  )
+  model_keys <- c("lasso_raw", "lasso_asinh", "enet_raw", "enet_asinh")
+
+  fits <- list()
+  summaries <- list()
+
+  for (k in seq_along(model_grid)) {
+    m <- model_grid[[k]]
+    cat(sprintf("═══ %s: %s ═══\n", spec_label, m$label))
+    t0 <- Sys.time()
+
+    fit <- cv.glmnet(
+      x              = m$X,
+      y              = y,
+      family         = "gaussian",
+      alpha          = m$alpha,
+      penalty.factor = pf,
+      foldid         = foldid,
+      standardize    = TRUE
+    )
+
+    cat("  Time:", round(difftime(Sys.time(), t0, units = "mins"), 1), "min\n")
+    cat("  lambda.min:", signif(fit$lambda.min, 4), "\n")
+    cat("  lambda.1se:", signif(fit$lambda.1se, 4), "\n")
+
+    s_min <- extract_suppliers(fit, n_ctrl, "lambda.min")
+    s_1se <- extract_suppliers(fit, n_ctrl, "lambda.1se")
+    cat("  Non-zero suppliers (lambda.min):", nrow(s_min),
+        "| positive:", sum(s_min$coef > 0),
+        "| negative:", sum(s_min$coef < 0), "\n")
+    cat("  Non-zero suppliers (lambda.1se):", nrow(s_1se),
+        "| positive:", sum(s_1se$coef > 0),
+        "| negative:", sum(s_1se$coef < 0), "\n\n")
+
+    fits[[model_keys[k]]] <- fit
+    summaries[[model_keys[k]]] <- bind_rows(
+      s_min %>% mutate(model = model_keys[k], lambda = "min"),
+      s_1se %>% mutate(model = model_keys[k], lambda = "1se")
+    )
+  }
+
+  supplier_summary <- bind_rows(summaries)
+
+  robustness <- supplier_summary %>%
+    filter(lambda == "min", coef > 0) %>%
+    count(vat_i_ano, name = "n_models") %>%
+    arrange(desc(n_models))
+
+  cv_tbl <- data.frame(
+    model      = model_keys,
+    cvm_min    = sapply(fits, function(f) min(f$cvm)),
+    lambda_min = sapply(fits, function(f) f$lambda.min)
+  )
+  cv_tbl$rmse_min <- sqrt(cv_tbl$cvm_min)
+
+  cat(sprintf("═══ %s: Summary ═══\n", spec_label))
+  cat("Suppliers with positive coef in all 4 models (lambda.min):",
+      sum(robustness$n_models == 4), "\n")
+  cat("Suppliers with positive coef in >= 3 models (lambda.min):",
+      sum(robustness$n_models >= 3), "\n")
+  cat("Suppliers with positive coef in >= 2 models (lambda.min):",
+      sum(robustness$n_models >= 2), "\n")
+  cat("Suppliers with positive coef in >= 1 model  (lambda.min):",
+      sum(robustness$n_models >= 1), "\n\n")
+
+  cat("CV performance (MSE at lambda.min):\n")
+  print(cv_tbl)
+  cat("\n")
+
+  list(fits = fits, supplier_summary = supplier_summary,
+       robustness = robustness, cv_summary = cv_tbl)
+}
+
+
+# =============================================================================
+#   RUN POOLED SPECIFICATION (sector FE)
+# =============================================================================
+cat("\n",
+    "##############################################################\n",
+    "# POOLED SPECIFICATION (sector FE)                           #\n",
+    "##############################################################\n\n")
+
+res_pooled <- run_one_spec(X_full_raw, X_full_asinh,
+                           penalty_factor, n_controls,
+                           "Pooled")
+
+
+# =============================================================================
+#   RUN WITHIN-BUYER SPECIFICATION (buyer FE)
+# =============================================================================
+cat("\n",
+    "##############################################################\n",
+    "# WITHIN-BUYER SPECIFICATION (buyer FE)                      #\n",
+    "##############################################################\n\n")
+
+res_fe <- run_one_spec(X_full_raw_fe, X_full_asinh_fe,
+                       penalty_factor_fe, n_controls_fe,
+                       "Within-buyer")
+
+
+# ── Combined CV comparison ───────────────────────────────────────────────────
+cv_summary <- bind_rows(
+  res_pooled$cv_summary %>% mutate(spec = "pooled"),
+  res_fe$cv_summary     %>% mutate(spec = "within_buyer")
 )
 
-cat("  Time:", round(difftime(Sys.time(), t0, units = "mins"), 1), "min\n")
-cat("  lambda.min:", signif(fit_lasso_raw$lambda.min, 4), "\n")
-cat("  lambda.1se:", signif(fit_lasso_raw$lambda.1se, 4), "\n")
-
-s1_min <- extract_suppliers(fit_lasso_raw, "lambda.min")
-s1_1se <- extract_suppliers(fit_lasso_raw, "lambda.1se")
-cat("  Non-zero suppliers (lambda.min):", nrow(s1_min),
-    "| positive:", sum(s1_min$coef > 0),
-    "| negative:", sum(s1_min$coef < 0), "\n")
-cat("  Non-zero suppliers (lambda.1se):", nrow(s1_1se),
-    "| positive:", sum(s1_1se$coef > 0),
-    "| negative:", sum(s1_1se$coef < 0), "\n\n")
-
-
-# =============================================================================
-#   MODEL 2: Lasso (alpha = 1), asinh(sales)
-# =============================================================================
-cat("═══ Model 2: Lasso, asinh sales ═══\n")
-t0 <- Sys.time()
-
-fit_lasso_asinh <- cv.glmnet(
-  x              = X_full_asinh,
-  y              = y,
-  family         = "gaussian",
-  alpha          = 1,
-  penalty.factor = penalty_factor,
-  foldid         = foldid,
-  standardize    = TRUE
-)
-
-cat("  Time:", round(difftime(Sys.time(), t0, units = "mins"), 1), "min\n")
-cat("  lambda.min:", signif(fit_lasso_asinh$lambda.min, 4), "\n")
-cat("  lambda.1se:", signif(fit_lasso_asinh$lambda.1se, 4), "\n")
-
-s2_min <- extract_suppliers(fit_lasso_asinh, "lambda.min")
-s2_1se <- extract_suppliers(fit_lasso_asinh, "lambda.1se")
-cat("  Non-zero suppliers (lambda.min):", nrow(s2_min),
-    "| positive:", sum(s2_min$coef > 0),
-    "| negative:", sum(s2_min$coef < 0), "\n")
-cat("  Non-zero suppliers (lambda.1se):", nrow(s2_1se),
-    "| positive:", sum(s2_1se$coef > 0),
-    "| negative:", sum(s2_1se$coef < 0), "\n\n")
-
-
-# =============================================================================
-#   MODEL 3: Elastic net (alpha = 0.5), raw sales
-# =============================================================================
-cat("═══ Model 3: Elastic net (alpha=0.5), raw sales ═══\n")
-t0 <- Sys.time()
-
-fit_enet_raw <- cv.glmnet(
-  x              = X_full_raw,
-  y              = y,
-  family         = "gaussian",
-  alpha          = 0.5,
-  penalty.factor = penalty_factor,
-  foldid         = foldid,
-  standardize    = TRUE
-)
-
-cat("  Time:", round(difftime(Sys.time(), t0, units = "mins"), 1), "min\n")
-cat("  lambda.min:", signif(fit_enet_raw$lambda.min, 4), "\n")
-cat("  lambda.1se:", signif(fit_enet_raw$lambda.1se, 4), "\n")
-
-s3_min <- extract_suppliers(fit_enet_raw, "lambda.min")
-s3_1se <- extract_suppliers(fit_enet_raw, "lambda.1se")
-cat("  Non-zero suppliers (lambda.min):", nrow(s3_min),
-    "| positive:", sum(s3_min$coef > 0),
-    "| negative:", sum(s3_min$coef < 0), "\n")
-cat("  Non-zero suppliers (lambda.1se):", nrow(s3_1se),
-    "| positive:", sum(s3_1se$coef > 0),
-    "| negative:", sum(s3_1se$coef < 0), "\n\n")
-
-
-# =============================================================================
-#   MODEL 4: Elastic net (alpha = 0.5), asinh(sales)
-# =============================================================================
-cat("═══ Model 4: Elastic net (alpha=0.5), asinh sales ═══\n")
-t0 <- Sys.time()
-
-fit_enet_asinh <- cv.glmnet(
-  x              = X_full_asinh,
-  y              = y,
-  family         = "gaussian",
-  alpha          = 0.5,
-  penalty.factor = penalty_factor,
-  foldid         = foldid,
-  standardize    = TRUE
-)
-
-cat("  Time:", round(difftime(Sys.time(), t0, units = "mins"), 1), "min\n")
-cat("  lambda.min:", signif(fit_enet_asinh$lambda.min, 4), "\n")
-cat("  lambda.1se:", signif(fit_enet_asinh$lambda.1se, 4), "\n")
-
-s4_min <- extract_suppliers(fit_enet_asinh, "lambda.min")
-s4_1se <- extract_suppliers(fit_enet_asinh, "lambda.1se")
-cat("  Non-zero suppliers (lambda.min):", nrow(s4_min),
-    "| positive:", sum(s4_min$coef > 0),
-    "| negative:", sum(s4_min$coef < 0), "\n")
-cat("  Non-zero suppliers (lambda.1se):", nrow(s4_1se),
-    "| positive:", sum(s4_1se$coef > 0),
-    "| negative:", sum(s4_1se$coef < 0), "\n\n")
-
-
-# =============================================================================
-#   SUMMARY
-# =============================================================================
-cat("═══ Summary across models ═══\n")
-
-# Collect all identified suppliers into one tidy table
-supplier_summary <- bind_rows(
-  s1_min %>% mutate(model = "lasso_raw",   lambda = "min"),
-  s1_1se %>% mutate(model = "lasso_raw",   lambda = "1se"),
-  s2_min %>% mutate(model = "lasso_asinh", lambda = "min"),
-  s2_1se %>% mutate(model = "lasso_asinh", lambda = "1se"),
-  s3_min %>% mutate(model = "enet_raw",    lambda = "min"),
-  s3_1se %>% mutate(model = "enet_raw",    lambda = "1se"),
-  s4_min %>% mutate(model = "enet_asinh",  lambda = "min"),
-  s4_1se %>% mutate(model = "enet_asinh",  lambda = "1se")
-)
-
-# How many models (at lambda.min) select each supplier?
-robustness <- supplier_summary %>%
-  filter(lambda == "min", coef > 0) %>%
-  count(vat_i_ano, name = "n_models") %>%
-  arrange(desc(n_models))
-
-cat("Suppliers with positive coef in all 4 models (lambda.min):",
-    sum(robustness$n_models == 4), "\n")
-cat("Suppliers with positive coef in >= 3 models (lambda.min):",
-    sum(robustness$n_models >= 3), "\n")
-cat("Suppliers with positive coef in >= 2 models (lambda.min):",
-    sum(robustness$n_models >= 2), "\n")
-cat("Suppliers with positive coef in >= 1 model  (lambda.min):",
-    sum(robustness$n_models >= 1), "\n")
-
-
-# =============================================================================
-#   CV PERFORMANCE
-# =============================================================================
-cat("\n═══ CV performance (MSE at lambda.min) ═══\n")
-
-cv_summary <- data.frame(
-  model      = c("lasso_raw", "lasso_asinh", "enet_raw", "enet_asinh"),
-  cvm_min    = c(min(fit_lasso_raw$cvm),   min(fit_lasso_asinh$cvm),
-                 min(fit_enet_raw$cvm),     min(fit_enet_asinh$cvm)),
-  lambda_min = c(fit_lasso_raw$lambda.min,  fit_lasso_asinh$lambda.min,
-                 fit_enet_raw$lambda.min,    fit_enet_asinh$lambda.min)
-)
-cv_summary$rmse_min <- sqrt(cv_summary$cvm_min)
+cat("═══ CV performance comparison ═══\n")
 print(cv_summary)
 
 
 # ── Save ─────────────────────────────────────────────────────────────────────
 OUT_PATH <- file.path(INT_DATA, "fuel_suppliers_elastic_net_results.RData")
 
+# Unpack fit objects for direct access downstream
+fit_pooled <- res_pooled$fits
+fit_fe     <- res_fe$fits
+supplier_summary_pooled <- res_pooled$supplier_summary
+supplier_summary_fe     <- res_fe$supplier_summary
+robustness_pooled       <- res_pooled$robustness
+robustness_fe           <- res_fe$robustness
+
 save(
-  fit_lasso_raw, fit_lasso_asinh,
-  fit_enet_raw, fit_enet_asinh,
-  supplier_summary, robustness, cv_summary,
+  fit_pooled, fit_fe,
+  supplier_summary_pooled, supplier_summary_fe,
+  robustness_pooled, robustness_fe,
+  cv_summary,
+  eligible_sellers, n_controls, n_controls_fe,
   file = OUT_PATH
 )
 
+# ── Export supplier lists to OUTPUT_DIR ───────────────────────────────────────
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
+
+write.csv(supplier_summary_pooled,
+          file.path(OUTPUT_DIR, "fuel_suppliers_selected_pooled.csv"),
+          row.names = FALSE)
+write.csv(supplier_summary_fe,
+          file.path(OUTPUT_DIR, "fuel_suppliers_selected_within_buyer.csv"),
+          row.names = FALSE)
+
 cat("\n══════════════════════════════════════════════\n")
 cat("All models saved to:", OUT_PATH, "\n")
+cat("Supplier lists exported to:", OUTPUT_DIR, "\n")
 cat("══════════════════════════════════════════════\n")

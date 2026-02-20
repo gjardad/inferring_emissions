@@ -4,7 +4,7 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
   OUTPUT_DIR <- "X:/Documents/JARDANG/inferring_emissions_output"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
   DATA_DIR <- "C:/Users/jota_/Documents/NBB_data/"
-  REPO_DIR <- "C:/Users/jota_/Documents/inferring_emissions"
+  REPO_DIR <- "C:/Users/jota_/Documents/fuel_supplier"
   OUTPUT_DIR <- "C:/Users/jota_/Documents/inferring_emissions_output"
 } else {
   stop("Define directories for this user.")

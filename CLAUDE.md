@@ -115,6 +115,18 @@ This project is developed across two desktops (never simultaneously):
 When running data analysis or scripts, the user will specify which desktop they
 are working from so that the correct paths are used.
 
+### Local desktop data
+The local desktop holds a **downsampled, self-consistent mini-version** of the full
+pipeline. All processed and intermediate datasets (b2b_selected_sample, loocv_training_sample,
+etc.) were built from the same downsampled raw B2B data, so everything is internally
+consistent — just smaller than the real thing (e.g. ~281 LHS firms vs 640, ~1,439
+candidate sellers vs 25K+). Scripts developed locally should be validated end-to-end
+on the downsampled data first, then run on the RMD with full data.
+
+Any parameters tuned for the local dev run (e.g. `MIN_LHS_BUYERS` lowered from 5 to 1
+in `fuel_suppliers/build_design_matrix.R`) must be restored before running on the RMD.
+These are always marked with a `# TODO: ... before running on RMD` comment.
+
 ## Conventions
 - Preprocessing scripts are numbered to indicate execution order
 - Descriptive scripts are also numbered

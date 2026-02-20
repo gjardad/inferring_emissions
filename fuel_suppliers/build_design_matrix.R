@@ -2,17 +2,21 @@
 # fuel_suppliers/build_design_matrix.R
 #
 # PURPOSE
-#   Build the sparse design matrix for the fuel-supplier elastic net.
+#   Build sparse design matrices for the fuel-supplier elastic net.
 #   Rows    = LHS firm-years from loocv_training_sample (EU ETS + NACE 19/24)
 #   Columns = eligible sellers (those supplying >= MIN_LHS_BUYERS LHS firms)
 #   Values  = corrected bilateral sales (corr_sales_ij)
 #
+#   Produces TWO specification variants:
+#     Pooled:       log_revenue + year FE + sector FE + supplier columns
+#     Within-buyer: log_revenue + year FE + buyer FE  + supplier columns
+#                   (sector FE dropped — collinear with buyer FE)
+#
 #   Also prepares:
 #   - LHS vector (emissions; NAs replaced by 0 for confirmed-zero firms)
-#   - Control variables (log revenue, year dummies, sector dummies)
-#   - Penalty factor vector (0 for controls, 1 for supplier columns)
+#   - Penalty factor vectors (0 for controls, 1 for supplier columns)
 #   - Group k-fold assignments by firm (foldid)
-#   - Two RHS versions: raw sales and asinh(sales)
+#   - Two RHS versions per specification: raw sales and asinh(sales)
 #
 # INPUT
 #   {PROC_DATA}/b2b_selected_sample.RData
@@ -38,7 +42,7 @@ library(Matrix)
 
 
 # ── Parameters ───────────────────────────────────────────────────────────────
-MIN_LHS_BUYERS <- 5L    # seller must supply >= this many distinct LHS firms
+MIN_LHS_BUYERS <- 1L    # TODO: set back to 5 before running on RMD (lowered to 1 for local dev run on downsampled data)
 K_FOLDS        <- 10L   # number of CV folds (grouped by firm)
 
 
@@ -168,20 +172,46 @@ cat("  (1 log_revenue +", ncol(year_dummies), "year dummies +",
     ncol(sector_dummies), "sector dummies)\n")
 
 
+# ── Build buyer FE control matrix (within-buyer specification) ─────────────
+# Buyer FEs absorb sector FEs (sector is time-invariant within firm), so
+# this variant uses: log_revenue + year dummies + buyer dummies
+cat("\nBuilding within-buyer controls (buyer FEs)...\n")
+
+buyer_dummies <- model.matrix(~ factor(vat), data = lhs)[, -1, drop = FALSE]
+colnames(buyer_dummies) <- paste0("buyer_", sort(unique(lhs$vat))[-1])
+
+X_controls_fe <- cbind(log_revenue = lhs$log_revenue,
+                       year_dummies,
+                       buyer_dummies)
+
+n_controls_fe <- ncol(X_controls_fe)
+cat("Within-buyer controls:", n_controls_fe, "columns\n")
+cat("  (1 log_revenue +", ncol(year_dummies), "year dummies +",
+    ncol(buyer_dummies), "buyer dummies)\n")
+
+
 # ── Combine into full design matrices ────────────────────────────────────────
 cat("\nAssembling full design matrices...\n")
 
 # Convert controls to sparse for efficient cbind with supplier matrix
-X_controls_sparse <- Matrix(X_controls, sparse = TRUE)
+X_controls_sparse    <- Matrix(X_controls, sparse = TRUE)
+X_controls_fe_sparse <- Matrix(X_controls_fe, sparse = TRUE)
 
+# Pooled specification
 X_full_raw   <- cbind(X_controls_sparse, X_raw)
 X_full_asinh <- cbind(X_controls_sparse, X_asinh)
-
-# Penalty factor: 0 for controls (unpenalized), 1 for supplier columns
 penalty_factor <- c(rep(0, n_controls), rep(1, n_cols))
 
-cat("Full design matrix:", nrow(X_full_raw), "x", ncol(X_full_raw),
+cat("Pooled design matrix:", nrow(X_full_raw), "x", ncol(X_full_raw),
     "(", n_controls, "controls +", n_cols, "supplier cols)\n")
+
+# Within-buyer specification
+X_full_raw_fe   <- cbind(X_controls_fe_sparse, X_raw)
+X_full_asinh_fe <- cbind(X_controls_fe_sparse, X_asinh)
+penalty_factor_fe <- c(rep(0, n_controls_fe), rep(1, n_cols))
+
+cat("Within-buyer design matrix:", nrow(X_full_raw_fe), "x", ncol(X_full_raw_fe),
+    "(", n_controls_fe, "controls +", n_cols, "supplier cols)\n")
 
 
 # ── Group k-fold by firm ─────────────────────────────────────────────────────
@@ -212,11 +242,17 @@ cat("  mean (positive):", round(mean(y[y > 0])), "\n")
 OUT_PATH <- file.path(INT_DATA, "fuel_suppliers_elastic_net_inputs.RData")
 
 save(
-  X_full_raw, X_full_asinh,
-  X_raw, X_asinh, X_controls,
-  y, lhs, penalty_factor, foldid,
+  # Pooled specification
+  X_full_raw, X_full_asinh, X_controls,
+  penalty_factor, n_controls,
+  # Within-buyer specification
+  X_full_raw_fe, X_full_asinh_fe, X_controls_fe,
+  penalty_factor_fe, n_controls_fe,
+  # Shared objects
+  X_raw, X_asinh,
+  y, lhs, foldid,
   eligible_sellers, seller_map,
-  n_controls, MIN_LHS_BUYERS, K_FOLDS,
+  MIN_LHS_BUYERS, K_FOLDS,
   file = OUT_PATH
 )
 
