@@ -3,10 +3,12 @@
 #
 # PURPOSE
 #   Validate elastic-net-identified suppliers against CN8 customs data.
-#   Two validation tiers:
+#   Three validation tiers:
 #     Broad (Ch.27 excl. 2716): all Chapter 27 products except electricity.
-#     Strict (LLM-curated):     ~58 CN8 codes for stationary combustion fuels,
+#     Strict (LLM-curated):     ~61 CN8 codes for stationary combustion fuels,
 #                                built in preprocess/build_cn8_fossil_fuel_list.R.
+#     Core (edge_case=FALSE):   ~31 unambiguous stationary combustion fuel codes
+#                                (subset of strict with edge_case excluded).
 #
 #   Within each tier, two validation levels:
 #     (a) Direct: is the selected supplier a CN8 fuel importer?
@@ -25,6 +27,7 @@
 #     - validation_pooled, validation_fe: per-supplier validation flags
 #     - cn8_importers, downstream_buyers, fuel_linked: broad tier reference sets
 #     - cn8_importers_strict, downstream_buyers_strict, fuel_linked_strict: strict tier
+#     - cn8_importers_core, downstream_buyers_core, fuel_linked_core: core tier
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -111,6 +114,35 @@ fuel_linked_strict <- union(cn8_importers_strict, downstream_buyers_strict)
 cat("  Fuel-linked (strict union):", length(fuel_linked_strict), "\n")
 cat("    of which in eligible_sellers:", sum(fuel_linked_strict %in% eligible_sellers), "\n")
 
+
+# ── CORE tier (edge_case == FALSE — unambiguous stationary combustion fuels) ──
+core_codes <- cn8digit_codes_for_fossil_fuels %>%
+  filter(edge_case == FALSE) %>%
+  pull(cn_code)
+
+cat("\nBuilding validation reference sets (CORE: ",
+    length(core_codes), " unambiguous CN8 codes)...\n", sep = "")
+
+cn8_importers_core <- fuel_imported_by_firm_year %>%
+  filter(cncode %in% core_codes) %>%
+  distinct(vat_ano) %>%
+  pull(vat_ano)
+
+cat("  CN8 importers (core):", length(cn8_importers_core), "\n")
+cat("    of which in eligible_sellers:", sum(cn8_importers_core %in% eligible_sellers), "\n")
+
+downstream_buyers_core <- b2b %>%
+  filter(vat_i_ano %in% cn8_importers_core, year >= 2005) %>%
+  distinct(vat_j_ano) %>%
+  pull(vat_j_ano)
+
+cat("  1-degree downstream (core):", length(downstream_buyers_core), "\n")
+cat("    of which in eligible_sellers:", sum(downstream_buyers_core %in% eligible_sellers), "\n")
+
+fuel_linked_core <- union(cn8_importers_core, downstream_buyers_core)
+cat("  Fuel-linked (core union):", length(fuel_linked_core), "\n")
+cat("    of which in eligible_sellers:", sum(fuel_linked_core %in% eligible_sellers), "\n")
+
 rm(b2b)  # free memory
 
 
@@ -133,7 +165,11 @@ validate_spec <- function(supplier_summary, spec_label) {
       # Strict tier
       is_cn8_importer_strict     = vat_i_ano %in% cn8_importers_strict,
       is_downstream_buyer_strict = vat_i_ano %in% downstream_buyers_strict,
-      is_fuel_linked_strict      = vat_i_ano %in% fuel_linked_strict
+      is_fuel_linked_strict      = vat_i_ano %in% fuel_linked_strict,
+      # Core tier
+      is_cn8_importer_core       = vat_i_ano %in% cn8_importers_core,
+      is_downstream_buyer_core   = vat_i_ano %in% downstream_buyers_core,
+      is_fuel_linked_core        = vat_i_ano %in% fuel_linked_core
     )
 
   n_sel <- nrow(selected)
@@ -190,12 +226,35 @@ validate_spec <- function(supplier_summary, spec_label) {
   cat(sprintf("\n    Precision: %.1f%%   Recall: %.1f%%\n",
               100 * precision_s, 100 * recall_s))
 
-  # Model-by-model breakdown (broad + strict)
+  # ── Core tier ──
+  n_importer_c   <- sum(selected$is_cn8_importer_core)
+  n_downstream_c <- sum(selected$is_downstream_buyer_core)
+  n_linked_c     <- sum(selected$is_fuel_linked_core)
+  n_neither_c    <- n_sel - n_linked_c
+
+  cat("\n  CORE (unambiguous stationary combustion fuels, edge cases excluded):\n")
+  cat("    CN8 fuel importers:                 ", n_importer_c,
+      sprintf("(%4.1f%%)\n", 100 * n_importer_c / n_sel))
+  cat("    1-degree downstream from importers: ", n_downstream_c,
+      sprintf("(%4.1f%%)\n", 100 * n_downstream_c / n_sel))
+  cat("    Fuel-linked (importer OR downstream):", n_linked_c,
+      sprintf("(%4.1f%%)\n", 100 * n_linked_c / n_sel))
+  cat("    Neither:                            ", n_neither_c,
+      sprintf("(%4.1f%%)\n", 100 * n_neither_c / n_sel))
+
+  n_fuel_linked_eligible_c <- sum(eligible_sellers %in% fuel_linked_core)
+  precision_c <- n_linked_c / n_sel
+  recall_c    <- n_linked_c / n_fuel_linked_eligible_c
+
+  cat(sprintf("\n    Precision: %.1f%%   Recall: %.1f%%\n",
+              100 * precision_c, 100 * recall_c))
+
+  # Model-by-model breakdown (broad + strict + core)
   cat("\n  Model-by-model breakdown (lambda.min, coef > 0):\n")
   model_names <- c("lasso_raw", "lasso_asinh", "enet_raw", "enet_asinh")
-  cat(sprintf("    %-15s  %5s  %11s  %11s\n",
-              "Model", "N sel", "Broad FL%", "Strict FL%"))
-  cat("    ", strrep("-", 50), "\n")
+  cat(sprintf("    %-15s  %5s  %11s  %11s  %11s\n",
+              "Model", "N sel", "Broad FL%", "Strict FL%", "Core FL%"))
+  cat("    ", strrep("-", 62), "\n")
   for (m in model_names) {
     m_sel <- supplier_summary %>%
       filter(model == m, lambda == "min", coef > 0) %>%
@@ -203,10 +262,12 @@ validate_spec <- function(supplier_summary, spec_label) {
     n_m <- length(m_sel)
     n_m_linked   <- sum(m_sel %in% fuel_linked)
     n_m_linked_s <- sum(m_sel %in% fuel_linked_strict)
-    cat(sprintf("    %-15s  %5d  %9.1f%%  %9.1f%%\n",
+    n_m_linked_c <- sum(m_sel %in% fuel_linked_core)
+    cat(sprintf("    %-15s  %5d  %9.1f%%  %9.1f%%  %9.1f%%\n",
                 m, n_m,
                 ifelse(n_m > 0, 100 * n_m_linked / n_m, 0),
-                ifelse(n_m > 0, 100 * n_m_linked_s / n_m, 0)))
+                ifelse(n_m > 0, 100 * n_m_linked_s / n_m, 0),
+                ifelse(n_m > 0, 100 * n_m_linked_c / n_m, 0)))
   }
 
   selected
@@ -265,6 +326,7 @@ save(
   validation_pooled, validation_fe,
   cn8_importers, downstream_buyers, fuel_linked,
   cn8_importers_strict, downstream_buyers_strict, fuel_linked_strict,
+  cn8_importers_core, downstream_buyers_core, fuel_linked_core,
   file = OUT_PATH
 )
 
@@ -297,10 +359,14 @@ validation_summary <- bind_rows(
                        "is_cn8_importer", "is_downstream_buyer", "is_fuel_linked"),
   build_validation_row(validation_pooled, "pooled", "strict",
                        "is_cn8_importer_strict", "is_downstream_buyer_strict", "is_fuel_linked_strict"),
+  build_validation_row(validation_pooled, "pooled", "core",
+                       "is_cn8_importer_core", "is_downstream_buyer_core", "is_fuel_linked_core"),
   build_validation_row(validation_fe, "within_buyer", "broad",
                        "is_cn8_importer", "is_downstream_buyer", "is_fuel_linked"),
   build_validation_row(validation_fe, "within_buyer", "strict",
-                       "is_cn8_importer_strict", "is_downstream_buyer_strict", "is_fuel_linked_strict")
+                       "is_cn8_importer_strict", "is_downstream_buyer_strict", "is_fuel_linked_strict"),
+  build_validation_row(validation_fe, "within_buyer", "core",
+                       "is_cn8_importer_core", "is_downstream_buyer_core", "is_fuel_linked_core")
 )
 
 write.csv(validation_summary,

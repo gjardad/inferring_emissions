@@ -6,9 +6,10 @@
 #   selected suppliers against a random baseline. Draw N random samples of the
 #   same size from eligible sellers and compute the same precision metrics.
 #
-#   Two CN8 tiers are tested:
+#   Three CN8 tiers are tested:
 #     Broad  (Ch.27 excl. 2716): all Chapter 27 products except electricity.
-#     Strict (LLM-curated):     ~58 CN8 codes for stationary combustion fuels.
+#     Strict (LLM-curated):     ~61 CN8 codes for stationary combustion fuels.
+#     Core   (edge_case=FALSE):  ~31 unambiguous stationary combustion fuel codes.
 #
 #   If random samples achieve similar precision, the validation is uninformative
 #   (i.e. nearly all firms in the economy are "fuel-linked" under that tier).
@@ -146,21 +147,25 @@ summary_strict <- run_baseline("strict",
                                cn8_importers_strict, downstream_buyers_strict,
                                fuel_linked_strict)
 
+summary_core <- run_baseline("core",
+                             cn8_importers_core, downstream_buyers_core,
+                             fuel_linked_core)
+
 
 # ── Interpretation ─────────────────────────────────────────────────────────
 cat("\n\nInterpretation:\n")
 cat("  p-value = share of random draws with >= elastic net's precision.\n")
 cat("  If p-value is high, the elastic net does no better than random on that metric.\n")
 cat("  If p-value is low, the elastic net is selectively picking that category.\n")
-cat("  The STRICT tier is more discriminating because fewer eligible sellers are\n")
-cat("  fuel-linked, so random precision is lower and a significant result is\n")
-cat("  more meaningful.\n")
+cat("  The STRICT and CORE tiers are more discriminating because fewer eligible\n")
+cat("  sellers are fuel-linked, so random precision is lower and a significant\n")
+cat("  result is more meaningful.\n")
 
 
 # ── Save ─────────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
-summary_all <- bind_rows(summary_broad, summary_strict)
+summary_all <- bind_rows(summary_broad, summary_strict, summary_core)
 
 write.csv(summary_all,
           file.path(OUTPUT_DIR, "enet_cn8_random_baseline.csv"),
