@@ -166,6 +166,58 @@ calibrate_predictions <- function(yhat, nace2d, year, syt) {
 }
 
 
+# ── Deployment-style clipping ─────────────────────────────────────────────
+# After proportional calibration, cap non-emitter predictions at the maximum
+# observed emission among emitters within each (nace2d, year) cell.
+# Iteratively redistribute clipped excess to uncapped non-emitters so that
+# the sector-year total is preserved.
+#
+# Inputs:
+#   yhat_cal : calibrated predictions (same length as emit, y, nace2d, year)
+#   emit     : binary (1 = emitter / ETS, 0 = non-emitter)
+#   y        : observed emissions (used only to compute the cap)
+#   nace2d, year : cell identifiers
+clip_to_ets_max <- function(yhat_cal, emit, y, nace2d, year, max_iter = 50) {
+  result <- yhat_cal
+
+  cells <- unique(data.frame(nace2d = nace2d, year = year,
+                             stringsAsFactors = FALSE))
+
+  for (r in seq_len(nrow(cells))) {
+    sec <- cells$nace2d[r]
+    yr  <- cells$year[r]
+
+    in_cell    <- (nace2d == sec & year == yr)
+    is_emitter <- (in_cell & emit == 1)
+    is_nonemit <- (in_cell & emit == 0)
+
+    if (!any(is_emitter) || !any(is_nonemit)) next
+
+    cap <- max(y[is_emitter], na.rm = TRUE)
+    if (!is.finite(cap) || cap <= 0) next
+
+    idx_non <- which(is_nonemit)
+
+    for (iter in seq_len(max_iter)) {
+      over <- idx_non[result[idx_non] > cap]
+      if (length(over) == 0) break
+
+      excess <- sum(result[over] - cap)
+      result[over] <- cap
+
+      uncapped <- idx_non[result[idx_non] > 0 & result[idx_non] < cap]
+      if (length(uncapped) == 0) break
+
+      denom <- sum(result[uncapped])
+      if (denom == 0) break
+      result[uncapped] <- result[uncapped] + excess * (result[uncapped] / denom)
+    }
+  }
+
+  result
+}
+
+
 # ── Model specifications ────────────────────────────────────────────────────
 
 # PPML specs
@@ -332,9 +384,32 @@ for (sp in ppml_specs) {
     nonemit_p99_rank_24 = m_cal$nonemit_p99_rank_24,
     stringsAsFactors = FALSE
   )
+
+  # Calibrated + clipped
+  yhat_clip <- clip_to_ets_max(
+    yhat_cal[ok], panel$emit[ok], panel$y[ok],
+    panel$nace2d[ok], panel$year[ok]
+  )
+  m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok])
+
+  results[[paste0(nm, "_clip")]] <- data.frame(
+    model = nm, variant = "calibrated_clipped", threshold = NA_real_,
+    n = m_clip$n, nRMSE = m_clip$nrmse_sd,
+    rmse = m_clip$rmse, mae = m_clip$mae,
+    mapd_emitters = m_clip$mapd_emitters, spearman = m_clip$spearman,
+    fpr_nonemitters = m_clip$fpr_nonemitters, tpr_emitters = m_clip$tpr_emitters,
+    emitter_mass_captured = m_clip$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_clip$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_clip$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_clip$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_clip$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_clip$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_clip$nonemit_p99_rank_24,
+    stringsAsFactors = FALSE
+  )
 }
 
-# ── Hurdle metrics (threshold search, raw + calibrated) ─────────────────────
+# ── Hurdle metrics (threshold search, raw + calibrated + clipped) ────────────
 cat("Searching over hurdle thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
 
 for (sp in hurdle_specs) {
@@ -345,12 +420,15 @@ for (sp in hurdle_specs) {
   ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
   if (sum(ok) == 0) next
 
-  best_raw <- list(rmse = Inf)
-  best_cal <- list(rmse = Inf)
-  best_thr_raw <- NA_real_
-  best_thr_cal <- NA_real_
-  best_m_raw <- NULL
-  best_m_cal <- NULL
+  best_raw  <- list(rmse = Inf)
+  best_cal  <- list(rmse = Inf)
+  best_clip <- list(rmse = Inf)
+  best_thr_raw  <- NA_real_
+  best_thr_cal  <- NA_real_
+  best_thr_clip <- NA_real_
+  best_m_raw  <- NULL
+  best_m_cal  <- NULL
+  best_m_clip <- NULL
 
   for (thr in THRESHOLDS) {
     # Hard threshold combination
@@ -365,6 +443,13 @@ for (sp in hurdle_specs) {
     )
     m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok])
 
+    # Calibrated + clipped
+    yhat_clip <- clip_to_ets_max(
+      yhat_cal, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok]
+    )
+    m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok])
+
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
       best_thr_raw <- thr
@@ -375,10 +460,15 @@ for (sp in hurdle_specs) {
       best_thr_cal <- thr
       best_m_cal <- m_cal
     }
+    if (!is.na(m_clip$rmse) && m_clip$rmse < best_clip$rmse) {
+      best_clip <- m_clip
+      best_thr_clip <- thr
+      best_m_clip <- m_clip
+    }
   }
 
-  cat(sprintf("  %s: best threshold (raw) = %.2f, best threshold (cal) = %.2f\n",
-              nm, best_thr_raw, best_thr_cal))
+  cat(sprintf("  %s: best thr (raw)=%.2f, (cal)=%.2f, (clip)=%.2f\n",
+              nm, best_thr_raw, best_thr_cal, best_thr_clip))
 
   if (!is.null(best_m_raw)) {
     results[[paste0(nm, "_raw")]] <- data.frame(
@@ -413,6 +503,24 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_cal$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_cal$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_cal$nonemit_p99_rank_24,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!is.null(best_m_clip)) {
+    results[[paste0(nm, "_clip")]] <- data.frame(
+      model = nm, variant = "calibrated_clipped", threshold = best_thr_clip,
+      n = best_m_clip$n, nRMSE = best_m_clip$nrmse_sd,
+      rmse = best_m_clip$rmse, mae = best_m_clip$mae,
+      mapd_emitters = best_m_clip$mapd_emitters, spearman = best_m_clip$spearman,
+      fpr_nonemitters = best_m_clip$fpr_nonemitters,
+      tpr_emitters = best_m_clip$tpr_emitters,
+      emitter_mass_captured = best_m_clip$emitter_mass_captured,
+      nonemit_p50_rank_19 = best_m_clip$nonemit_p50_rank_19,
+      nonemit_p90_rank_19 = best_m_clip$nonemit_p90_rank_19,
+      nonemit_p99_rank_19 = best_m_clip$nonemit_p99_rank_19,
+      nonemit_p50_rank_24 = best_m_clip$nonemit_p50_rank_24,
+      nonemit_p90_rank_24 = best_m_clip$nonemit_p90_rank_24,
+      nonemit_p99_rank_24 = best_m_clip$nonemit_p99_rank_24,
       stringsAsFactors = FALSE
     )
   }
