@@ -23,18 +23,26 @@
 #       express each as a percentile rank within the sector's emitter distribution.
 #       nonemit_p50_rank_19, nonemit_p90_rank_19, nonemit_p99_rank_19
 #       nonemit_p50_rank_24, nonemit_p90_rank_24, nonemit_p99_rank_24
+#   - Within-sector-year averaged FP severity (optional, when nace2d AND year
+#     provided): for each (sector, year) cell in NACE 19 and 24, find the
+#     percentile rank (within the cell's emitter ecdf) of the median and p99
+#     of predicted emissions among the cell's non-emitters. Average these
+#     percentile ranks across all valid cells.
+#       avg_nonemit_p50_rank, avg_nonemit_p99_rank
 #
 # INPUTS
 #   y, yhat : numeric vectors (same length)
 #   fp_threshold : numeric threshold; predicted positive iff yhat > fp_threshold
 #   nace2d : optional character vector (same length as y); when provided,
 #            computes sector-specific false-positive severity for NACE 19/24
+#   year : optional vector (same length as y); when provided together with
+#          nace2d, computes within-sector-year averaged FP severity
 #
 # OUTPUT
 #   A named list with fields used by ppml.R and hurdle.R.
 ###############################################################################
 
-calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
+calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) {
   y <- as.numeric(y)
   yhat <- as.numeric(yhat)
 
@@ -42,6 +50,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
   y <- y[ok]
   yhat <- yhat[ok]
   if (!is.null(nace2d)) nace2d <- nace2d[ok]
+  if (!is.null(year))   year   <- year[ok]
   
   n <- length(y)
   if (n == 0) {
@@ -59,7 +68,8 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
       nonemit_p50_rank_19 = NA_real_, nonemit_p90_rank_19 = NA_real_,
       nonemit_p99_rank_19 = NA_real_,
       nonemit_p50_rank_24 = NA_real_, nonemit_p90_rank_24 = NA_real_,
-      nonemit_p99_rank_24 = NA_real_
+      nonemit_p99_rank_24 = NA_real_,
+      avg_nonemit_p50_rank = NA_real_, avg_nonemit_p99_rank = NA_real_
     ))
   }
   
@@ -185,6 +195,46 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
   }
 
   # -----------------------------
+  # Within-sector-year averaged FP severity (NACE 19 and 24)
+  # For each (sector, year) cell: rank the median and p99 of non-emitter
+  # predictions in the cell's emitter ecdf. Average across all valid cells.
+  # -----------------------------
+  avg_nonemit_p50_rank <- NA_real_
+  avg_nonemit_p99_rank <- NA_real_
+
+  if (!is.null(nace2d) && !is.null(year)) {
+    cell_p50_ranks <- numeric(0)
+    cell_p99_ranks <- numeric(0)
+
+    for (sec in c("19", "24")) {
+      in_sec <- (nace2d == sec)
+      yrs <- sort(unique(year[in_sec]))
+
+      for (yr in yrs) {
+        in_cell      <- (in_sec & year == yr)
+        cell_emit    <- (in_cell & is_emit_true)
+        cell_nonemit <- (in_cell & is_nonemit_true)
+
+        if (sum(cell_emit) < 5 || sum(cell_nonemit) < 1) next
+
+        cell_ecdf <- stats::ecdf(y[cell_emit])
+        ne_preds  <- yhat[cell_nonemit]
+
+        q_ne <- stats::quantile(ne_preds, probs = c(0.50, 0.99),
+                                na.rm = TRUE, names = FALSE, type = 7)
+
+        cell_p50_ranks <- c(cell_p50_ranks, cell_ecdf(q_ne[1]))
+        cell_p99_ranks <- c(cell_p99_ranks, cell_ecdf(q_ne[2]))
+      }
+    }
+
+    if (length(cell_p50_ranks) > 0) {
+      avg_nonemit_p50_rank <- mean(cell_p50_ranks)
+      avg_nonemit_p99_rank <- mean(cell_p99_ranks)
+    }
+  }
+
+  # -----------------------------
   # Return named list
   # -----------------------------
   list(
@@ -222,6 +272,10 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
     nonemit_p50_rank_24 = nonemit_p50_rank_24,
     nonemit_p90_rank_24 = nonemit_p90_rank_24,
     nonemit_p99_rank_24 = nonemit_p99_rank_24,
+
+    # within-sector-year averaged FP severity (NACE 19 and 24)
+    avg_nonemit_p50_rank = avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = avg_nonemit_p99_rank,
 
     # emitters-only intensity error summary
     mapd_emitters = mapd_emitters,

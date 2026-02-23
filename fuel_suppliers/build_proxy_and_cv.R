@@ -345,14 +345,14 @@ for (sp in ppml_specs) {
   if (sum(ok) == 0) next
 
   # Raw
-  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok])
+  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   # Calibrated
   yhat_cal <- rep(NA_real_, nrow(panel))
   yhat_cal[ok] <- calibrate_predictions(
     yhat_raw[ok], panel$nace2d[ok], panel$year[ok], syt
   )
-  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok], nace2d = panel$nace2d[ok])
+  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   results[[paste0(nm, "_raw")]] <- data.frame(
     model = nm, variant = "raw", threshold = NA_real_,
@@ -367,6 +367,8 @@ for (sp in ppml_specs) {
     nonemit_p50_rank_24 = m_raw$nonemit_p50_rank_24,
     nonemit_p90_rank_24 = m_raw$nonemit_p90_rank_24,
     nonemit_p99_rank_24 = m_raw$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_raw$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_raw$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
   results[[paste0(nm, "_cal")]] <- data.frame(
@@ -382,6 +384,8 @@ for (sp in ppml_specs) {
     nonemit_p50_rank_24 = m_cal$nonemit_p50_rank_24,
     nonemit_p90_rank_24 = m_cal$nonemit_p90_rank_24,
     nonemit_p99_rank_24 = m_cal$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_cal$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_cal$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
 
@@ -390,7 +394,7 @@ for (sp in ppml_specs) {
     yhat_cal[ok], panel$emit[ok], panel$y[ok],
     panel$nace2d[ok], panel$year[ok]
   )
-  m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok])
+  m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   results[[paste0(nm, "_clip")]] <- data.frame(
     model = nm, variant = "calibrated_clipped", threshold = NA_real_,
@@ -405,6 +409,8 @@ for (sp in ppml_specs) {
     nonemit_p50_rank_24 = m_clip$nonemit_p50_rank_24,
     nonemit_p90_rank_24 = m_clip$nonemit_p90_rank_24,
     nonemit_p99_rank_24 = m_clip$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_clip$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_clip$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
 }
@@ -435,20 +441,20 @@ for (sp in hurdle_specs) {
     yhat_hard <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
 
     # Raw metrics
-    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok])
+    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     # Calibrated
     yhat_cal <- calibrate_predictions(
       yhat_hard, panel$nace2d[ok], panel$year[ok], syt
     )
-    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok])
+    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     # Calibrated + clipped
     yhat_clip <- clip_to_ets_max(
       yhat_cal, panel$emit[ok], panel$y[ok],
       panel$nace2d[ok], panel$year[ok]
     )
-    m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok])
+    m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
@@ -485,6 +491,8 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_raw$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_raw$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_raw$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_raw$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_raw$avg_nonemit_p99_rank,
       stringsAsFactors = FALSE
     )
   }
@@ -503,6 +511,8 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_cal$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_cal$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_cal$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_cal$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_cal$avg_nonemit_p99_rank,
       stringsAsFactors = FALSE
     )
   }
@@ -521,6 +531,8 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_clip$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_clip$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_clip$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_clip$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_clip$avg_nonemit_p99_rank,
       stringsAsFactors = FALSE
     )
   }
