@@ -166,52 +166,112 @@ calibrate_predictions <- function(yhat, nace2d, year, syt) {
 }
 
 
-# ── Deployment-style clipping ─────────────────────────────────────────────
-# After proportional calibration, cap non-emitter predictions at the maximum
-# observed emission among emitters within each (nace2d, year) cell.
-# Iteratively redistribute clipped excess to uncapped non-emitters so that
-# the sector-year total is preserved.
+# ── Joint calibration with cap ─────────────────────────────────────────────
+# Jointly calibrate raw predictions to known sector-year totals while capping
+# non-emitter predictions at min(y[ETS]) within each cell. Uses iterative
+# proportional fitting with box constraints (water-filling algorithm):
+#   1. Proportionally allocate E_total among all firms
+#   2. Cap non-emitters that exceed min(y[ETS])
+#   3. Redistribute excess to ALL remaining uncapped firms proportionally
+#   4. Iterate until no violations
+#
+# Among uncapped firms, proportionality is preserved exactly. This is the
+# standard approach for combining benchmarking with inequality constraints
+# in small area estimation (Rao & Molina 2015, Ch. 6; Chen et al. 2022).
 #
 # Inputs:
-#   yhat_cal : calibrated predictions (same length as emit, y, nace2d, year)
-#   emit     : binary (1 = emitter / ETS, 0 = non-emitter)
-#   y        : observed emissions (used only to compute the cap)
+#   yhat   : raw predictions (NOT pre-calibrated)
+#   emit   : binary (1 = emitter / ETS, 0 = non-emitter)
+#   y      : observed emissions (used only to compute the cap)
 #   nace2d, year : cell identifiers
-clip_to_ets_max <- function(yhat_cal, emit, y, nace2d, year, max_iter = 50) {
-  result <- yhat_cal
+#   syt    : sector-year totals (data.frame with nace2d, year, E_total, n_full)
+calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
 
-  cells <- unique(data.frame(nace2d = nace2d, year = year,
-                             stringsAsFactors = FALSE))
+  df <- data.frame(
+    yhat   = yhat,
+    emit   = emit,
+    y      = y,
+    nace2d = nace2d,
+    year   = year,
+    idx    = seq_along(yhat),
+    stringsAsFactors = FALSE
+  )
+  df <- merge(df, syt, by = c("nace2d", "year"), all.x = TRUE)
+  df <- df[order(df$idx), ]
+
+  result <- rep(NA_real_, nrow(df))
+
+  cells <- unique(df[, c("nace2d", "year")])
 
   for (r in seq_len(nrow(cells))) {
     sec <- cells$nace2d[r]
     yr  <- cells$year[r]
+    in_cell <- which(df$nace2d == sec & df$year == yr)
 
-    in_cell    <- (nace2d == sec & year == yr)
-    is_emitter <- (in_cell & emit == 1)
-    is_nonemit <- (in_cell & emit == 0)
+    E_total <- df$E_total[in_cell[1]]
+    n_full  <- df$n_full[in_cell[1]]
 
-    if (!any(is_emitter) || !any(is_nonemit)) next
-
-    cap <- max(y[is_emitter], na.rm = TRUE)
-    if (!is.finite(cap) || cap <= 0) next
-
-    idx_non <- which(is_nonemit)
-
-    for (iter in seq_len(max_iter)) {
-      over <- idx_non[result[idx_non] > cap]
-      if (length(over) == 0) break
-
-      excess <- sum(result[over] - cap)
-      result[over] <- cap
-
-      uncapped <- idx_non[result[idx_non] > 0 & result[idx_non] < cap]
-      if (length(uncapped) == 0) break
-
-      denom <- sum(result[uncapped])
-      if (denom == 0) break
-      result[uncapped] <- result[uncapped] + excess * (result[uncapped] / denom)
+    # ── E_total missing or zero → all predictions = 0 ──
+    if (is.na(E_total) || E_total == 0) {
+      result[in_cell] <- 0
+      next
     }
+
+    raw    <- df$yhat[in_cell]
+    is_emi <- df$emit[in_cell] == 1
+    is_non <- df$emit[in_cell] == 0
+
+    # ── Compute cap: min observed emitter emission in cell ──
+    # If no emitters or no non-emitters, just do proportional calibration
+    has_cap <- any(is_emi) && any(is_non)
+    if (has_cap) {
+      cap <- min(df$y[in_cell[is_emi]], na.rm = TRUE)
+      if (!is.finite(cap) || cap <= 0) has_cap <- FALSE
+    }
+
+    # ── Iterative proportional fitting with cap ──
+    x       <- rep(0, length(in_cell))
+    active  <- seq_along(in_cell)       # indices within cell (1..n_cell)
+    fixed   <- integer(0)
+    E_rem   <- E_total
+
+    for (iter in seq_len(length(in_cell) + 1)) {
+      # Proportional allocation among active firms
+      r_active <- raw[active]
+      denom    <- sum(r_active, na.rm = TRUE)
+
+      if (denom > 0) {
+        x[active] <- E_rem * r_active / denom
+      } else {
+        x[active] <- E_rem / length(active)
+      }
+
+      if (!has_cap) break
+
+      # Find non-emitter violations
+      violations <- active[is_non[active] & x[active] > cap]
+      if (length(violations) == 0) break
+
+      # Fix violators at cap
+      x[violations] <- cap
+      E_rem  <- E_rem - length(violations) * cap
+      fixed  <- c(fixed, violations)
+      active <- setdiff(active, violations)
+
+      if (length(active) == 0) break
+
+      # Safety: if capped mass exceeds total, scale down capped firms
+      if (E_rem < 0) {
+        x[active] <- 0
+        x[fixed]  <- E_total / length(fixed)
+        break
+      }
+    }
+
+    # Non-negativity
+    x <- pmax(x, 0)
+
+    result[in_cell] <- x
   }
 
   result
@@ -389,28 +449,28 @@ for (sp in ppml_specs) {
     stringsAsFactors = FALSE
   )
 
-  # Calibrated + clipped
-  yhat_clip <- clip_to_ets_max(
-    yhat_cal[ok], panel$emit[ok], panel$y[ok],
-    panel$nace2d[ok], panel$year[ok]
+  # Joint calibration + cap
+  yhat_cap <- calibrate_with_cap(
+    yhat_raw[ok], panel$emit[ok], panel$y[ok],
+    panel$nace2d[ok], panel$year[ok], syt
   )
-  m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
+  m_cap <- calc_metrics(panel$y[ok], yhat_cap, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   results[[paste0(nm, "_clip")]] <- data.frame(
     model = nm, variant = "calibrated_clipped", threshold = NA_real_,
-    n = m_clip$n, nRMSE = m_clip$nrmse_sd,
-    rmse = m_clip$rmse, mae = m_clip$mae,
-    mapd_emitters = m_clip$mapd_emitters, spearman = m_clip$spearman,
-    fpr_nonemitters = m_clip$fpr_nonemitters, tpr_emitters = m_clip$tpr_emitters,
-    emitter_mass_captured = m_clip$emitter_mass_captured,
-    nonemit_p50_rank_19 = m_clip$nonemit_p50_rank_19,
-    nonemit_p90_rank_19 = m_clip$nonemit_p90_rank_19,
-    nonemit_p99_rank_19 = m_clip$nonemit_p99_rank_19,
-    nonemit_p50_rank_24 = m_clip$nonemit_p50_rank_24,
-    nonemit_p90_rank_24 = m_clip$nonemit_p90_rank_24,
-    nonemit_p99_rank_24 = m_clip$nonemit_p99_rank_24,
-    avg_nonemit_p50_rank = m_clip$avg_nonemit_p50_rank,
-    avg_nonemit_p99_rank = m_clip$avg_nonemit_p99_rank,
+    n = m_cap$n, nRMSE = m_cap$nrmse_sd,
+    rmse = m_cap$rmse, mae = m_cap$mae,
+    mapd_emitters = m_cap$mapd_emitters, spearman = m_cap$spearman,
+    fpr_nonemitters = m_cap$fpr_nonemitters, tpr_emitters = m_cap$tpr_emitters,
+    emitter_mass_captured = m_cap$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_cap$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_cap$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_cap$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_cap$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_cap$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_cap$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_cap$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_cap$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
 }
@@ -449,12 +509,12 @@ for (sp in hurdle_specs) {
     )
     m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
-    # Calibrated + clipped
-    yhat_clip <- clip_to_ets_max(
-      yhat_cal, panel$emit[ok], panel$y[ok],
-      panel$nace2d[ok], panel$year[ok]
+    # Joint calibration + cap
+    yhat_cap <- calibrate_with_cap(
+      yhat_hard, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok], syt
     )
-    m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
+    m_clip <- calc_metrics(panel$y[ok], yhat_cap, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
@@ -666,20 +726,15 @@ if (sum(ok_losocv) > 0) {
     0
   )
 
-  # Calibrate
-  yhat_losocv_cal <- calibrate_predictions(
-    yhat_losocv_raw, panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
-  )
-
-  # Clip
-  yhat_losocv_clip <- clip_to_ets_max(
-    yhat_losocv_cal, panel$emit[ok_losocv], panel$y[ok_losocv],
-    panel$nace2d[ok_losocv], panel$year[ok_losocv]
+  # Joint calibration + cap
+  yhat_losocv_cap <- calibrate_with_cap(
+    yhat_losocv_raw, panel$emit[ok_losocv], panel$y[ok_losocv],
+    panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
   )
 
   # (e) Compute metrics
   m_losocv <- calc_metrics(
-    panel$y[ok_losocv], yhat_losocv_clip,
+    panel$y[ok_losocv], yhat_losocv_cap,
     nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
   )
 
