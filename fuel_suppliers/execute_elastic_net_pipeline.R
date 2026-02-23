@@ -8,8 +8,9 @@
 #     Step 3: Compare pooled vs within-buyer supplier selection
 #     Step 4: Validate selected suppliers against CN8 fuel importers
 #     Step 5: Build proxies from identified suppliers + group k-fold CV
-#     Step 6: Elastic net proxy diagnostics (regressions, summary stats, densities)
-#     Step 7: Supplier selection diagnostics (CN8 validation, baseline,
+#     Step 6: Generate paper-ready LaTeX tables from CV results
+#     Step 7: Elastic net proxy diagnostics (regressions, summary stats, densities)
+#     Step 8: Supplier selection diagnostics (CN8 validation, baseline,
 #             NACE profile, stability, placebo, within-firm test)
 #
 # INPUT  (consumed by the sourced scripts)
@@ -26,6 +27,8 @@
 #   {OUTPUT_DIR}/fuel_suppliers_comparison.csv
 #   {OUTPUT_DIR}/fuel_suppliers_cn8_validation.csv
 #   {OUTPUT_DIR}/fuel_suppliers_cv_performance.csv
+#   {OUTPUT_DIR}/enet_cv_performance.tex
+#   {OUTPUT_DIR}/enet_fp_severity.tex
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -89,19 +92,28 @@ cat("\n",
 source(file.path(SCRIPT_DIR, "build_proxy_and_cv.R"))
 
 
-# ── Step 6: Proxy diagnostics ────────────────────────────────────────────────
+# ── Step 6: Paper-ready LaTeX tables ──────────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# STEP 6: Elastic net proxy diagnostics                      #\n",
+    "# STEP 6: Generating paper-ready LaTeX tables                #\n",
+    "##############################################################\n\n")
+
+source(file.path(SCRIPT_DIR, "descriptives", "table_cv_performance.R"))
+
+
+# ── Step 7: Proxy diagnostics ────────────────────────────────────────────────
+cat("\n",
+    "##############################################################\n",
+    "# STEP 7: Elastic net proxy diagnostics                      #\n",
     "##############################################################\n\n")
 
 source(file.path(SCRIPT_DIR, "descriptives", "elastic_net_proxy_diagnostics.R"))
 
 
-# ── Step 7: Supplier selection diagnostics ────────────────────────────────────
+# ── Step 8: Supplier selection diagnostics ────────────────────────────────────
 cat("\n",
     "##############################################################\n",
-    "# STEP 7: Supplier selection diagnostics                     #\n",
+    "# STEP 8: Supplier selection diagnostics                     #\n",
     "#   (CN8 validation, baseline, NACE, stability,              #\n",
     "#    placebo, within-firm test)                               #\n",
     "##############################################################\n\n")
@@ -121,4 +133,6 @@ cat("\n",
     "#   fuel_suppliers_comparison.csv                             \n",
     "#   fuel_suppliers_cn8_validation.csv                         \n",
     "#   fuel_suppliers_cv_performance.csv                         \n",
+    "#   enet_cv_performance.tex                                   \n",
+    "#   enet_fp_severity.tex                                      \n",
     "##############################################################\n")
