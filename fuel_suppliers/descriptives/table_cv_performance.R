@@ -9,7 +9,7 @@
 #     Five rows showing progressive model improvements:
 #       1. PPML benchmark (sector RE, calibrated)
 #       2. PPML + proxy (sector RE, calibrated)
-#       3. Hurdle + proxy (calibrated)
+#       3. Hurdle + proxy (raw — no calibration or clipping)
 #       4. Hurdle + proxy (calibrated + clipped)
 #       5. LOSOCV Hurdle + proxy (calibrated + clipped)
 #
@@ -56,7 +56,7 @@ cv <- read.csv(cv_path, stringsAsFactors = FALSE)
 row_specs <- list(
   list(model = "benchmark",                 variant = "calibrated",         label = "PPML benchmark",                show_ext = FALSE),
   list(model = "proxy_pooled",              variant = "calibrated",         label = "\\quad + fuel-supply proxy",     show_ext = FALSE),
-  list(model = "hurdle_proxy_pooled",       variant = "calibrated",         label = "Hurdle + proxy",                show_ext = TRUE),
+  list(model = "hurdle_proxy_pooled",       variant = "raw",                label = "Hurdle + proxy",                show_ext = TRUE),
   list(model = "hurdle_proxy_pooled",       variant = "calibrated_clipped", label = "\\quad + calibration \\& clip",  show_ext = TRUE),
   list(model = "losocv_hurdle_proxy_pooled", variant = "calibrated_clipped", label = "LOSOCV (out-of-sector)",       show_ext = TRUE)
 )
