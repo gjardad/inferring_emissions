@@ -166,6 +166,58 @@ calibrate_predictions <- function(yhat, nace2d, year, syt) {
 }
 
 
+# ── Deployment-style clipping ─────────────────────────────────────────────
+# After proportional calibration, cap non-emitter predictions at the maximum
+# observed emission among emitters within each (nace2d, year) cell.
+# Iteratively redistribute clipped excess to uncapped non-emitters so that
+# the sector-year total is preserved.
+#
+# Inputs:
+#   yhat_cal : calibrated predictions (same length as emit, y, nace2d, year)
+#   emit     : binary (1 = emitter / ETS, 0 = non-emitter)
+#   y        : observed emissions (used only to compute the cap)
+#   nace2d, year : cell identifiers
+clip_to_ets_max <- function(yhat_cal, emit, y, nace2d, year, max_iter = 50) {
+  result <- yhat_cal
+
+  cells <- unique(data.frame(nace2d = nace2d, year = year,
+                             stringsAsFactors = FALSE))
+
+  for (r in seq_len(nrow(cells))) {
+    sec <- cells$nace2d[r]
+    yr  <- cells$year[r]
+
+    in_cell    <- (nace2d == sec & year == yr)
+    is_emitter <- (in_cell & emit == 1)
+    is_nonemit <- (in_cell & emit == 0)
+
+    if (!any(is_emitter) || !any(is_nonemit)) next
+
+    cap <- max(y[is_emitter], na.rm = TRUE)
+    if (!is.finite(cap) || cap <= 0) next
+
+    idx_non <- which(is_nonemit)
+
+    for (iter in seq_len(max_iter)) {
+      over <- idx_non[result[idx_non] > cap]
+      if (length(over) == 0) break
+
+      excess <- sum(result[over] - cap)
+      result[over] <- cap
+
+      uncapped <- idx_non[result[idx_non] > 0 & result[idx_non] < cap]
+      if (length(uncapped) == 0) break
+
+      denom <- sum(result[uncapped])
+      if (denom == 0) break
+      result[uncapped] <- result[uncapped] + excess * (result[uncapped] / denom)
+    }
+  }
+
+  result
+}
+
+
 # ── Model specifications ────────────────────────────────────────────────────
 
 # PPML specs
@@ -293,14 +345,14 @@ for (sp in ppml_specs) {
   if (sum(ok) == 0) next
 
   # Raw
-  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok])
+  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   # Calibrated
   yhat_cal <- rep(NA_real_, nrow(panel))
   yhat_cal[ok] <- calibrate_predictions(
     yhat_raw[ok], panel$nace2d[ok], panel$year[ok], syt
   )
-  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok], nace2d = panel$nace2d[ok])
+  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   results[[paste0(nm, "_raw")]] <- data.frame(
     model = nm, variant = "raw", threshold = NA_real_,
@@ -315,6 +367,8 @@ for (sp in ppml_specs) {
     nonemit_p50_rank_24 = m_raw$nonemit_p50_rank_24,
     nonemit_p90_rank_24 = m_raw$nonemit_p90_rank_24,
     nonemit_p99_rank_24 = m_raw$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_raw$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_raw$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
   results[[paste0(nm, "_cal")]] <- data.frame(
@@ -330,11 +384,38 @@ for (sp in ppml_specs) {
     nonemit_p50_rank_24 = m_cal$nonemit_p50_rank_24,
     nonemit_p90_rank_24 = m_cal$nonemit_p90_rank_24,
     nonemit_p99_rank_24 = m_cal$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_cal$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_cal$avg_nonemit_p99_rank,
+    stringsAsFactors = FALSE
+  )
+
+  # Calibrated + clipped
+  yhat_clip <- clip_to_ets_max(
+    yhat_cal[ok], panel$emit[ok], panel$y[ok],
+    panel$nace2d[ok], panel$year[ok]
+  )
+  m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+  results[[paste0(nm, "_clip")]] <- data.frame(
+    model = nm, variant = "calibrated_clipped", threshold = NA_real_,
+    n = m_clip$n, nRMSE = m_clip$nrmse_sd,
+    rmse = m_clip$rmse, mae = m_clip$mae,
+    mapd_emitters = m_clip$mapd_emitters, spearman = m_clip$spearman,
+    fpr_nonemitters = m_clip$fpr_nonemitters, tpr_emitters = m_clip$tpr_emitters,
+    emitter_mass_captured = m_clip$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_clip$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_clip$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_clip$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_clip$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_clip$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_clip$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_clip$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_clip$avg_nonemit_p99_rank,
     stringsAsFactors = FALSE
   )
 }
 
-# ── Hurdle metrics (threshold search, raw + calibrated) ─────────────────────
+# ── Hurdle metrics (threshold search, raw + calibrated + clipped) ────────────
 cat("Searching over hurdle thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
 
 for (sp in hurdle_specs) {
@@ -345,25 +426,35 @@ for (sp in hurdle_specs) {
   ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
   if (sum(ok) == 0) next
 
-  best_raw <- list(rmse = Inf)
-  best_cal <- list(rmse = Inf)
-  best_thr_raw <- NA_real_
-  best_thr_cal <- NA_real_
-  best_m_raw <- NULL
-  best_m_cal <- NULL
+  best_raw  <- list(rmse = Inf)
+  best_cal  <- list(rmse = Inf)
+  best_clip <- list(rmse = Inf)
+  best_thr_raw  <- NA_real_
+  best_thr_cal  <- NA_real_
+  best_thr_clip <- NA_real_
+  best_m_raw  <- NULL
+  best_m_cal  <- NULL
+  best_m_clip <- NULL
 
   for (thr in THRESHOLDS) {
     # Hard threshold combination
     yhat_hard <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
 
     # Raw metrics
-    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok])
+    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     # Calibrated
     yhat_cal <- calibrate_predictions(
       yhat_hard, panel$nace2d[ok], panel$year[ok], syt
     )
-    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok])
+    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+    # Calibrated + clipped
+    yhat_clip <- clip_to_ets_max(
+      yhat_cal, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok]
+    )
+    m_clip <- calc_metrics(panel$y[ok], yhat_clip, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
@@ -375,10 +466,15 @@ for (sp in hurdle_specs) {
       best_thr_cal <- thr
       best_m_cal <- m_cal
     }
+    if (!is.na(m_clip$rmse) && m_clip$rmse < best_clip$rmse) {
+      best_clip <- m_clip
+      best_thr_clip <- thr
+      best_m_clip <- m_clip
+    }
   }
 
-  cat(sprintf("  %s: best threshold (raw) = %.2f, best threshold (cal) = %.2f\n",
-              nm, best_thr_raw, best_thr_cal))
+  cat(sprintf("  %s: best thr (raw)=%.2f, (cal)=%.2f, (clip)=%.2f\n",
+              nm, best_thr_raw, best_thr_cal, best_thr_clip))
 
   if (!is.null(best_m_raw)) {
     results[[paste0(nm, "_raw")]] <- data.frame(
@@ -395,6 +491,8 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_raw$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_raw$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_raw$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_raw$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_raw$avg_nonemit_p99_rank,
       stringsAsFactors = FALSE
     )
   }
@@ -413,17 +511,218 @@ for (sp in hurdle_specs) {
       nonemit_p50_rank_24 = best_m_cal$nonemit_p50_rank_24,
       nonemit_p90_rank_24 = best_m_cal$nonemit_p90_rank_24,
       nonemit_p99_rank_24 = best_m_cal$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_cal$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_cal$avg_nonemit_p99_rank,
+      stringsAsFactors = FALSE
+    )
+  }
+  if (!is.null(best_m_clip)) {
+    results[[paste0(nm, "_clip")]] <- data.frame(
+      model = nm, variant = "calibrated_clipped", threshold = best_thr_clip,
+      n = best_m_clip$n, nRMSE = best_m_clip$nrmse_sd,
+      rmse = best_m_clip$rmse, mae = best_m_clip$mae,
+      mapd_emitters = best_m_clip$mapd_emitters, spearman = best_m_clip$spearman,
+      fpr_nonemitters = best_m_clip$fpr_nonemitters,
+      tpr_emitters = best_m_clip$tpr_emitters,
+      emitter_mass_captured = best_m_clip$emitter_mass_captured,
+      nonemit_p50_rank_19 = best_m_clip$nonemit_p50_rank_19,
+      nonemit_p90_rank_19 = best_m_clip$nonemit_p90_rank_19,
+      nonemit_p99_rank_19 = best_m_clip$nonemit_p99_rank_19,
+      nonemit_p50_rank_24 = best_m_clip$nonemit_p50_rank_24,
+      nonemit_p90_rank_24 = best_m_clip$nonemit_p90_rank_24,
+      nonemit_p99_rank_24 = best_m_clip$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = best_m_clip$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = best_m_clip$avg_nonemit_p99_rank,
       stringsAsFactors = FALSE
     )
   }
 }
 
 
-# ── Combine and display ─────────────────────────────────────────────────────
+# ── Combine k-fold results ─────────────────────────────────────────────────
 cv_performance <- bind_rows(results)
 
 cat("\n═══ Group k-fold CV performance ═══\n")
 print(cv_performance, row.names = FALSE)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# LOSOCV: Leave-One-Sector-Out CV for the hurdle + pooled proxy
+#
+# Evaluates how the model performs for firms in sectors NOT in the training
+# sample. Each NACE 2-digit sector is held out in turn; the model is trained
+# on the remaining sectors and predicts the held-out sector. With sector RE
+# (s(nace2d_f, bs="re")), the RE for the unseen sector defaults to the
+# population mean (correct behavior).
+# ══════════════════════════════════════════════════════════════════════════════
+
+cat("\n\n═══ LOSOCV: Leave-One-Sector-Out CV ═══\n")
+
+# (a) Best threshold from k-fold CV (hurdle_proxy_pooled, calibrated_clipped)
+best_kfold <- cv_performance[cv_performance$model == "hurdle_proxy_pooled" &
+                             cv_performance$variant == "calibrated_clipped", ]
+
+if (nrow(best_kfold) == 0) {
+  cat("WARNING: hurdle_proxy_pooled calibrated_clipped not found in k-fold results.\n")
+  cat("         Falling back to calibrated variant.\n")
+  best_kfold <- cv_performance[cv_performance$model == "hurdle_proxy_pooled" &
+                               cv_performance$variant == "calibrated", ]
+}
+
+losocv_threshold <- if (nrow(best_kfold) > 0 && !is.na(best_kfold$threshold[1])) {
+  best_kfold$threshold[1]
+} else {
+  0.30  # sensible default
+}
+cat("Using threshold from k-fold CV:", losocv_threshold, "\n")
+
+# (b) Assign sector folds (one fold per NACE 2-digit sector)
+firm_sector <- panel %>%
+  group_by(vat) %>%
+  summarise(primary_nace2d = names(which.max(table(nace2d))), .groups = "drop")
+
+sector_levels <- sort(unique(firm_sector$primary_nace2d))
+n_sector_folds <- length(sector_levels)
+
+panel <- panel %>%
+  left_join(firm_sector %>% select(vat, primary_nace2d), by = "vat")
+
+cat("Assigned", n_distinct(panel$vat), "firms to", n_sector_folds, "sector folds\n\n")
+
+# Preserve full factor levels for mgcv
+all_nace2d_levels <- levels(panel$nace2d_f)
+all_year_levels   <- levels(panel$year_f)
+
+# (c) LOSOCV hurdle formulas (same as hurdle_proxy_pooled)
+losocv_ext_formula <- emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                             year_f + s(nace2d_f, bs = "re")
+losocv_int_formula <- y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                          year_f + s(nace2d_f, bs = "re")
+
+# Pre-allocate prediction columns
+panel$losocv_phat  <- NA_real_
+panel$losocv_muhat <- NA_real_
+
+cat("Running LOSOCV (", n_sector_folds, " sector folds)...\n", sep = "")
+t0_losocv <- Sys.time()
+
+for (s_idx in seq_along(sector_levels)) {
+  sec <- sector_levels[s_idx]
+  t0_fold <- Sys.time()
+
+  train_idx <- which(panel$primary_nace2d != sec)
+  test_idx  <- which(panel$primary_nace2d == sec)
+
+  train <- panel[train_idx, ]
+  test  <- panel[test_idx, ]
+
+  # Ensure factor levels match the full panel (critical for mgcv RE)
+  train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
+  test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
+  train$year_f   <- factor(train$year,   levels = all_year_levels)
+  test$year_f    <- factor(test$year,    levels = all_year_levels)
+
+  # Step 1: Extensive margin (logit on full training data)
+  fit_ext <- tryCatch(
+    gam(losocv_ext_formula, data = train,
+        family = binomial(link = "logit"), method = "REML"),
+    error = function(e) NULL
+  )
+  if (!is.null(fit_ext)) {
+    phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
+    phat <- pmin(pmax(phat, 0), 1)
+    panel$losocv_phat[test_idx] <- phat
+  }
+
+  # Step 2: Intensive margin (Poisson on emitters only)
+  train_emit <- train[train$emit == 1, ]
+  if (nrow(train_emit) > 0) {
+    fit_int <- tryCatch(
+      gam(losocv_int_formula, data = train_emit,
+          family = poisson(link = "log"), method = "REML"),
+      error = function(e) NULL
+    )
+    if (!is.null(fit_int)) {
+      muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
+      panel$losocv_muhat[test_idx] <- muhat
+    }
+  }
+
+  elapsed_fold <- round(difftime(Sys.time(), t0_fold, units = "secs"), 1)
+  cat(sprintf("  Sector %s (%2d/%d): %4d test obs (%.1fs)\n",
+              sec, s_idx, n_sector_folds, length(test_idx), elapsed_fold))
+}
+
+elapsed_losocv <- round(difftime(Sys.time(), t0_losocv, units = "mins"), 1)
+cat(sprintf("LOSOCV done (%.1f min)\n\n", elapsed_losocv))
+
+# (d) Combine predictions, calibrate, clip
+ok_losocv <- !is.na(panel$losocv_phat) & !is.na(panel$losocv_muhat) & !is.na(panel$y)
+
+if (sum(ok_losocv) > 0) {
+  yhat_losocv_raw <- pmax(
+    as.numeric(panel$losocv_phat[ok_losocv] > losocv_threshold) *
+      panel$losocv_muhat[ok_losocv],
+    0
+  )
+
+  # Calibrate
+  yhat_losocv_cal <- calibrate_predictions(
+    yhat_losocv_raw, panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
+  )
+
+  # Clip
+  yhat_losocv_clip <- clip_to_ets_max(
+    yhat_losocv_cal, panel$emit[ok_losocv], panel$y[ok_losocv],
+    panel$nace2d[ok_losocv], panel$year[ok_losocv]
+  )
+
+  # (e) Compute metrics
+  m_losocv <- calc_metrics(
+    panel$y[ok_losocv], yhat_losocv_clip,
+    nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
+  )
+
+  cat("LOSOCV metrics (calibrated + clipped):\n")
+  cat(sprintf("  nRMSE = %.3f, MAPD = %.3f, Spearman = %.3f\n",
+              m_losocv$nrmse_sd, m_losocv$mapd_emitters, m_losocv$spearman))
+  cat(sprintf("  FPR = %.3f, TPR = %.3f\n",
+              m_losocv$fpr_nonemitters, m_losocv$tpr_emitters))
+  cat(sprintf("  avg_nonemit_p50_rank = %.3f, avg_nonemit_p99_rank = %.3f\n",
+              m_losocv$avg_nonemit_p50_rank, m_losocv$avg_nonemit_p99_rank))
+
+  # (f) Append to results
+  losocv_row <- data.frame(
+    model = "losocv_hurdle_proxy_pooled",
+    variant = "calibrated_clipped",
+    threshold = losocv_threshold,
+    n = m_losocv$n, nRMSE = m_losocv$nrmse_sd,
+    rmse = m_losocv$rmse, mae = m_losocv$mae,
+    mapd_emitters = m_losocv$mapd_emitters, spearman = m_losocv$spearman,
+    fpr_nonemitters = m_losocv$fpr_nonemitters,
+    tpr_emitters = m_losocv$tpr_emitters,
+    emitter_mass_captured = m_losocv$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_losocv$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_losocv$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_losocv$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_losocv$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_losocv$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_losocv$nonemit_p99_rank_24,
+    avg_nonemit_p50_rank = m_losocv$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m_losocv$avg_nonemit_p99_rank,
+    stringsAsFactors = FALSE
+  )
+
+  cv_performance <- bind_rows(cv_performance, losocv_row)
+
+} else {
+  cat("WARNING: No valid LOSOCV predictions. Skipping.\n")
+}
+
+# Clean up temporary column
+panel$primary_nace2d <- NULL
+panel$losocv_phat    <- NULL
+panel$losocv_muhat   <- NULL
 
 
 # ── Save ─────────────────────────────────────────────────────────────────────

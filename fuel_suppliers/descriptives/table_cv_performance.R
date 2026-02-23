@@ -2,27 +2,30 @@
 # fuel_suppliers/descriptives/table_cv_performance.R
 #
 # PURPOSE
-#   Generate paper-ready LaTeX tables from the group k-fold CV results.
+#   Generate the main prediction performance table (T1) from group k-fold CV
+#   and LOSOCV results.
 #
-#   Table 1 — Model selection (cv_performance.tex):
-#     Rows: 6 models (3 PPML + 3 hurdle), calibrated variant.
-#     Columns: N | Extensive margin (FPR, TPR, Mass capt.) |
-#              Intensive margin (nRMSE, MAPD, Spearman rho)
-#     PPML models show "---" for extensive margin (no explicit classification).
+#   T1 — Prediction performance (enet_cv_performance.tex):
+#     Five rows showing progressive model improvements:
+#       1. PPML benchmark (sector RE, calibrated)
+#       2. PPML + proxy (sector RE, calibrated)
+#       3. Hurdle + proxy (calibrated)
+#       4. Hurdle + proxy (calibrated + clipped)
+#       5. LOSOCV Hurdle + proxy (calibrated + clipped)
 #
-#   Table 2 — False-positive severity (fp_severity.tex):
-#     For each calibrated model, how large are imputed emissions for confirmed
-#     non-emitters (y=0) relative to the sector's emitter distribution?
-#     Separate panels for NACE 19 (coke/petroleum) and NACE 24 (metals).
-#     Entries: percentile rank within the emitter ecdf of the median/p90/p99
-#     of predicted emissions among true non-emitters in that sector.
+#     Columns split into two groups:
+#       "Prediction accuracy": nRMSE, MAPD, Spearman rho
+#       "Extensive margin":    FPR, TPR, p50, p99
+#         where p50 and p99 are the within-sector-year averaged percentile
+#         ranks of non-emitter predictions in the emitter ecdf (NACE 19 & 24).
+#
+#     PPML rows show "---" for extensive margin (no explicit classification).
 #
 # INPUTS
 #   {OUTPUT_DIR}/fuel_suppliers_cv_performance.csv
 #
 # OUTPUTS
 #   {OUTPUT_DIR}/enet_cv_performance.tex
-#   {OUTPUT_DIR}/enet_fp_severity.tex
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -45,122 +48,85 @@ cv <- read.csv(cv_path, stringsAsFactors = FALSE)
 
 
 # ===========================================================================
-# Table 1: Model selection (calibrated variant only)
+# T1: Prediction performance — 5 progressive rows
 # ===========================================================================
 
-# Model display order and labels
-model_order <- c(
-  "benchmark",            "proxy_pooled",            "proxy_within_buyer",
-  "hurdle_benchmark",     "hurdle_proxy_pooled",     "hurdle_proxy_within_buyer"
+# ── Define the 5 rows ─────────────────────────────────────────────────────
+# Each row = (model key in CSV, variant, display label, show extensive margin?)
+row_specs <- list(
+  list(model = "benchmark",                 variant = "calibrated",         label = "PPML benchmark",                show_ext = FALSE),
+  list(model = "proxy_pooled",              variant = "calibrated",         label = "\\quad + fuel-supply proxy",     show_ext = FALSE),
+  list(model = "hurdle_proxy_pooled",       variant = "calibrated",         label = "Hurdle + proxy",                show_ext = TRUE),
+  list(model = "hurdle_proxy_pooled",       variant = "calibrated_clipped", label = "\\quad + calibration \\& clip",  show_ext = TRUE),
+  list(model = "losocv_hurdle_proxy_pooled", variant = "calibrated_clipped", label = "LOSOCV (out-of-sector)",       show_ext = TRUE)
 )
-model_labels <- c(
-  "PPML benchmark",       "PPML + pooled proxy",     "PPML + within-buyer proxy",
-  "Hurdle benchmark",     "Hurdle + pooled proxy",   "Hurdle + within-buyer proxy"
-)
-is_hurdle <- grepl("^hurdle", model_order)
 
-# Filter to calibrated variant
-cal <- cv[cv$variant == "calibrated", ]
-cal$model <- factor(cal$model, levels = model_order)
-cal <- cal[order(cal$model), ]
+# ── Extract rows from CSV ─────────────────────────────────────────────────
+rows <- lapply(row_specs, function(spec) {
+  r <- cv[cv$model == spec$model & cv$variant == spec$variant, ]
+  if (nrow(r) == 0) {
+    warning(sprintf("Row not found: model=%s, variant=%s", spec$model, spec$variant))
+    return(NULL)
+  }
+  r[1, ]
+})
 
-if (nrow(cal) == 0) stop("No calibrated rows found in CV results.")
-
-# Formatting helpers
+# ── Formatting helpers ────────────────────────────────────────────────────
 fmt3 <- function(x) ifelse(is.na(x), "---", sprintf("%.3f", x))
-fmt_n <- function(x) ifelse(is.na(x), "---", format(as.integer(x), big.mark = ","))
 
-# Build LaTeX
+# FP severity as integer percentile (0-100)
+fmt_pct <- function(x) ifelse(is.na(x), "---", sprintf("%.0f", x * 100))
+
+
+# ── Build LaTeX ───────────────────────────────────────────────────────────
 tex <- c(
-  "\\begin{tabular}{l r ccc ccc}",
+  "\\begin{tabular}{l ccc cccc}",
   "\\toprule",
-  " & & \\multicolumn{3}{c}{Extensive margin} & \\multicolumn{3}{c}{Intensive margin} \\\\",
-  "\\cmidrule(lr){3-5} \\cmidrule(lr){6-8}",
-  "Model & $N$ & FPR & TPR & Mass capt. & nRMSE & MAPD & $\\rho$ \\\\",
+  " & \\multicolumn{3}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
+  "\\cmidrule(lr){2-4} \\cmidrule(lr){5-8}",
+  "Model & nRMSE & MAPD & $\\rho$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
   "\\midrule"
 )
 
-for (i in seq_len(nrow(cal))) {
-  r <- cal[i, ]
-  lab <- model_labels[match(as.character(r$model), model_order)]
-  hurdle <- is_hurdle[match(as.character(r$model), model_order)]
+for (i in seq_along(row_specs)) {
+  spec <- row_specs[[i]]
+  r <- rows[[i]]
 
-  # PPML has no meaningful extensive margin (everything predicted positive)
-  if (hurdle) {
-    fpr <- fmt3(r$fpr_nonemitters)
-    tpr <- fmt3(r$tpr_emitters)
-    mc  <- fmt3(r$emitter_mass_captured)
+  # Prediction accuracy columns (always shown)
+  if (!is.null(r)) {
+    nrmse <- fmt3(r$nRMSE)
+    mapd  <- fmt3(r$mapd_emitters)
+    rho   <- fmt3(r$spearman)
   } else {
-    fpr <- "---"
-    tpr <- "---"
-    mc  <- "---"
+    nrmse <- "---"; mapd <- "---"; rho <- "---"
+  }
+
+  # Extensive margin columns
+  if (spec$show_ext && !is.null(r)) {
+    fpr  <- fmt3(r$fpr_nonemitters)
+    tpr  <- fmt3(r$tpr_emitters)
+    p50  <- fmt_pct(r$avg_nonemit_p50_rank)
+    p99  <- fmt_pct(r$avg_nonemit_p99_rank)
+  } else {
+    fpr <- "---"; tpr <- "---"; p50 <- "---"; p99 <- "---"
   }
 
   line <- sprintf(
     "%s & %s & %s & %s & %s & %s & %s & %s \\\\",
-    lab,
-    fmt_n(r$n),
-    fpr, tpr, mc,
-    fmt3(r$nRMSE), fmt3(r$mapd_emitters), fmt3(r$spearman)
+    spec$label, nrmse, mapd, rho, fpr, tpr, p50, p99
   )
   tex <- c(tex, line)
 
-  # Visual break between PPML and hurdle blocks
-  if (i == 3) tex <- c(tex, "\\addlinespace")
+  # Visual break: after PPML block (row 2) and after k-fold hurdle block (row 4)
+  if (i == 2 || i == 4) tex <- c(tex, "\\addlinespace")
 }
 
 tex <- c(tex, "\\bottomrule", "\\end{tabular}")
 
-out1 <- file.path(OUTPUT_DIR, "enet_cv_performance.tex")
+
+# ── Save ──────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
-writeLines(tex, out1)
-cat("Saved Table 1 (model selection) to:", out1, "\n")
 
-
-# ===========================================================================
-# Table 2: False-positive severity (NACE 19 and 24)
-# ===========================================================================
-
-# Check if any sector-specific columns exist
-has_fp <- any(!is.na(cal$nonemit_p50_rank_19)) || any(!is.na(cal$nonemit_p50_rank_24))
-
-if (has_fp) {
-
-  fmt_pct <- function(x) ifelse(is.na(x), "---", sprintf("%.0f", x * 100))
-
-  tex2 <- c(
-    "\\begin{tabular}{l ccc ccc}",
-    "\\toprule",
-    " & \\multicolumn{3}{c}{NACE 19 (Coke \\& petroleum)} & \\multicolumn{3}{c}{NACE 24 (Basic metals)} \\\\",
-    "\\cmidrule(lr){2-4} \\cmidrule(lr){5-7}",
-    "Model & $p_{50}$ & $p_{90}$ & $p_{99}$ & $p_{50}$ & $p_{90}$ & $p_{99}$ \\\\",
-    "\\midrule"
-  )
-
-  for (i in seq_len(nrow(cal))) {
-    r <- cal[i, ]
-    lab <- model_labels[match(as.character(r$model), model_order)]
-
-    line <- sprintf(
-      "%s & %s & %s & %s & %s & %s & %s \\\\",
-      lab,
-      fmt_pct(r$nonemit_p50_rank_19),
-      fmt_pct(r$nonemit_p90_rank_19),
-      fmt_pct(r$nonemit_p99_rank_19),
-      fmt_pct(r$nonemit_p50_rank_24),
-      fmt_pct(r$nonemit_p90_rank_24),
-      fmt_pct(r$nonemit_p99_rank_24)
-    )
-    tex2 <- c(tex2, line)
-    if (i == 3) tex2 <- c(tex2, "\\addlinespace")
-  }
-
-  tex2 <- c(tex2, "\\bottomrule", "\\end{tabular}")
-
-  out2 <- file.path(OUTPUT_DIR, "enet_fp_severity.tex")
-  writeLines(tex2, out2)
-  cat("Saved Table 2 (false-positive severity) to:", out2, "\n")
-
-} else {
-  cat("Skipping Table 2: no sector-specific false-positive severity data available.\n")
-}
+out_path <- file.path(OUTPUT_DIR, "enet_cv_performance.tex")
+writeLines(tex, out_path)
+cat("Saved T1 (prediction performance) to:", out_path, "\n")
