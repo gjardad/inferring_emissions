@@ -17,22 +17,31 @@
 #       emitter_mass_captured = sum(y among predicted positives) / sum(y among true emitters)
 #   - Summaries of predicted values for true non-emitters:
 #       mean_pred_nonemit, p50_pred_nonemit, p90_pred_nonemit, p95_pred_nonemit, p99_pred_nonemit
+#   - Sector-specific false-positive severity (optional, when nace2d provided):
+#       For NACE 19 and 24 (sectors with confirmed zeros in the training sample),
+#       take the p50/p90/p99 of predicted emissions among true non-emitters and
+#       express each as a percentile rank within the sector's emitter distribution.
+#       nonemit_p50_rank_19, nonemit_p90_rank_19, nonemit_p99_rank_19
+#       nonemit_p50_rank_24, nonemit_p90_rank_24, nonemit_p99_rank_24
 #
 # INPUTS
 #   y, yhat : numeric vectors (same length)
 #   fp_threshold : numeric threshold; predicted positive iff yhat > fp_threshold
+#   nace2d : optional character vector (same length as y); when provided,
+#            computes sector-specific false-positive severity for NACE 19/24
 #
 # OUTPUT
 #   A named list with fields used by ppml.R and hurdle.R.
 ###############################################################################
 
-calc_metrics <- function(y, yhat, fp_threshold = 0) {
+calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL) {
   y <- as.numeric(y)
   yhat <- as.numeric(yhat)
-  
+
   ok <- is.finite(y) & is.finite(yhat)
   y <- y[ok]
   yhat <- yhat[ok]
+  if (!is.null(nace2d)) nace2d <- nace2d[ok]
   
   n <- length(y)
   if (n == 0) {
@@ -46,7 +55,11 @@ calc_metrics <- function(y, yhat, fp_threshold = 0) {
       mean_pred_nonemit = NA_real_, p50_pred_nonemit = NA_real_, p90_pred_nonemit = NA_real_,
       p95_pred_nonemit = NA_real_, p99_pred_nonemit = NA_real_,
       mapd_emitters = NA_real_,
-      TP = NA_integer_, FP = NA_integer_, TN = NA_integer_, FN = NA_integer_
+      TP = NA_integer_, FP = NA_integer_, TN = NA_integer_, FN = NA_integer_,
+      nonemit_p50_rank_19 = NA_real_, nonemit_p90_rank_19 = NA_real_,
+      nonemit_p99_rank_19 = NA_real_,
+      nonemit_p50_rank_24 = NA_real_, nonemit_p90_rank_24 = NA_real_,
+      nonemit_p99_rank_24 = NA_real_
     ))
   }
   
@@ -136,18 +149,54 @@ calc_metrics <- function(y, yhat, fp_threshold = 0) {
   }
   
   # -----------------------------
+  # Sector-specific false-positive severity (NACE 19 and 24)
+  # -----------------------------
+  nonemit_p50_rank_19 <- NA_real_
+  nonemit_p90_rank_19 <- NA_real_
+  nonemit_p99_rank_19 <- NA_real_
+  nonemit_p50_rank_24 <- NA_real_
+  nonemit_p90_rank_24 <- NA_real_
+  nonemit_p99_rank_24 <- NA_real_
+
+  if (!is.null(nace2d)) {
+    for (sec in c("19", "24")) {
+      in_sec        <- (nace2d == sec)
+      sec_emitters  <- (in_sec & is_emit_true)
+      sec_nonemit   <- (in_sec & is_nonemit_true)
+
+      if (sum(sec_emitters) >= 5 && sum(sec_nonemit) >= 1) {
+        emitter_ecdf <- stats::ecdf(y[sec_emitters])
+        q_ne <- stats::quantile(yhat[sec_nonemit],
+                                probs = c(0.50, 0.90, 0.99),
+                                na.rm = TRUE, names = FALSE, type = 7)
+        ranks <- emitter_ecdf(q_ne)
+
+        if (sec == "19") {
+          nonemit_p50_rank_19 <- ranks[1]
+          nonemit_p90_rank_19 <- ranks[2]
+          nonemit_p99_rank_19 <- ranks[3]
+        } else {
+          nonemit_p50_rank_24 <- ranks[1]
+          nonemit_p90_rank_24 <- ranks[2]
+          nonemit_p99_rank_24 <- ranks[3]
+        }
+      }
+    }
+  }
+
+  # -----------------------------
   # Return named list
   # -----------------------------
   list(
     n = n,
-    
+
     rmse = rmse,
     nrmse_mean = nrmse_mean,
     nrmse_sd = nrmse_sd,
     mae = mae,
     mape = mape,
     spearman = spearman,
-    
+
     # classification-style (threshold-based)
     fp_threshold = fp_threshold,
     fpr_nonemitters = fpr_nonemitters,
@@ -155,20 +204,28 @@ calc_metrics <- function(y, yhat, fp_threshold = 0) {
     ppv_precision = ppv_precision,
     f1 = f1,
     predicted_positive_rate = predicted_positive_rate,
-    
+
     # recommended extra diagnostic
     emitter_mass_captured = emitter_mass_captured,
-    
+
     # non-emitter prediction summaries
     mean_pred_nonemit = mean_pred_nonemit,
     p50_pred_nonemit  = q_nonemit[1],
     p90_pred_nonemit  = q_nonemit[2],
     p95_pred_nonemit  = q_nonemit[3],
     p99_pred_nonemit  = q_nonemit[4],
-    
+
+    # sector-specific false-positive severity (NACE 19 and 24)
+    nonemit_p50_rank_19 = nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = nonemit_p99_rank_24,
+
     # emitters-only intensity error summary
     mapd_emitters = mapd_emitters,
-    
+
     # confusion matrix counts
     TP = as.integer(TP),
     FP = as.integer(FP),

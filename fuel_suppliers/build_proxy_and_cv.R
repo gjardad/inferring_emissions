@@ -293,14 +293,14 @@ for (sp in ppml_specs) {
   if (sum(ok) == 0) next
 
   # Raw
-  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok])
+  m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok])
 
   # Calibrated
   yhat_cal <- rep(NA_real_, nrow(panel))
   yhat_cal[ok] <- calibrate_predictions(
     yhat_raw[ok], panel$nace2d[ok], panel$year[ok], syt
   )
-  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok])
+  m_cal <- calc_metrics(panel$y[ok], yhat_cal[ok], nace2d = panel$nace2d[ok])
 
   results[[paste0(nm, "_raw")]] <- data.frame(
     model = nm, variant = "raw", threshold = NA_real_,
@@ -309,6 +309,12 @@ for (sp in ppml_specs) {
     mapd_emitters = m_raw$mapd_emitters, spearman = m_raw$spearman,
     fpr_nonemitters = m_raw$fpr_nonemitters, tpr_emitters = m_raw$tpr_emitters,
     emitter_mass_captured = m_raw$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_raw$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_raw$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_raw$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_raw$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_raw$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_raw$nonemit_p99_rank_24,
     stringsAsFactors = FALSE
   )
   results[[paste0(nm, "_cal")]] <- data.frame(
@@ -318,6 +324,12 @@ for (sp in ppml_specs) {
     mapd_emitters = m_cal$mapd_emitters, spearman = m_cal$spearman,
     fpr_nonemitters = m_cal$fpr_nonemitters, tpr_emitters = m_cal$tpr_emitters,
     emitter_mass_captured = m_cal$emitter_mass_captured,
+    nonemit_p50_rank_19 = m_cal$nonemit_p50_rank_19,
+    nonemit_p90_rank_19 = m_cal$nonemit_p90_rank_19,
+    nonemit_p99_rank_19 = m_cal$nonemit_p99_rank_19,
+    nonemit_p50_rank_24 = m_cal$nonemit_p50_rank_24,
+    nonemit_p90_rank_24 = m_cal$nonemit_p90_rank_24,
+    nonemit_p99_rank_24 = m_cal$nonemit_p99_rank_24,
     stringsAsFactors = FALSE
   )
 }
@@ -345,13 +357,13 @@ for (sp in hurdle_specs) {
     yhat_hard <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
 
     # Raw metrics
-    m_raw <- calc_metrics(panel$y[ok], yhat_hard)
+    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok])
 
     # Calibrated
     yhat_cal <- calibrate_predictions(
       yhat_hard, panel$nace2d[ok], panel$year[ok], syt
     )
-    m_cal <- calc_metrics(panel$y[ok], yhat_cal)
+    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok])
 
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
@@ -377,6 +389,12 @@ for (sp in hurdle_specs) {
       fpr_nonemitters = best_m_raw$fpr_nonemitters,
       tpr_emitters = best_m_raw$tpr_emitters,
       emitter_mass_captured = best_m_raw$emitter_mass_captured,
+      nonemit_p50_rank_19 = best_m_raw$nonemit_p50_rank_19,
+      nonemit_p90_rank_19 = best_m_raw$nonemit_p90_rank_19,
+      nonemit_p99_rank_19 = best_m_raw$nonemit_p99_rank_19,
+      nonemit_p50_rank_24 = best_m_raw$nonemit_p50_rank_24,
+      nonemit_p90_rank_24 = best_m_raw$nonemit_p90_rank_24,
+      nonemit_p99_rank_24 = best_m_raw$nonemit_p99_rank_24,
       stringsAsFactors = FALSE
     )
   }
@@ -389,6 +407,12 @@ for (sp in hurdle_specs) {
       fpr_nonemitters = best_m_cal$fpr_nonemitters,
       tpr_emitters = best_m_cal$tpr_emitters,
       emitter_mass_captured = best_m_cal$emitter_mass_captured,
+      nonemit_p50_rank_19 = best_m_cal$nonemit_p50_rank_19,
+      nonemit_p90_rank_19 = best_m_cal$nonemit_p90_rank_19,
+      nonemit_p99_rank_19 = best_m_cal$nonemit_p99_rank_19,
+      nonemit_p50_rank_24 = best_m_cal$nonemit_p50_rank_24,
+      nonemit_p90_rank_24 = best_m_cal$nonemit_p90_rank_24,
+      nonemit_p99_rank_24 = best_m_cal$nonemit_p99_rank_24,
       stringsAsFactors = FALSE
     )
   }
