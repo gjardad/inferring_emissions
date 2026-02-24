@@ -536,6 +536,11 @@ for (sp in hurdle_specs) {
   cat(sprintf("  %s: best thr (raw)=%.2f, (cal)=%.2f, (clip)=%.2f\n",
               nm, best_thr_raw, best_thr_cal, best_thr_clip))
 
+  # Capture per-cell FP severity for hurdle_proxy_pooled
+  if (nm == "hurdle_proxy_pooled" && !is.null(best_m_clip)) {
+    hurdle_proxy_pooled_cell_fp <- best_m_clip$cell_fp_severity
+  }
+
   if (!is.null(best_m_raw)) {
     results[[paste0(nm, "_raw")]] <- data.frame(
       model = nm, variant = "raw", threshold = best_thr_raw,
@@ -738,6 +743,8 @@ if (sum(ok_losocv) > 0) {
     nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
   )
 
+  losocv_cell_fp <- m_losocv$cell_fp_severity
+
   cat("LOSOCV metrics (calibrated + clipped):\n")
   cat(sprintf("  nRMSE = %.3f, MAPD = %.3f, Spearman = %.3f\n",
               m_losocv$nrmse_sd, m_losocv$mapd_emitters, m_losocv$spearman))
@@ -785,6 +792,19 @@ if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
 out_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance.csv")
 write.csv(cv_performance, out_path, row.names = FALSE)
+
+# Save per-cell FP severity for hurdle_proxy_pooled (calibrated_clipped)
+# and LOSOCV so the distribution can be inspected (IQR, etc.)
+if (exists("hurdle_proxy_pooled_cell_fp")) {
+  write.csv(hurdle_proxy_pooled_cell_fp,
+            file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled.csv"),
+            row.names = FALSE)
+}
+if (exists("losocv_cell_fp")) {
+  write.csv(losocv_cell_fp,
+            file.path(OUTPUT_DIR, "cell_fp_severity_losocv.csv"),
+            row.names = FALSE)
+}
 
 cat("\n══════════════════════════════════════════════\n")
 cat("CV performance saved to:", out_path, "\n")

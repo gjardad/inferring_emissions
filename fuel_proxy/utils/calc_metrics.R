@@ -205,6 +205,8 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
   if (!is.null(nace2d) && !is.null(year)) {
     cell_p50_ranks <- numeric(0)
     cell_p99_ranks <- numeric(0)
+    cell_sectors   <- character(0)
+    cell_years     <- character(0)
 
     for (sec in c("19", "24")) {
       in_sec <- (nace2d == sec)
@@ -225,6 +227,8 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
 
         cell_p50_ranks <- c(cell_p50_ranks, cell_ecdf(q_ne[1]))
         cell_p99_ranks <- c(cell_p99_ranks, cell_ecdf(q_ne[2]))
+        cell_sectors   <- c(cell_sectors, sec)
+        cell_years     <- c(cell_years, as.character(yr))
       }
     }
 
@@ -232,6 +236,25 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       avg_nonemit_p50_rank <- mean(cell_p50_ranks)
       avg_nonemit_p99_rank <- mean(cell_p99_ranks)
     }
+  }
+
+  # Build per-cell detail data.frame (empty if no cells computed)
+  if (length(cell_p50_ranks) > 0) {
+    cell_fp_severity <- data.frame(
+      nace2d   = cell_sectors,
+      year     = cell_years,
+      p50_rank = cell_p50_ranks,
+      p99_rank = cell_p99_ranks,
+      stringsAsFactors = FALSE
+    )
+  } else {
+    cell_fp_severity <- data.frame(
+      nace2d   = character(0),
+      year     = character(0),
+      p50_rank = numeric(0),
+      p99_rank = numeric(0),
+      stringsAsFactors = FALSE
+    )
   }
 
   # -----------------------------
@@ -276,6 +299,9 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     # within-sector-year averaged FP severity (NACE 19 and 24)
     avg_nonemit_p50_rank = avg_nonemit_p50_rank,
     avg_nonemit_p99_rank = avg_nonemit_p99_rank,
+
+    # per-cell detail (data.frame with nace2d, year, p50_rank, p99_rank)
+    cell_fp_severity = cell_fp_severity,
 
     # emitters-only intensity error summary
     mapd_emitters = mapd_emitters,
