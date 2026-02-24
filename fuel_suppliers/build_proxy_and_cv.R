@@ -537,8 +537,13 @@ for (sp in hurdle_specs) {
               nm, best_thr_raw, best_thr_cal, best_thr_clip))
 
   # Capture per-cell FP severity for hurdle_proxy_pooled
-  if (nm == "hurdle_proxy_pooled" && !is.null(best_m_clip)) {
-    hurdle_proxy_pooled_cell_fp <- best_m_clip$cell_fp_severity
+  if (nm == "hurdle_proxy_pooled") {
+    if (!is.null(best_m_clip)) {
+      hurdle_proxy_pooled_cell_fp <- best_m_clip$cell_fp_severity
+    }
+    if (!is.null(best_m_raw)) {
+      hurdle_proxy_pooled_cell_fp_raw <- best_m_raw$cell_fp_severity
+    }
   }
 
   if (!is.null(best_m_raw)) {
@@ -731,6 +736,13 @@ if (sum(ok_losocv) > 0) {
     0
   )
 
+  # Raw predictions (for pre-calibration FP severity)
+  m_losocv_raw <- calc_metrics(
+    panel$y[ok_losocv], yhat_losocv_raw,
+    nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
+  )
+  losocv_cell_fp_raw <- m_losocv_raw$cell_fp_severity
+
   # Joint calibration + cap
   yhat_losocv_cap <- calibrate_with_cap(
     yhat_losocv_raw, panel$emit[ok_losocv], panel$y[ok_losocv],
@@ -793,16 +805,26 @@ if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 out_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance.csv")
 write.csv(cv_performance, out_path, row.names = FALSE)
 
-# Save per-cell FP severity for hurdle_proxy_pooled (calibrated_clipped)
-# and LOSOCV so the distribution can be inspected (IQR, etc.)
+# Save per-cell FP severity: post-cap and raw (pre-calibration, pre-cap)
+# for hurdle_proxy_pooled and LOSOCV
 if (exists("hurdle_proxy_pooled_cell_fp")) {
   write.csv(hurdle_proxy_pooled_cell_fp,
             file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled.csv"),
             row.names = FALSE)
 }
+if (exists("hurdle_proxy_pooled_cell_fp_raw")) {
+  write.csv(hurdle_proxy_pooled_cell_fp_raw,
+            file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_raw.csv"),
+            row.names = FALSE)
+}
 if (exists("losocv_cell_fp")) {
   write.csv(losocv_cell_fp,
             file.path(OUTPUT_DIR, "cell_fp_severity_losocv.csv"),
+            row.names = FALSE)
+}
+if (exists("losocv_cell_fp_raw")) {
+  write.csv(losocv_cell_fp_raw,
+            file.path(OUTPUT_DIR, "cell_fp_severity_losocv_raw.csv"),
             row.names = FALSE)
 }
 
