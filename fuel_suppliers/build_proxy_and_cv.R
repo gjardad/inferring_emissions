@@ -225,7 +225,7 @@ calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
     # If no emitters or no non-emitters, just do proportional calibration
     has_cap <- any(is_emi) && any(is_non)
     if (has_cap) {
-      cap <- min(df$y[in_cell[is_emi]], na.rm = TRUE)
+      cap <- min(df$y[in_cell[is_emi]], na.rm = TRUE) * (1 - 1e-10)
       if (!is.finite(cap) || cap <= 0) has_cap <- FALSE
     }
 
