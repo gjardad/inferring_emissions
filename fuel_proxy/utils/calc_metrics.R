@@ -174,7 +174,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       sec_emitters  <- (in_sec & is_emit_true)
       sec_nonemit   <- (in_sec & is_nonemit_true)
 
-      if (sum(sec_emitters) >= 5 && sum(sec_nonemit) >= 1) {
+      if (sum(sec_emitters) >= 3 && sum(sec_nonemit) >= 1) {
         emitter_ecdf <- stats::ecdf(y[sec_emitters])
         q_ne <- stats::quantile(yhat[sec_nonemit],
                                 probs = c(0.50, 0.90, 0.99),
@@ -217,7 +217,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
         cell_emit    <- (in_cell & is_emit_true)
         cell_nonemit <- (in_cell & is_nonemit_true)
 
-        if (sum(cell_emit) < 5 || sum(cell_nonemit) < 1) next
+        if (sum(cell_emit) < 3 || sum(cell_nonemit) < 1) next
 
         cell_ecdf <- stats::ecdf(y[cell_emit])
         ne_preds  <- yhat[cell_nonemit]
