@@ -69,7 +69,9 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       nonemit_p99_rank_19 = NA_real_,
       nonemit_p50_rank_24 = NA_real_, nonemit_p90_rank_24 = NA_real_,
       nonemit_p99_rank_24 = NA_real_,
-      avg_nonemit_p50_rank = NA_real_, avg_nonemit_p99_rank = NA_real_
+      avg_nonemit_p50_rank = NA_real_, avg_nonemit_p99_rank = NA_real_,
+      within_sy_rho_med = NA_real_, within_sy_rho_min = NA_real_,
+      within_sy_rho_max = NA_real_
     ))
   }
   
@@ -238,6 +240,47 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     }
   }
 
+  # -----------------------------
+  # Within-sector-year Spearman rho
+  # For each (sector, year) cell across ALL sectors, compute rank correlation
+  # between y and yhat. Requires >=5 firms with variation in y.
+  # Returns median, min, max across cells.
+  # -----------------------------
+  within_sy_rho_med <- NA_real_
+  within_sy_rho_min <- NA_real_
+  within_sy_rho_max <- NA_real_
+
+  if (!is.null(nace2d) && !is.null(year)) {
+    sy_rhos <- numeric(0)
+
+    all_secs <- sort(unique(nace2d))
+    for (sec in all_secs) {
+      in_sec <- (nace2d == sec)
+      yrs <- sort(unique(year[in_sec]))
+
+      for (yr in yrs) {
+        in_cell <- (in_sec & year == yr)
+        y_cell    <- y[in_cell]
+        yhat_cell <- yhat[in_cell]
+
+        # Need >=5 firms and variation in both y and yhat
+        if (sum(in_cell) < 5) next
+        if (sd(y_cell) == 0 || sd(yhat_cell) == 0) next
+
+        rho_cell <- suppressWarnings(
+          stats::cor(y_cell, yhat_cell, method = "spearman", use = "complete.obs")
+        )
+        if (is.finite(rho_cell)) sy_rhos <- c(sy_rhos, rho_cell)
+      }
+    }
+
+    if (length(sy_rhos) > 0) {
+      within_sy_rho_med <- median(sy_rhos)
+      within_sy_rho_min <- min(sy_rhos)
+      within_sy_rho_max <- max(sy_rhos)
+    }
+  }
+
   # Build per-cell detail data.frame (empty if no cells computed)
   if (length(cell_p50_ranks) > 0) {
     cell_fp_severity <- data.frame(
@@ -299,6 +342,11 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     # within-sector-year averaged FP severity (NACE 19 and 24)
     avg_nonemit_p50_rank = avg_nonemit_p50_rank,
     avg_nonemit_p99_rank = avg_nonemit_p99_rank,
+
+    # within-sector-year Spearman rho (all sectors)
+    within_sy_rho_med = within_sy_rho_med,
+    within_sy_rho_min = within_sy_rho_min,
+    within_sy_rho_max = within_sy_rho_max,
 
     # per-cell detail (data.frame with nace2d, year, p50_rank, p99_rank)
     cell_fp_severity = cell_fp_severity,

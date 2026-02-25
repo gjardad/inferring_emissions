@@ -111,6 +111,12 @@ fmt_pct_minmax <- function(vals) {
   sprintf("{\\scriptsize [%d, %d]}", round(min(vals) * 100), round(max(vals) * 100))
 }
 
+# Within-sector-year rho: format [min, max] from CSV columns
+fmt_rho_minmax <- function(rmin, rmax) {
+  if (is.na(rmin) || is.na(rmax)) return("")
+  sprintf("{\\scriptsize [%.2f, %.2f]}", rmin, rmax)
+}
+
 
 # ── Map model names to per-cell FP severity data ─────────────────────────
 cell_fp_map <- list(
@@ -122,13 +128,14 @@ cell_fp_map <- list(
 
 # ── Build LaTeX ───────────────────────────────────────────────────────────
 tex <- c(
-  "\\begin{tabular}{l ccc cccc}",
+  "\\begin{tabular}{l cccc cccc}",
   "\\toprule",
-  " & \\multicolumn{3}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
-  "\\cmidrule(lr){2-4} \\cmidrule(lr){5-8}",
-  "Model & nRMSE & MAPD & $\\rho$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
+  " & \\multicolumn{4}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
+  "\\cmidrule(lr){2-5} \\cmidrule(lr){6-9}",
+  "Model & nRMSE & MAPD & $\\rho$ & $\\rho_{s,t}$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
+  " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) \\\\",
   "\\midrule",
-  "\\multicolumn{8}{l}{\\textit{Panel A: Leave-firms-out cross-validation}} \\\\",
+  "\\multicolumn{9}{l}{\\textit{Panel A: Leave-firms-out cross-validation}} \\\\",
   "\\addlinespace"
 )
 
@@ -141,7 +148,7 @@ for (i in seq_along(row_specs)) {
     tex <- c(tex,
       "\\addlinespace",
       "\\midrule",
-      "\\multicolumn{8}{l}{\\textit{Panel B: Leave-one-sector-out cross-validation}} \\\\",
+      "\\multicolumn{9}{l}{\\textit{Panel B: Leave-one-sector-out cross-validation}} \\\\",
       "\\addlinespace"
     )
   }
@@ -153,13 +160,14 @@ for (i in seq_along(row_specs)) {
     if (!is.null(cf) && nrow(cf) > 0) cell_fp <- cf
   }
 
-  # Prediction accuracy columns (always shown)
+  # Prediction accuracy columns
   if (!is.null(r)) {
-    nrmse <- fmt3(r$nRMSE)
-    mapd  <- fmt3(r$mapd_emitters)
-    rho   <- fmt3(r$spearman)
+    nrmse  <- fmt3(r$nRMSE)
+    mapd   <- fmt3(r$mapd_emitters)
+    rho    <- fmt3(r$spearman)
+    rho_w  <- fmt3(r$within_sy_rho_med)
   } else {
-    nrmse <- "---"; mapd <- "---"; rho <- "---"
+    nrmse <- "---"; mapd <- "---"; rho <- "---"; rho_w <- "---"
   }
 
   # Extensive margin columns
@@ -178,24 +186,35 @@ for (i in seq_along(row_specs)) {
     fpr <- "---"; tpr <- "---"; p50 <- "---"; p99 <- "---"
   }
 
-  if (!is.null(cell_fp)) {
-    # Two-row block: first row with \multirow for all columns except p50/p99
+  # Every row is a two-row block (within-sector rho always has [min, max])
+  has_rho_range <- !is.null(r) && !is.na(r$within_sy_rho_min) && !is.na(r$within_sy_rho_max)
+
+  if (has_rho_range) {
+    rho_w_range <- fmt_rho_minmax(r$within_sy_rho_min, r$within_sy_rho_max)
+
+    # Multirow columns: label, nRMSE, MAPD, rho, FPR, TPR
+    # Non-multirow columns: rho_w (median + [min,max]), p50, p99
+    if (!is.null(cell_fp)) {
+      p50_range <- fmt_pct_minmax(cell_fp$p50_rank)
+      p99_range <- fmt_pct_minmax(cell_fp$p99_rank)
+    } else {
+      p50_range <- ""
+      p99_range <- ""
+    }
+
     line1 <- sprintf(
-      "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & %s \\\\",
-      spec$label, nrmse, mapd, rho, fpr, tpr, p50, p99
+      "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & %s \\\\",
+      spec$label, nrmse, mapd, rho, rho_w, fpr, tpr, p50, p99
     )
-    # Second row: only [min, max] in p50 and p99 columns
-    p50_range <- fmt_pct_minmax(cell_fp$p50_rank)
-    p99_range <- fmt_pct_minmax(cell_fp$p99_rank)
     line2 <- sprintf(
-      " & & & & & & %s & %s \\\\",
-      p50_range, p99_range
+      " & & & & %s & & & %s & %s \\\\",
+      rho_w_range, p50_range, p99_range
     )
     tex <- c(tex, line1, line2)
   } else {
     line <- sprintf(
-      "%s & %s & %s & %s & %s & %s & %s & %s \\\\",
-      spec$label, nrmse, mapd, rho, fpr, tpr, p50, p99
+      "%s & %s & %s & %s & %s & %s & %s & %s & %s \\\\",
+      spec$label, nrmse, mapd, rho, rho_w, fpr, tpr, p50, p99
     )
     tex <- c(tex, line)
   }
