@@ -51,13 +51,14 @@ if (!file.exists(cv_path)) stop("CV results not found: ", cv_path)
 
 cv <- read.csv(cv_path, stringsAsFactors = FALSE)
 
-# Load per-cell FP severity for hurdle raw (pre-calibration, pre-cap)
-cell_fp_raw_path <- file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_raw.csv")
-if (file.exists(cell_fp_raw_path)) {
-  cell_fp_raw <- read.csv(cell_fp_raw_path, stringsAsFactors = FALSE)
-} else {
-  cell_fp_raw <- NULL
+# Load per-cell FP severity CSVs (raw, pre-calibration, pre-cap)
+load_cell_fp <- function(fname) {
+  p <- file.path(OUTPUT_DIR, fname)
+  if (file.exists(p)) read.csv(p, stringsAsFactors = FALSE) else NULL
 }
+cell_fp_benchmark_raw   <- load_cell_fp("cell_fp_severity_benchmark_raw.csv")
+cell_fp_proxy_pooled_raw <- load_cell_fp("cell_fp_severity_proxy_pooled_raw.csv")
+cell_fp_hurdle_raw      <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_raw.csv")
 
 
 # ===========================================================================
@@ -67,8 +68,8 @@ if (file.exists(cell_fp_raw_path)) {
 # ── Define the 5 rows ─────────────────────────────────────────────────────
 # Each row = (model key in CSV, variant, display label, show extensive margin?)
 row_specs <- list(
-  list(model = "benchmark",                 variant = "raw",                label = "PPML benchmark",                show_ext = FALSE),
-  list(model = "proxy_pooled",              variant = "raw",                label = "\\quad + fuel-supply proxy",     show_ext = FALSE),
+  list(model = "benchmark",                 variant = "raw",                label = "PPML benchmark",                show_ext = TRUE),
+  list(model = "proxy_pooled",              variant = "raw",                label = "\\quad + fuel-supply proxy",     show_ext = TRUE),
   list(model = "hurdle_proxy_pooled",       variant = "raw",                label = "Hurdle + proxy",                show_ext = TRUE),
   list(model = "hurdle_proxy_pooled",       variant = "calibrated_clipped", label = "\\quad + calibration \\& clip",  show_ext = TRUE),
   list(model = "losocv_hurdle_proxy_pooled", variant = "calibrated_clipped", label = "Leave-one-sector-out",        show_ext = TRUE)
@@ -111,13 +112,23 @@ tex <- c(
   "\\midrule"
 )
 
+# Map model names to per-cell FP severity data
+cell_fp_map <- list(
+  benchmark            = cell_fp_benchmark_raw,
+  proxy_pooled         = cell_fp_proxy_pooled_raw,
+  hurdle_proxy_pooled  = cell_fp_hurdle_raw
+)
+
 for (i in seq_along(row_specs)) {
   spec <- row_specs[[i]]
   r <- rows[[i]]
 
-  # Check if this is the hurdle raw row with per-cell data available
-  is_hurdle_raw <- (spec$model == "hurdle_proxy_pooled" && spec$variant == "raw" &&
-                    !is.null(cell_fp_raw) && nrow(cell_fp_raw) > 0)
+  # Look up per-cell data for raw rows
+  cell_fp <- NULL
+  if (spec$variant == "raw" && spec$model %in% names(cell_fp_map)) {
+    cf <- cell_fp_map[[spec$model]]
+    if (!is.null(cf) && nrow(cf) > 0) cell_fp <- cf
+  }
 
   # Prediction accuracy columns (always shown)
   if (!is.null(r)) {
@@ -133,9 +144,9 @@ for (i in seq_along(row_specs)) {
     fpr <- fmt3(r$fpr_nonemitters)
     tpr <- fmt3(r$tpr_emitters)
 
-    if (is_hurdle_raw) {
-      p50 <- fmt_pct_med(cell_fp_raw$p50_rank)
-      p99 <- fmt_pct_med(cell_fp_raw$p99_rank)
+    if (!is.null(cell_fp)) {
+      p50 <- fmt_pct_med(cell_fp$p50_rank)
+      p99 <- fmt_pct_med(cell_fp$p99_rank)
     } else {
       p50 <- fmt_pct(r$avg_nonemit_p50_rank)
       p99 <- fmt_pct(r$avg_nonemit_p99_rank)
@@ -144,15 +155,15 @@ for (i in seq_along(row_specs)) {
     fpr <- "---"; tpr <- "---"; p50 <- "---"; p99 <- "---"
   }
 
-  if (is_hurdle_raw) {
+  if (!is.null(cell_fp)) {
     # Two-row block: first row with \multirow for all columns except p50/p99
     line1 <- sprintf(
       "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & %s \\\\",
       spec$label, nrmse, mapd, rho, fpr, tpr, p50, p99
     )
     # Second row: only [min, max] in p50 and p99 columns
-    p50_range <- fmt_pct_minmax(cell_fp_raw$p50_rank)
-    p99_range <- fmt_pct_minmax(cell_fp_raw$p99_rank)
+    p50_range <- fmt_pct_minmax(cell_fp$p50_rank)
+    p99_range <- fmt_pct_minmax(cell_fp$p99_rank)
     line2 <- sprintf(
       " & & & & & & %s & %s \\\\",
       p50_range, p99_range
