@@ -291,12 +291,12 @@ ppml_specs <- list(
   ),
   list(
     name    = "proxy_pooled",
-    formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+    formula = y ~ log_revenue + asinh(proxy_pooled) +
                   year_f + s(nace2d_f, bs = "re")
   ),
   list(
     name    = "proxy_within_buyer",
-    formula = y ~ log_revenue + I(proxy_fe > 0) + asinh(proxy_fe) +
+    formula = y ~ log_revenue + asinh(proxy_fe) +
                   year_f + s(nace2d_f, bs = "re")
   )
 )
@@ -310,16 +310,16 @@ hurdle_specs <- list(
   ),
   list(
     name        = "hurdle_proxy_pooled",
-    ext_formula = emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+    ext_formula = emit ~ log_revenue + asinh(proxy_pooled) +
                          year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+    int_formula = y ~ log_revenue + asinh(proxy_pooled) +
                        year_f + s(nace2d_f, bs = "re")
   ),
   list(
     name        = "hurdle_proxy_within_buyer",
-    ext_formula = emit ~ log_revenue + I(proxy_fe > 0) + asinh(proxy_fe) +
+    ext_formula = emit ~ log_revenue + asinh(proxy_fe) +
                          year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + I(proxy_fe > 0) + asinh(proxy_fe) +
+    int_formula = y ~ log_revenue + asinh(proxy_fe) +
                        year_f + s(nace2d_f, bs = "re")
   )
 )
@@ -638,9 +638,9 @@ all_nace2d_levels <- levels(panel$nace2d_f)
 all_year_levels   <- levels(panel$year_f)
 
 # (c) LOSOCV hurdle formulas (same as hurdle_proxy_pooled)
-losocv_ext_formula <- emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+losocv_ext_formula <- emit ~ log_revenue + asinh(proxy_pooled) +
                              year_f + s(nace2d_f, bs = "re")
-losocv_int_formula <- y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+losocv_int_formula <- y ~ log_revenue + asinh(proxy_pooled) +
                           year_f + s(nace2d_f, bs = "re")
 
 # Pre-allocate prediction columns
