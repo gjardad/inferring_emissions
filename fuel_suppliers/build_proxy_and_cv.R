@@ -446,6 +446,9 @@ for (sp in ppml_specs) {
     nonemit_p99_rank_24 = m_raw$nonemit_p99_rank_24,
     avg_nonemit_p50_rank = m_raw$avg_nonemit_p50_rank,
     avg_nonemit_p99_rank = m_raw$avg_nonemit_p99_rank,
+    within_sy_rho_med = m_raw$within_sy_rho_med,
+    within_sy_rho_min = m_raw$within_sy_rho_min,
+    within_sy_rho_max = m_raw$within_sy_rho_max,
     stringsAsFactors = FALSE
   )
   results[[paste0(nm, "_cal")]] <- data.frame(
@@ -463,6 +466,9 @@ for (sp in ppml_specs) {
     nonemit_p99_rank_24 = m_cal$nonemit_p99_rank_24,
     avg_nonemit_p50_rank = m_cal$avg_nonemit_p50_rank,
     avg_nonemit_p99_rank = m_cal$avg_nonemit_p99_rank,
+    within_sy_rho_med = m_cal$within_sy_rho_med,
+    within_sy_rho_min = m_cal$within_sy_rho_min,
+    within_sy_rho_max = m_cal$within_sy_rho_max,
     stringsAsFactors = FALSE
   )
 
@@ -488,6 +494,9 @@ for (sp in ppml_specs) {
     nonemit_p99_rank_24 = m_cap$nonemit_p99_rank_24,
     avg_nonemit_p50_rank = m_cap$avg_nonemit_p50_rank,
     avg_nonemit_p99_rank = m_cap$avg_nonemit_p99_rank,
+    within_sy_rho_med = m_cap$within_sy_rho_med,
+    within_sy_rho_min = m_cap$within_sy_rho_min,
+    within_sy_rho_max = m_cap$within_sy_rho_max,
     stringsAsFactors = FALSE
   )
 }
@@ -567,6 +576,9 @@ for (sp in hurdle_specs) {
       nonemit_p99_rank_24 = best_m_raw$nonemit_p99_rank_24,
       avg_nonemit_p50_rank = best_m_raw$avg_nonemit_p50_rank,
       avg_nonemit_p99_rank = best_m_raw$avg_nonemit_p99_rank,
+      within_sy_rho_med = best_m_raw$within_sy_rho_med,
+      within_sy_rho_min = best_m_raw$within_sy_rho_min,
+      within_sy_rho_max = best_m_raw$within_sy_rho_max,
       stringsAsFactors = FALSE
     )
   }
@@ -587,6 +599,9 @@ for (sp in hurdle_specs) {
       nonemit_p99_rank_24 = best_m_cal$nonemit_p99_rank_24,
       avg_nonemit_p50_rank = best_m_cal$avg_nonemit_p50_rank,
       avg_nonemit_p99_rank = best_m_cal$avg_nonemit_p99_rank,
+      within_sy_rho_med = best_m_cal$within_sy_rho_med,
+      within_sy_rho_min = best_m_cal$within_sy_rho_min,
+      within_sy_rho_max = best_m_cal$within_sy_rho_max,
       stringsAsFactors = FALSE
     )
   }
@@ -607,6 +622,9 @@ for (sp in hurdle_specs) {
       nonemit_p99_rank_24 = best_m_clip$nonemit_p99_rank_24,
       avg_nonemit_p50_rank = best_m_clip$avg_nonemit_p50_rank,
       avg_nonemit_p99_rank = best_m_clip$avg_nonemit_p99_rank,
+      within_sy_rho_med = best_m_clip$within_sy_rho_med,
+      within_sy_rho_min = best_m_clip$within_sy_rho_min,
+      within_sy_rho_max = best_m_clip$within_sy_rho_max,
       stringsAsFactors = FALSE
     )
   }
@@ -792,6 +810,9 @@ for (losocv_sp in losocv_specs) {
       nonemit_p99_rank_24 = this_m$nonemit_p99_rank_24,
       avg_nonemit_p50_rank = this_m$avg_nonemit_p50_rank,
       avg_nonemit_p99_rank = this_m$avg_nonemit_p99_rank,
+      within_sy_rho_med = this_m$within_sy_rho_med,
+      within_sy_rho_min = this_m$within_sy_rho_min,
+      within_sy_rho_max = this_m$within_sy_rho_max,
       stringsAsFactors = FALSE
     )
     cv_performance <- bind_rows(cv_performance, losocv_row)
