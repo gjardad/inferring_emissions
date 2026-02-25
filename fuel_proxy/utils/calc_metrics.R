@@ -71,7 +71,12 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       nonemit_p99_rank_24 = NA_real_,
       avg_nonemit_p50_rank = NA_real_, avg_nonemit_p99_rank = NA_real_,
       within_sy_rho_med = NA_real_, within_sy_rho_min = NA_real_,
-      within_sy_rho_max = NA_real_
+      within_sy_rho_max = NA_real_,
+      within_sy_rho_detail = data.frame(
+        nace2d = character(0), year = integer(0),
+        rho = numeric(0), n_firms = integer(0),
+        stringsAsFactors = FALSE
+      )
     ))
   }
   
@@ -250,9 +255,12 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
   within_sy_rho_min <- NA_real_
   within_sy_rho_max <- NA_real_
 
-  if (!is.null(nace2d) && !is.null(year)) {
-    sy_rhos <- numeric(0)
+  sy_detail_secs  <- character(0)
+  sy_detail_years <- integer(0)
+  sy_detail_rhos  <- numeric(0)
+  sy_detail_n     <- integer(0)
 
+  if (!is.null(nace2d) && !is.null(year)) {
     all_secs <- sort(unique(nace2d))
     for (sec in all_secs) {
       in_sec <- (nace2d == sec)
@@ -270,16 +278,29 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
         rho_cell <- suppressWarnings(
           stats::cor(y_cell, yhat_cell, method = "spearman", use = "complete.obs")
         )
-        if (is.finite(rho_cell)) sy_rhos <- c(sy_rhos, rho_cell)
+        if (is.finite(rho_cell)) {
+          sy_detail_secs  <- c(sy_detail_secs, sec)
+          sy_detail_years <- c(sy_detail_years, yr)
+          sy_detail_rhos  <- c(sy_detail_rhos, rho_cell)
+          sy_detail_n     <- c(sy_detail_n, sum(in_cell))
+        }
       }
     }
 
-    if (length(sy_rhos) > 0) {
-      within_sy_rho_med <- median(sy_rhos)
-      within_sy_rho_min <- min(sy_rhos)
-      within_sy_rho_max <- max(sy_rhos)
+    if (length(sy_detail_rhos) > 0) {
+      within_sy_rho_med <- median(sy_detail_rhos)
+      within_sy_rho_min <- min(sy_detail_rhos)
+      within_sy_rho_max <- max(sy_detail_rhos)
     }
   }
+
+  within_sy_rho_detail <- data.frame(
+    nace2d = sy_detail_secs,
+    year   = sy_detail_years,
+    rho    = sy_detail_rhos,
+    n_firms = sy_detail_n,
+    stringsAsFactors = FALSE
+  )
 
   # Build per-cell detail data.frame (empty if no cells computed)
   if (length(cell_p50_ranks) > 0) {
@@ -350,6 +371,9 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
 
     # per-cell detail (data.frame with nace2d, year, p50_rank, p99_rank)
     cell_fp_severity = cell_fp_severity,
+
+    # per-cell within-sector-year rho detail (data.frame with nace2d, year, rho, n_firms)
+    within_sy_rho_detail = within_sy_rho_detail,
 
     # emitters-only intensity error summary
     mapd_emitters = mapd_emitters,
