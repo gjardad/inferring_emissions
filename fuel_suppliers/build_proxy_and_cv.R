@@ -407,6 +407,13 @@ for (sp in ppml_specs) {
   # Raw
   m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
+  # Capture per-cell FP severity for benchmark and proxy_pooled raw
+  if (nm == "benchmark") {
+    benchmark_cell_fp_raw <- m_raw$cell_fp_severity
+  } else if (nm == "proxy_pooled") {
+    proxy_pooled_cell_fp_raw <- m_raw$cell_fp_severity
+  }
+
   # Calibrated
   yhat_cal <- rep(NA_real_, nrow(panel))
   yhat_cal[ok] <- calibrate_predictions(
@@ -805,8 +812,17 @@ if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 out_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance.csv")
 write.csv(cv_performance, out_path, row.names = FALSE)
 
-# Save per-cell FP severity: post-cap and raw (pre-calibration, pre-cap)
-# for hurdle_proxy_pooled and LOSOCV
+# Save per-cell FP severity CSVs
+if (exists("benchmark_cell_fp_raw")) {
+  write.csv(benchmark_cell_fp_raw,
+            file.path(OUTPUT_DIR, "cell_fp_severity_benchmark_raw.csv"),
+            row.names = FALSE)
+}
+if (exists("proxy_pooled_cell_fp_raw")) {
+  write.csv(proxy_pooled_cell_fp_raw,
+            file.path(OUTPUT_DIR, "cell_fp_severity_proxy_pooled_raw.csv"),
+            row.names = FALSE)
+}
 if (exists("hurdle_proxy_pooled_cell_fp")) {
   write.csv(hurdle_proxy_pooled_cell_fp,
             file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled.csv"),
