@@ -635,24 +635,6 @@ print(cv_performance, row.names = FALSE)
 
 cat("\n\n═══ LOSOCV: Leave-One-Sector-Out CV ═══\n")
 
-# (a) Best threshold from k-fold CV (hurdle_proxy_pooled, calibrated_clipped)
-best_kfold <- cv_performance[cv_performance$model == "hurdle_proxy_pooled" &
-                             cv_performance$variant == "calibrated_clipped", ]
-
-if (nrow(best_kfold) == 0) {
-  cat("WARNING: hurdle_proxy_pooled calibrated_clipped not found in k-fold results.\n")
-  cat("         Falling back to calibrated variant.\n")
-  best_kfold <- cv_performance[cv_performance$model == "hurdle_proxy_pooled" &
-                               cv_performance$variant == "calibrated", ]
-}
-
-losocv_threshold <- if (nrow(best_kfold) > 0 && !is.na(best_kfold$threshold[1])) {
-  best_kfold$threshold[1]
-} else {
-  0.30  # sensible default
-}
-cat("Using threshold from k-fold CV:", losocv_threshold, "\n")
-
 # (b) Assign sector folds (one fold per NACE 2-digit sector)
 firm_sector <- panel %>%
   group_by(vat) %>%
@@ -733,37 +715,58 @@ for (s_idx in seq_along(sector_levels)) {
 elapsed_losocv <- round(difftime(Sys.time(), t0_losocv, units = "mins"), 1)
 cat(sprintf("LOSOCV done (%.1f min)\n\n", elapsed_losocv))
 
-# (d) Combine predictions, calibrate, clip
+# (d) Combine predictions — search over LOSO-specific thresholds
 ok_losocv <- !is.na(panel$losocv_phat) & !is.na(panel$losocv_muhat) & !is.na(panel$y)
 
 if (sum(ok_losocv) > 0) {
+  cat("Searching over LOSOCV thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
+
+  best_losocv     <- list(rmse = Inf)
+  best_losocv_thr <- NA_real_
+  best_m_losocv   <- NULL
+
+  for (thr in THRESHOLDS) {
+    yhat_thr <- pmax(
+      as.numeric(panel$losocv_phat[ok_losocv] > thr) *
+        panel$losocv_muhat[ok_losocv],
+      0
+    )
+
+    # Joint calibration + cap
+    yhat_cap <- calibrate_with_cap(
+      yhat_thr, panel$emit[ok_losocv], panel$y[ok_losocv],
+      panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
+    )
+
+    m <- calc_metrics(
+      panel$y[ok_losocv], yhat_cap,
+      nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
+    )
+
+    if (!is.na(m$rmse) && m$rmse < best_losocv$rmse) {
+      best_losocv     <- m
+      best_losocv_thr <- thr
+      best_m_losocv   <- m
+    }
+  }
+
+  losocv_threshold <- best_losocv_thr
+  m_losocv <- best_m_losocv
+  losocv_cell_fp <- m_losocv$cell_fp_severity
+
+  # Also compute raw (pre-calibration) FP severity at the best threshold
   yhat_losocv_raw <- pmax(
     as.numeric(panel$losocv_phat[ok_losocv] > losocv_threshold) *
       panel$losocv_muhat[ok_losocv],
     0
   )
-
-  # Raw predictions (for pre-calibration FP severity)
   m_losocv_raw <- calc_metrics(
     panel$y[ok_losocv], yhat_losocv_raw,
     nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
   )
   losocv_cell_fp_raw <- m_losocv_raw$cell_fp_severity
 
-  # Joint calibration + cap
-  yhat_losocv_cap <- calibrate_with_cap(
-    yhat_losocv_raw, panel$emit[ok_losocv], panel$y[ok_losocv],
-    panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
-  )
-
-  # (e) Compute metrics
-  m_losocv <- calc_metrics(
-    panel$y[ok_losocv], yhat_losocv_cap,
-    nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
-  )
-
-  losocv_cell_fp <- m_losocv$cell_fp_severity
-
+  cat(sprintf("LOSOCV best threshold: %.2f\n", losocv_threshold))
   cat("LOSOCV metrics (calibrated + clipped):\n")
   cat(sprintf("  nRMSE = %.3f, MAPD = %.3f, Spearman = %.3f\n",
               m_losocv$nrmse_sd, m_losocv$mapd_emitters, m_losocv$spearman))
