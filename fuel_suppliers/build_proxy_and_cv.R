@@ -230,8 +230,11 @@ calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
     }
 
     # ── Iterative proportional fitting with cap ──
+    # Firms with yhat = 0 (e.g. zeroed by hurdle threshold) stay at 0
+    # and do not participate in the allocation.
     x       <- rep(0, length(in_cell))
-    active  <- seq_along(in_cell)       # indices within cell (1..n_cell)
+    active  <- which(raw > 0)           # only firms with positive predictions
+    if (length(active) == 0) active <- seq_along(in_cell)  # fallback: all firms
     fixed   <- integer(0)
     E_rem   <- E_total
 
@@ -493,55 +496,37 @@ for (sp in hurdle_specs) {
   ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
   if (sum(ok) == 0) next
 
+  # Step 1: find best threshold on raw predictions
   best_raw  <- list(rmse = Inf)
-  best_cal  <- list(rmse = Inf)
-  best_clip <- list(rmse = Inf)
-  best_thr_raw  <- NA_real_
-  best_thr_cal  <- NA_real_
-  best_thr_clip <- NA_real_
-  best_m_raw  <- NULL
-  best_m_cal  <- NULL
-  best_m_clip <- NULL
+  best_thr_raw <- NA_real_
+  best_m_raw   <- NULL
 
   for (thr in THRESHOLDS) {
-    # Hard threshold combination
     yhat_hard <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
-
-    # Raw metrics
     m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-    # Calibrated
-    yhat_cal <- calibrate_predictions(
-      yhat_hard, panel$nace2d[ok], panel$year[ok], syt
-    )
-    m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-    # Joint calibration + cap
-    yhat_cap <- calibrate_with_cap(
-      yhat_hard, panel$emit[ok], panel$y[ok],
-      panel$nace2d[ok], panel$year[ok], syt
-    )
-    m_clip <- calc_metrics(panel$y[ok], yhat_cap, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
     if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
       best_raw <- m_raw
       best_thr_raw <- thr
       best_m_raw <- m_raw
     }
-    if (!is.na(m_cal$rmse) && m_cal$rmse < best_cal$rmse) {
-      best_cal <- m_cal
-      best_thr_cal <- thr
-      best_m_cal <- m_cal
-    }
-    if (!is.na(m_clip$rmse) && m_clip$rmse < best_clip$rmse) {
-      best_clip <- m_clip
-      best_thr_clip <- thr
-      best_m_clip <- m_clip
-    }
   }
 
-  cat(sprintf("  %s: best thr (raw)=%.2f, (cal)=%.2f, (clip)=%.2f\n",
-              nm, best_thr_raw, best_thr_cal, best_thr_clip))
+  # Step 2: apply calibration + cap at the raw-optimal threshold
+  yhat_hard <- pmax(as.numeric(phat[ok] > best_thr_raw) * muhat[ok], 0)
+
+  yhat_cal <- calibrate_predictions(
+    yhat_hard, panel$nace2d[ok], panel$year[ok], syt
+  )
+  best_m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+  yhat_cap <- calibrate_with_cap(
+    yhat_hard, panel$emit[ok], panel$y[ok],
+    panel$nace2d[ok], panel$year[ok], syt
+  )
+  best_m_clip <- calc_metrics(panel$y[ok], yhat_cap, nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+  cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr_raw))
 
   # Capture per-cell FP severity for hurdle_proxy_pooled
   if (nm == "hurdle_proxy_pooled") {
@@ -575,7 +560,7 @@ for (sp in hurdle_specs) {
   }
   if (!is.null(best_m_cal)) {
     results[[paste0(nm, "_cal")]] <- data.frame(
-      model = nm, variant = "calibrated", threshold = best_thr_cal,
+      model = nm, variant = "calibrated", threshold = best_thr_raw,
       n = best_m_cal$n, nRMSE = best_m_cal$nrmse_sd,
       rmse = best_m_cal$rmse, mae = best_m_cal$mae,
       mapd_emitters = best_m_cal$mapd_emitters, spearman = best_m_cal$spearman,
@@ -595,7 +580,7 @@ for (sp in hurdle_specs) {
   }
   if (!is.null(best_m_clip)) {
     results[[paste0(nm, "_clip")]] <- data.frame(
-      model = nm, variant = "calibrated_clipped", threshold = best_thr_clip,
+      model = nm, variant = "calibrated_clipped", threshold = best_thr_raw,
       n = best_m_clip$n, nRMSE = best_m_clip$nrmse_sd,
       rmse = best_m_clip$rmse, mae = best_m_clip$mae,
       mapd_emitters = best_m_clip$mapd_emitters, spearman = best_m_clip$spearman,
