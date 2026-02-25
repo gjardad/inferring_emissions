@@ -8,7 +8,7 @@
 #   T1 — Prediction performance (enet_cv_performance.tex):
 #     Two panels, seven rows:
 #
-#     Panel A: k-fold cross-validation (leave-firms-out)
+#     Panel A: Leave-firms-out cross-validation (leave-firms-out)
 #       1. PPML                        (benchmark, raw)
 #       2.   + fuel-supply proxy       (proxy_pooled, raw — no indicator)
 #       3. Hurdle + proxy              (hurdle_proxy_pooled, raw — no indicator)
@@ -128,7 +128,7 @@ tex <- c(
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-8}",
   "Model & nRMSE & MAPD & $\\rho$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
   "\\midrule",
-  "\\multicolumn{8}{l}{\\textit{Panel A: k-fold cross-validation}} \\\\",
+  "\\multicolumn{8}{l}{\\textit{Panel A: Leave-firms-out cross-validation}} \\\\",
   "\\addlinespace"
 )
 
