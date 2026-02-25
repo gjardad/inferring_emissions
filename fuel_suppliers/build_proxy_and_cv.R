@@ -417,11 +417,13 @@ for (sp in ppml_specs) {
   # Raw
   m_raw <- calc_metrics(panel$y[ok], yhat_raw[ok], nace2d = panel$nace2d[ok], year = panel$year[ok])
 
-  # Capture per-cell FP severity for benchmark and proxy_pooled raw
+  # Capture per-cell FP severity and within-sector-year rho detail
   if (nm == "benchmark") {
     benchmark_cell_fp_raw <- m_raw$cell_fp_severity
+    benchmark_sy_rho_raw  <- m_raw$within_sy_rho_detail
   } else if (nm == "proxy_pooled") {
     proxy_pooled_cell_fp_raw <- m_raw$cell_fp_severity
+    proxy_pooled_sy_rho_raw  <- m_raw$within_sy_rho_detail
   }
 
   # Calibrated
@@ -544,18 +546,21 @@ for (sp in hurdle_specs) {
 
   cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr_raw))
 
-  # Capture per-cell FP severity for hurdle variants
+  # Capture per-cell FP severity and within-sector-year rho detail
   if (nm == "hurdle_proxy_pooled") {
     if (!is.null(best_m_raw)) {
       hurdle_proxy_pooled_cell_fp_raw <- best_m_raw$cell_fp_severity
+      hurdle_proxy_pooled_sy_rho_raw  <- best_m_raw$within_sy_rho_detail
     }
   }
   if (nm == "hurdle_proxy_pooled_ind") {
     if (!is.null(best_m_clip)) {
-      hurdle_proxy_pooled_ind_cell_fp <- best_m_clip$cell_fp_severity
+      hurdle_proxy_pooled_ind_cell_fp     <- best_m_clip$cell_fp_severity
+      hurdle_proxy_pooled_ind_sy_rho_clip <- best_m_clip$within_sy_rho_detail
     }
     if (!is.null(best_m_raw)) {
       hurdle_proxy_pooled_ind_cell_fp_raw <- best_m_raw$cell_fp_severity
+      hurdle_proxy_pooled_ind_sy_rho_raw  <- best_m_raw$within_sy_rho_detail
     }
   }
 
@@ -817,6 +822,13 @@ for (losocv_sp in losocv_specs) {
     )
     cv_performance <- bind_rows(cv_performance, losocv_row)
 
+    # Capture within-sector-year rho detail
+    if (losocv_nm == "losocv_hurdle_proxy_pooled") {
+      losocv_hurdle_sy_rho <- this_m$within_sy_rho_detail
+    } else if (losocv_nm == "losocv_hurdle_proxy_pooled_ind") {
+      losocv_hurdle_ind_sy_rho <- this_m$within_sy_rho_detail
+    }
+
   } else {
     cat(sprintf("WARNING: No valid LOSOCV predictions for %s. Skipping.\n", losocv_nm))
   }
@@ -861,6 +873,24 @@ if (exists("hurdle_proxy_pooled_ind_cell_fp_raw")) {
   write.csv(hurdle_proxy_pooled_ind_cell_fp_raw,
             file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_ind_raw.csv"),
             row.names = FALSE)
+}
+
+# Save within-sector-year rho detail CSVs
+sy_rho_saves <- list(
+  benchmark_sy_rho_raw              = "within_sy_rho_benchmark_raw.csv",
+  proxy_pooled_sy_rho_raw           = "within_sy_rho_proxy_pooled_raw.csv",
+  hurdle_proxy_pooled_sy_rho_raw    = "within_sy_rho_hurdle_proxy_pooled_raw.csv",
+  hurdle_proxy_pooled_ind_sy_rho_raw  = "within_sy_rho_hurdle_proxy_pooled_ind_raw.csv",
+  hurdle_proxy_pooled_ind_sy_rho_clip = "within_sy_rho_hurdle_proxy_pooled_ind_cal_clip.csv",
+  losocv_hurdle_sy_rho              = "within_sy_rho_losocv_hurdle_proxy_pooled.csv",
+  losocv_hurdle_ind_sy_rho          = "within_sy_rho_losocv_hurdle_proxy_pooled_ind.csv"
+)
+for (v in names(sy_rho_saves)) {
+  if (exists(v) && nrow(get(v)) > 0) {
+    write.csv(get(v),
+              file.path(OUTPUT_DIR, sy_rho_saves[[v]]),
+              row.names = FALSE)
+  }
 }
 
 cat("\n══════════════════════════════════════════════\n")
