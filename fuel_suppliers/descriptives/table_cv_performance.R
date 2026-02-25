@@ -6,25 +6,29 @@
 #   and LOSOCV results.
 #
 #   T1 — Prediction performance (enet_cv_performance.tex):
-#     Five rows showing progressive model improvements:
-#       1. PPML benchmark (sector RE, raw)
-#       2. PPML + proxy (sector RE, raw)
-#       3. Hurdle + proxy (raw — no calibration or clipping)
-#       4. Hurdle + proxy (calibrated + clipped)
-#       5. LOSOCV Hurdle + proxy (calibrated + clipped)
+#     Two panels, seven rows:
+#
+#     Panel A: k-fold cross-validation (leave-firms-out)
+#       1. PPML                        (benchmark, raw)
+#       2.   + fuel-supply proxy       (proxy_pooled, raw — no indicator)
+#       3. Hurdle + proxy              (hurdle_proxy_pooled, raw — no indicator)
+#       4.   + fuel-purchase indicator  (hurdle_proxy_pooled_ind, raw)
+#       5.     + calibrated            (hurdle_proxy_pooled_ind, calibrated_clipped)
+#
+#     Panel B: Leave-one-sector-out cross-validation
+#       6. Hurdle + proxy, calibrated  (losocv_hurdle_proxy_pooled, calibrated_clipped)
+#       7.   + fuel-purchase indicator  (losocv_hurdle_proxy_pooled_ind, calibrated_clipped)
 #
 #     Columns split into two groups:
 #       "Prediction accuracy": nRMSE, MAPD, Spearman rho
 #       "Extensive margin":    FPR, TPR, p50, p99
-#         where p50 and p99 are the within-sector-year averaged percentile
-#         ranks of non-emitter predictions in the emitter ecdf (NACE 19 & 24).
 #
-#     PPML rows show "---" for extensive margin (no explicit classification).
-#     Hurdle raw row shows median [min, max] for p50 and p99 across cells.
+#     Raw rows with per-cell FP severity data show median // [min, max].
+#     Calibrated rows show single values (p50, p99 = 0 by construction).
 #
 # INPUTS
 #   {OUTPUT_DIR}/fuel_suppliers_cv_performance.csv
-#   {OUTPUT_DIR}/cell_fp_severity_hurdle_proxy_pooled_raw.csv  (optional)
+#   {OUTPUT_DIR}/cell_fp_severity_*.csv  (per-cell FP severity, optional)
 #
 # OUTPUTS
 #   {OUTPUT_DIR}/enet_cv_performance.tex
@@ -56,23 +60,29 @@ load_cell_fp <- function(fname) {
   p <- file.path(OUTPUT_DIR, fname)
   if (file.exists(p)) read.csv(p, stringsAsFactors = FALSE) else NULL
 }
-cell_fp_benchmark_raw   <- load_cell_fp("cell_fp_severity_benchmark_raw.csv")
-cell_fp_proxy_pooled_raw <- load_cell_fp("cell_fp_severity_proxy_pooled_raw.csv")
-cell_fp_hurdle_raw      <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_raw.csv")
+cell_fp_benchmark_raw       <- load_cell_fp("cell_fp_severity_benchmark_raw.csv")
+cell_fp_proxy_pooled_raw    <- load_cell_fp("cell_fp_severity_proxy_pooled_raw.csv")
+cell_fp_hurdle_raw          <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_raw.csv")
+cell_fp_hurdle_ind_raw      <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_ind_raw.csv")
 
 
 # ===========================================================================
-# T1: Prediction performance — 5 progressive rows
+# T1: Prediction performance — 7 rows, 2 panels
 # ===========================================================================
 
-# ── Define the 5 rows ─────────────────────────────────────────────────────
-# Each row = (model key in CSV, variant, display label, show extensive margin?)
+# ── Define the 7 rows ─────────────────────────────────────────────────────
+# Each row = (model key in CSV, variant, display label)
+# Panel breaks inserted via panel_after indices below.
 row_specs <- list(
-  list(model = "benchmark",                 variant = "raw",                label = "PPML benchmark",                show_ext = TRUE),
-  list(model = "proxy_pooled",              variant = "raw",                label = "\\quad + fuel-supply proxy",     show_ext = TRUE),
-  list(model = "hurdle_proxy_pooled",       variant = "raw",                label = "Hurdle + proxy",                show_ext = TRUE),
-  list(model = "hurdle_proxy_pooled",       variant = "calibrated_clipped", label = "\\quad + calibration \\& clip",  show_ext = TRUE),
-  list(model = "losocv_hurdle_proxy_pooled", variant = "calibrated_clipped", label = "Leave-one-sector-out",        show_ext = TRUE)
+  # Panel A: k-fold CV
+  list(model = "benchmark",                      variant = "raw",                label = "PPML"),
+  list(model = "proxy_pooled",                   variant = "raw",                label = "\\quad + fuel-supply proxy"),
+  list(model = "hurdle_proxy_pooled",            variant = "raw",                label = "Hurdle + proxy"),
+  list(model = "hurdle_proxy_pooled_ind",        variant = "raw",                label = "\\quad + fuel-purchase indicator"),
+  list(model = "hurdle_proxy_pooled_ind",        variant = "calibrated_clipped", label = "\\quad\\quad + calibrated"),
+  # Panel B: LOSO CV
+  list(model = "losocv_hurdle_proxy_pooled",     variant = "calibrated_clipped", label = "Hurdle + proxy, calibrated"),
+  list(model = "losocv_hurdle_proxy_pooled_ind", variant = "calibrated_clipped", label = "\\quad + fuel-purchase indicator")
 )
 
 # ── Extract rows from CSV ─────────────────────────────────────────────────
@@ -102,6 +112,14 @@ fmt_pct_minmax <- function(vals) {
 }
 
 
+# ── Map model names to per-cell FP severity data ─────────────────────────
+cell_fp_map <- list(
+  benchmark                = cell_fp_benchmark_raw,
+  proxy_pooled             = cell_fp_proxy_pooled_raw,
+  hurdle_proxy_pooled      = cell_fp_hurdle_raw,
+  hurdle_proxy_pooled_ind  = cell_fp_hurdle_ind_raw
+)
+
 # ── Build LaTeX ───────────────────────────────────────────────────────────
 tex <- c(
   "\\begin{tabular}{l ccc cccc}",
@@ -109,19 +127,24 @@ tex <- c(
   " & \\multicolumn{3}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-8}",
   "Model & nRMSE & MAPD & $\\rho$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
-  "\\midrule"
-)
-
-# Map model names to per-cell FP severity data
-cell_fp_map <- list(
-  benchmark            = cell_fp_benchmark_raw,
-  proxy_pooled         = cell_fp_proxy_pooled_raw,
-  hurdle_proxy_pooled  = cell_fp_hurdle_raw
+  "\\midrule",
+  "\\multicolumn{8}{l}{\\textit{Panel A: k-fold cross-validation}} \\\\",
+  "\\addlinespace"
 )
 
 for (i in seq_along(row_specs)) {
   spec <- row_specs[[i]]
   r <- rows[[i]]
+
+  # Panel B header before row 6
+  if (i == 6) {
+    tex <- c(tex,
+      "\\addlinespace",
+      "\\midrule",
+      "\\multicolumn{8}{l}{\\textit{Panel B: Leave-one-sector-out cross-validation}} \\\\",
+      "\\addlinespace"
+    )
+  }
 
   # Look up per-cell data for raw rows
   cell_fp <- NULL
@@ -140,7 +163,7 @@ for (i in seq_along(row_specs)) {
   }
 
   # Extensive margin columns
-  if (spec$show_ext && !is.null(r)) {
+  if (!is.null(r)) {
     fpr <- fmt3(r$fpr_nonemitters)
     tpr <- fmt3(r$tpr_emitters)
 
@@ -177,8 +200,9 @@ for (i in seq_along(row_specs)) {
     tex <- c(tex, line)
   }
 
-  # Visual break: after PPML block (row 2) and after k-fold hurdle block (row 4)
-  if (i == 2 || i == 4) tex <- c(tex, "\\addlinespace")
+  # Visual breaks within panels
+  if (i == 2) tex <- c(tex, "\\addlinespace")  # after PPML block
+  if (i == 5) tex <- c(tex, "")                 # end of Panel A (midrule added before row 6)
 }
 
 tex <- c(tex, "\\bottomrule", "\\end{tabular}")
