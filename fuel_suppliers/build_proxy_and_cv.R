@@ -316,6 +316,13 @@ hurdle_specs <- list(
                        year_f + s(nace2d_f, bs = "re")
   ),
   list(
+    name        = "hurdle_proxy_pooled_ind",
+    ext_formula = emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                         year_f + s(nace2d_f, bs = "re"),
+    int_formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                       year_f + s(nace2d_f, bs = "re")
+  ),
+  list(
     name        = "hurdle_proxy_within_buyer",
     ext_formula = emit ~ log_revenue + asinh(proxy_fe) +
                          year_f + s(nace2d_f, bs = "re"),
@@ -528,13 +535,18 @@ for (sp in hurdle_specs) {
 
   cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr_raw))
 
-  # Capture per-cell FP severity for hurdle_proxy_pooled
+  # Capture per-cell FP severity for hurdle variants
   if (nm == "hurdle_proxy_pooled") {
-    if (!is.null(best_m_clip)) {
-      hurdle_proxy_pooled_cell_fp <- best_m_clip$cell_fp_severity
-    }
     if (!is.null(best_m_raw)) {
       hurdle_proxy_pooled_cell_fp_raw <- best_m_raw$cell_fp_severity
+    }
+  }
+  if (nm == "hurdle_proxy_pooled_ind") {
+    if (!is.null(best_m_clip)) {
+      hurdle_proxy_pooled_ind_cell_fp <- best_m_clip$cell_fp_severity
+    }
+    if (!is.null(best_m_raw)) {
+      hurdle_proxy_pooled_ind_cell_fp_raw <- best_m_raw$cell_fp_severity
     }
   }
 
@@ -637,161 +649,164 @@ cat("Assigned", n_distinct(panel$vat), "firms to", n_sector_folds, "sector folds
 all_nace2d_levels <- levels(panel$nace2d_f)
 all_year_levels   <- levels(panel$year_f)
 
-# (c) LOSOCV hurdle formulas (same as hurdle_proxy_pooled)
-losocv_ext_formula <- emit ~ log_revenue + asinh(proxy_pooled) +
-                             year_f + s(nace2d_f, bs = "re")
-losocv_int_formula <- y ~ log_revenue + asinh(proxy_pooled) +
-                          year_f + s(nace2d_f, bs = "re")
-
-# Pre-allocate prediction columns
-panel$losocv_phat  <- NA_real_
-panel$losocv_muhat <- NA_real_
-
-cat("Running LOSOCV (", n_sector_folds, " sector folds)...\n", sep = "")
-t0_losocv <- Sys.time()
-
-for (s_idx in seq_along(sector_levels)) {
-  sec <- sector_levels[s_idx]
-  t0_fold <- Sys.time()
-
-  train_idx <- which(panel$primary_nace2d != sec)
-  test_idx  <- which(panel$primary_nace2d == sec)
-
-  train <- panel[train_idx, ]
-  test  <- panel[test_idx, ]
-
-  # Ensure factor levels match the full panel (critical for mgcv RE)
-  train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
-  test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
-  train$year_f   <- factor(train$year,   levels = all_year_levels)
-  test$year_f    <- factor(test$year,    levels = all_year_levels)
-
-  # Step 1: Extensive margin (logit on full training data)
-  fit_ext <- tryCatch(
-    gam(losocv_ext_formula, data = train,
-        family = binomial(link = "logit"), method = "REML"),
-    error = function(e) NULL
+# (c) LOSOCV hurdle formulas — two variants: without and with indicator
+losocv_specs <- list(
+  list(
+    name        = "losocv_hurdle_proxy_pooled",
+    ext_formula = emit ~ log_revenue + asinh(proxy_pooled) +
+                         year_f + s(nace2d_f, bs = "re"),
+    int_formula = y ~ log_revenue + asinh(proxy_pooled) +
+                       year_f + s(nace2d_f, bs = "re")
+  ),
+  list(
+    name        = "losocv_hurdle_proxy_pooled_ind",
+    ext_formula = emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                         year_f + s(nace2d_f, bs = "re"),
+    int_formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
+                       year_f + s(nace2d_f, bs = "re")
   )
-  if (!is.null(fit_ext)) {
-    phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
-    phat <- pmin(pmax(phat, 0), 1)
-    panel$losocv_phat[test_idx] <- phat
-  }
+)
 
-  # Step 2: Intensive margin (Poisson on emitters only)
-  train_emit <- train[train$emit == 1, ]
-  if (nrow(train_emit) > 0) {
-    fit_int <- tryCatch(
-      gam(losocv_int_formula, data = train_emit,
-          family = poisson(link = "log"), method = "REML"),
+for (losocv_sp in losocv_specs) {
+  losocv_nm <- losocv_sp$name
+  cat(sprintf("\n── Running LOSOCV: %s ──\n", losocv_nm))
+
+  # Pre-allocate prediction columns
+  panel$losocv_phat  <- NA_real_
+  panel$losocv_muhat <- NA_real_
+
+  cat("Running LOSOCV (", n_sector_folds, " sector folds)...\n", sep = "")
+  t0_losocv <- Sys.time()
+
+  for (s_idx in seq_along(sector_levels)) {
+    sec <- sector_levels[s_idx]
+    t0_fold <- Sys.time()
+
+    train_idx <- which(panel$primary_nace2d != sec)
+    test_idx  <- which(panel$primary_nace2d == sec)
+
+    train <- panel[train_idx, ]
+    test  <- panel[test_idx, ]
+
+    # Ensure factor levels match the full panel (critical for mgcv RE)
+    train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
+    test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
+    train$year_f   <- factor(train$year,   levels = all_year_levels)
+    test$year_f    <- factor(test$year,    levels = all_year_levels)
+
+    # Step 1: Extensive margin (logit on full training data)
+    fit_ext <- tryCatch(
+      gam(losocv_sp$ext_formula, data = train,
+          family = binomial(link = "logit"), method = "REML"),
       error = function(e) NULL
     )
-    if (!is.null(fit_int)) {
-      muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
-      panel$losocv_muhat[test_idx] <- muhat
+    if (!is.null(fit_ext)) {
+      phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
+      phat <- pmin(pmax(phat, 0), 1)
+      panel$losocv_phat[test_idx] <- phat
     }
+
+    # Step 2: Intensive margin (Poisson on emitters only)
+    train_emit <- train[train$emit == 1, ]
+    if (nrow(train_emit) > 0) {
+      fit_int <- tryCatch(
+        gam(losocv_sp$int_formula, data = train_emit,
+            family = poisson(link = "log"), method = "REML"),
+        error = function(e) NULL
+      )
+      if (!is.null(fit_int)) {
+        muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
+        panel$losocv_muhat[test_idx] <- muhat
+      }
+    }
+
+    elapsed_fold <- round(difftime(Sys.time(), t0_fold, units = "secs"), 1)
+    cat(sprintf("  Sector %s (%2d/%d): %4d test obs (%.1fs)\n",
+                sec, s_idx, n_sector_folds, length(test_idx), elapsed_fold))
   }
 
-  elapsed_fold <- round(difftime(Sys.time(), t0_fold, units = "secs"), 1)
-  cat(sprintf("  Sector %s (%2d/%d): %4d test obs (%.1fs)\n",
-              sec, s_idx, n_sector_folds, length(test_idx), elapsed_fold))
-}
+  elapsed_losocv <- round(difftime(Sys.time(), t0_losocv, units = "mins"), 1)
+  cat(sprintf("LOSOCV %s done (%.1f min)\n\n", losocv_nm, elapsed_losocv))
 
-elapsed_losocv <- round(difftime(Sys.time(), t0_losocv, units = "mins"), 1)
-cat(sprintf("LOSOCV done (%.1f min)\n\n", elapsed_losocv))
+  # (d) Combine predictions — search over LOSO-specific thresholds
+  ok_losocv <- !is.na(panel$losocv_phat) & !is.na(panel$losocv_muhat) & !is.na(panel$y)
 
-# (d) Combine predictions — search over LOSO-specific thresholds
-ok_losocv <- !is.na(panel$losocv_phat) & !is.na(panel$losocv_muhat) & !is.na(panel$y)
+  if (sum(ok_losocv) > 0) {
+    cat("Searching over LOSOCV thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
 
-if (sum(ok_losocv) > 0) {
-  cat("Searching over LOSOCV thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
+    best_losocv     <- list(rmse = Inf)
+    best_losocv_thr <- NA_real_
+    best_m_losocv   <- NULL
 
-  best_losocv     <- list(rmse = Inf)
-  best_losocv_thr <- NA_real_
-  best_m_losocv   <- NULL
+    for (thr in THRESHOLDS) {
+      yhat_thr <- pmax(
+        as.numeric(panel$losocv_phat[ok_losocv] > thr) *
+          panel$losocv_muhat[ok_losocv],
+        0
+      )
 
-  for (thr in THRESHOLDS) {
-    yhat_thr <- pmax(
-      as.numeric(panel$losocv_phat[ok_losocv] > thr) *
-        panel$losocv_muhat[ok_losocv],
-      0
-    )
+      # Joint calibration + cap
+      yhat_cap <- calibrate_with_cap(
+        yhat_thr, panel$emit[ok_losocv], panel$y[ok_losocv],
+        panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
+      )
 
-    # Joint calibration + cap
-    yhat_cap <- calibrate_with_cap(
-      yhat_thr, panel$emit[ok_losocv], panel$y[ok_losocv],
-      panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
-    )
+      m <- calc_metrics(
+        panel$y[ok_losocv], yhat_cap,
+        nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
+      )
 
-    m <- calc_metrics(
-      panel$y[ok_losocv], yhat_cap,
-      nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
-    )
-
-    if (!is.na(m$rmse) && m$rmse < best_losocv$rmse) {
-      best_losocv     <- m
-      best_losocv_thr <- thr
-      best_m_losocv   <- m
+      if (!is.na(m$rmse) && m$rmse < best_losocv$rmse) {
+        best_losocv     <- m
+        best_losocv_thr <- thr
+        best_m_losocv   <- m
+      }
     }
+
+    this_thr <- best_losocv_thr
+    this_m   <- best_m_losocv
+
+    cat(sprintf("%s best threshold: %.2f\n", losocv_nm, this_thr))
+    cat("  Metrics (calibrated + clipped):\n")
+    cat(sprintf("  nRMSE = %.3f, MAPD = %.3f, Spearman = %.3f\n",
+                this_m$nrmse_sd, this_m$mapd_emitters, this_m$spearman))
+    cat(sprintf("  FPR = %.3f, TPR = %.3f\n",
+                this_m$fpr_nonemitters, this_m$tpr_emitters))
+
+    # Append to results
+    losocv_row <- data.frame(
+      model = losocv_nm,
+      variant = "calibrated_clipped",
+      threshold = this_thr,
+      n = this_m$n, nRMSE = this_m$nrmse_sd,
+      rmse = this_m$rmse, mae = this_m$mae,
+      mapd_emitters = this_m$mapd_emitters, spearman = this_m$spearman,
+      fpr_nonemitters = this_m$fpr_nonemitters,
+      tpr_emitters = this_m$tpr_emitters,
+      emitter_mass_captured = this_m$emitter_mass_captured,
+      nonemit_p50_rank_19 = this_m$nonemit_p50_rank_19,
+      nonemit_p90_rank_19 = this_m$nonemit_p90_rank_19,
+      nonemit_p99_rank_19 = this_m$nonemit_p99_rank_19,
+      nonemit_p50_rank_24 = this_m$nonemit_p50_rank_24,
+      nonemit_p90_rank_24 = this_m$nonemit_p90_rank_24,
+      nonemit_p99_rank_24 = this_m$nonemit_p99_rank_24,
+      avg_nonemit_p50_rank = this_m$avg_nonemit_p50_rank,
+      avg_nonemit_p99_rank = this_m$avg_nonemit_p99_rank,
+      stringsAsFactors = FALSE
+    )
+    cv_performance <- bind_rows(cv_performance, losocv_row)
+
+  } else {
+    cat(sprintf("WARNING: No valid LOSOCV predictions for %s. Skipping.\n", losocv_nm))
   }
 
-  losocv_threshold <- best_losocv_thr
-  m_losocv <- best_m_losocv
-  losocv_cell_fp <- m_losocv$cell_fp_severity
-
-  # Also compute raw (pre-calibration) FP severity at the best threshold
-  yhat_losocv_raw <- pmax(
-    as.numeric(panel$losocv_phat[ok_losocv] > losocv_threshold) *
-      panel$losocv_muhat[ok_losocv],
-    0
-  )
-  m_losocv_raw <- calc_metrics(
-    panel$y[ok_losocv], yhat_losocv_raw,
-    nace2d = panel$nace2d[ok_losocv], year = panel$year[ok_losocv]
-  )
-  losocv_cell_fp_raw <- m_losocv_raw$cell_fp_severity
-
-  cat(sprintf("LOSOCV best threshold: %.2f\n", losocv_threshold))
-  cat("LOSOCV metrics (calibrated + clipped):\n")
-  cat(sprintf("  nRMSE = %.3f, MAPD = %.3f, Spearman = %.3f\n",
-              m_losocv$nrmse_sd, m_losocv$mapd_emitters, m_losocv$spearman))
-  cat(sprintf("  FPR = %.3f, TPR = %.3f\n",
-              m_losocv$fpr_nonemitters, m_losocv$tpr_emitters))
-  cat(sprintf("  avg_nonemit_p50_rank = %.3f, avg_nonemit_p99_rank = %.3f\n",
-              m_losocv$avg_nonemit_p50_rank, m_losocv$avg_nonemit_p99_rank))
-
-  # (f) Append to results
-  losocv_row <- data.frame(
-    model = "losocv_hurdle_proxy_pooled",
-    variant = "calibrated_clipped",
-    threshold = losocv_threshold,
-    n = m_losocv$n, nRMSE = m_losocv$nrmse_sd,
-    rmse = m_losocv$rmse, mae = m_losocv$mae,
-    mapd_emitters = m_losocv$mapd_emitters, spearman = m_losocv$spearman,
-    fpr_nonemitters = m_losocv$fpr_nonemitters,
-    tpr_emitters = m_losocv$tpr_emitters,
-    emitter_mass_captured = m_losocv$emitter_mass_captured,
-    nonemit_p50_rank_19 = m_losocv$nonemit_p50_rank_19,
-    nonemit_p90_rank_19 = m_losocv$nonemit_p90_rank_19,
-    nonemit_p99_rank_19 = m_losocv$nonemit_p99_rank_19,
-    nonemit_p50_rank_24 = m_losocv$nonemit_p50_rank_24,
-    nonemit_p90_rank_24 = m_losocv$nonemit_p90_rank_24,
-    nonemit_p99_rank_24 = m_losocv$nonemit_p99_rank_24,
-    avg_nonemit_p50_rank = m_losocv$avg_nonemit_p50_rank,
-    avg_nonemit_p99_rank = m_losocv$avg_nonemit_p99_rank,
-    stringsAsFactors = FALSE
-  )
-
-  cv_performance <- bind_rows(cv_performance, losocv_row)
-
-} else {
-  cat("WARNING: No valid LOSOCV predictions. Skipping.\n")
+  # Clean up prediction columns before next variant
+  panel$losocv_phat  <- NULL
+  panel$losocv_muhat <- NULL
 }
 
 # Clean up temporary column
 panel$primary_nace2d <- NULL
-panel$losocv_phat    <- NULL
-panel$losocv_muhat   <- NULL
 
 
 # ── Save ─────────────────────────────────────────────────────────────────────
@@ -811,24 +826,19 @@ if (exists("proxy_pooled_cell_fp_raw")) {
             file.path(OUTPUT_DIR, "cell_fp_severity_proxy_pooled_raw.csv"),
             row.names = FALSE)
 }
-if (exists("hurdle_proxy_pooled_cell_fp")) {
-  write.csv(hurdle_proxy_pooled_cell_fp,
-            file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled.csv"),
-            row.names = FALSE)
-}
 if (exists("hurdle_proxy_pooled_cell_fp_raw")) {
   write.csv(hurdle_proxy_pooled_cell_fp_raw,
             file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_raw.csv"),
             row.names = FALSE)
 }
-if (exists("losocv_cell_fp")) {
-  write.csv(losocv_cell_fp,
-            file.path(OUTPUT_DIR, "cell_fp_severity_losocv.csv"),
+if (exists("hurdle_proxy_pooled_ind_cell_fp")) {
+  write.csv(hurdle_proxy_pooled_ind_cell_fp,
+            file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_ind.csv"),
             row.names = FALSE)
 }
-if (exists("losocv_cell_fp_raw")) {
-  write.csv(losocv_cell_fp_raw,
-            file.path(OUTPUT_DIR, "cell_fp_severity_losocv_raw.csv"),
+if (exists("hurdle_proxy_pooled_ind_cell_fp_raw")) {
+  write.csv(hurdle_proxy_pooled_ind_cell_fp_raw,
+            file.path(OUTPUT_DIR, "cell_fp_severity_hurdle_proxy_pooled_ind_raw.csv"),
             row.names = FALSE)
 }
 
