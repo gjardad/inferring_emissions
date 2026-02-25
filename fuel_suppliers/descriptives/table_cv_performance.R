@@ -79,9 +79,9 @@ row_specs <- list(
   list(model = "proxy_pooled",                   variant = "raw",                label = "\\quad + fuel-supply proxy"),
   list(model = "hurdle_proxy_pooled",            variant = "raw",                label = "Hurdle + proxy"),
   list(model = "hurdle_proxy_pooled_ind",        variant = "raw",                label = "\\quad + fuel-purchase indicator"),
-  list(model = "hurdle_proxy_pooled_ind",        variant = "calibrated_clipped", label = "\\quad\\quad + calibrated"),
+  list(model = "hurdle_proxy_pooled_ind",        variant = "calibrated_clipped", label = "\\quad\\quad + calibration"),
   # Panel B: LOSO CV
-  list(model = "losocv_hurdle_proxy_pooled",     variant = "calibrated_clipped", label = "Hurdle + proxy, calibrated"),
+  list(model = "losocv_hurdle_proxy_pooled",     variant = "calibrated_clipped", label = "Hurdle + proxy, calibration"),
   list(model = "losocv_hurdle_proxy_pooled_ind", variant = "calibrated_clipped", label = "\\quad + fuel-purchase indicator")
 )
 
