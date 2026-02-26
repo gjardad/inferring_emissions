@@ -96,13 +96,19 @@ proxy_pooled <- build_proxy(b2b_lhs, suppliers_pooled, "proxy_pooled")
 proxy_fe     <- build_proxy(b2b_lhs, suppliers_fe,     "proxy_fe")
 rm(b2b_lhs)
 
-# Merge nace5d from loocv_training_sample (lhs only has nace2d)
+# Merge nace5d and annual accounts from loocv_training_sample + full annual accounts
 load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 nace5d_lookup <- loocv_training_sample %>%
   filter(year >= 2005) %>%
   select(vat, year, nace5d) %>%
   mutate(nace4d = substr(nace5d, 1, 4))
 rm(loocv_training_sample)
+
+# Load full annual accounts for training_sample export
+load(file.path(PROC_DATA, "annual_accounts_selected_sample.RData"))
+aa_all <- df_annual_accounts_selected_sample %>%
+  rename(vat = vat_ano)
+rm(df_annual_accounts_selected_sample)
 
 # Merge proxies into LHS panel
 panel <- lhs %>%
@@ -127,16 +133,24 @@ cat("Proxy coverage (pooled > 0):", sum(panel$proxy_pooled > 0),
 cat("Proxy coverage (within-buyer > 0):", sum(panel$proxy_fe > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_fe > 0)))
 
-# ── Save analysis-ready panel (for local experimentation) ────────────────────
-# Contains everything needed to run model variants without B2B or elastic net
-# inputs. Small enough to transfer to local desktop via Dropbox.
-analysis_panel <- panel %>%
+# ── Save training sample (for local experimentation) ─────────────────────────
+# Merges core panel columns with ALL annual accounts variables so we have
+# everything locally without needing B2B or elastic net inputs.
+aa_lhs <- aa_all %>%
+  semi_join(panel, by = c("vat", "year"))
+# Drop columns that already exist in panel
+overlap_cols <- setdiff(intersect(names(aa_lhs), names(panel)), c("vat", "year"))
+if (length(overlap_cols) > 0) aa_lhs <- aa_lhs %>% select(-all_of(overlap_cols))
+
+training_sample <- panel %>%
   select(vat, year, y, log_revenue, nace2d, nace5d, euets, emit,
-         proxy_pooled, proxy_fe)
-save(analysis_panel, file = file.path(PROC_DATA, "fuel_suppliers_analysis_panel.RData"))
-cat("Saved analysis panel:", nrow(analysis_panel), "rows to",
-    file.path(PROC_DATA, "fuel_suppliers_analysis_panel.RData"), "\n\n")
-rm(analysis_panel)
+         proxy_pooled, proxy_fe) %>%
+  left_join(aa_lhs, by = c("vat", "year"))
+save(training_sample, file = file.path(PROC_DATA, "training_sample.RData"))
+cat("Saved training sample:", nrow(training_sample), "rows x",
+    ncol(training_sample), "cols to",
+    file.path(PROC_DATA, "training_sample.RData"), "\n\n")
+rm(training_sample, aa_lhs, aa_all)
 
 # ── Sector-year emission totals (for calibration) ───────────────────────────
 syt <- panel %>%
