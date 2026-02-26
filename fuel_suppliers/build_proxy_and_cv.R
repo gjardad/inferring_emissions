@@ -96,17 +96,29 @@ proxy_pooled <- build_proxy(b2b_lhs, suppliers_pooled, "proxy_pooled")
 proxy_fe     <- build_proxy(b2b_lhs, suppliers_fe,     "proxy_fe")
 rm(b2b_lhs)
 
+# Merge nace5d from loocv_training_sample (lhs only has nace2d)
+load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+nace5d_lookup <- loocv_training_sample %>%
+  filter(year >= 2005) %>%
+  select(vat, year, nace5d) %>%
+  mutate(nace4d = substr(nace5d, 1, 4))
+rm(loocv_training_sample)
+
 # Merge proxies into LHS panel
 panel <- lhs %>%
   left_join(proxy_pooled, by = c("vat", "year")) %>%
   left_join(proxy_fe,     by = c("vat", "year")) %>%
+  left_join(nace5d_lookup, by = c("vat", "year")) %>%
   mutate(
     proxy_pooled = coalesce(proxy_pooled, 0),
     proxy_fe     = coalesce(proxy_fe, 0),
     year_f       = factor(year),
     nace2d_f     = factor(nace2d),
+    nace4d_f     = factor(nace4d),
+    nace5d_f     = factor(nace5d),
     emit         = as.integer(y > 0)
   )
+rm(nace5d_lookup)
 
 cat("Panel rows:", nrow(panel), "\n")
 cat("Emitters:", sum(panel$emit), sprintf("(%.1f%%)\n", 100 * mean(panel$emit)))
@@ -115,6 +127,16 @@ cat("Proxy coverage (pooled > 0):", sum(panel$proxy_pooled > 0),
 cat("Proxy coverage (within-buyer > 0):", sum(panel$proxy_fe > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_fe > 0)))
 
+# ── Save analysis-ready panel (for local experimentation) ────────────────────
+# Contains everything needed to run model variants without B2B or elastic net
+# inputs. Small enough to transfer to local desktop via Dropbox.
+analysis_panel <- panel %>%
+  select(vat, year, y, log_revenue, nace2d, nace5d, euets, emit,
+         proxy_pooled, proxy_fe)
+save(analysis_panel, file = file.path(PROC_DATA, "fuel_suppliers_analysis_panel.RData"))
+cat("Saved analysis panel:", nrow(analysis_panel), "rows to",
+    file.path(PROC_DATA, "fuel_suppliers_analysis_panel.RData"), "\n\n")
+rm(analysis_panel)
 
 # ── Sector-year emission totals (for calibration) ───────────────────────────
 syt <- panel %>%
@@ -282,53 +304,47 @@ calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
 
 
 # ── Model specifications ────────────────────────────────────────────────────
+# All models are run with two RE variants:
+#   "nested": s(nace2d_f, bs = "re") + s(nace5d_f, bs = "re")
+#   "base":   s(nace2d_f, bs = "re") only
+# Base variants get a "_base" name suffix. Both go into the output CSV.
+# A comparison of within-sector-year rho is printed at the end.
 
-# PPML specs
-ppml_specs <- list(
+re_nested <- "year_f + s(nace2d_f, bs = 're') + s(nace5d_f, bs = 're')"
+re_base   <- "year_f + s(nace2d_f, bs = 're')"
+
+make_ppml_spec <- function(name, rhs, re) {
+  list(name = name, formula = as.formula(paste("y ~", rhs, "+", re)))
+}
+
+make_hurdle_spec <- function(name, rhs, re) {
   list(
-    name    = "benchmark",
-    formula = y ~ log_revenue + year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name    = "proxy_pooled",
-    formula = y ~ log_revenue + asinh(proxy_pooled) +
-                  year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name    = "proxy_within_buyer",
-    formula = y ~ log_revenue + asinh(proxy_fe) +
-                  year_f + s(nace2d_f, bs = "re")
+    name        = name,
+    ext_formula = as.formula(paste("emit ~", rhs, "+", re)),
+    int_formula = as.formula(paste("y ~", rhs, "+", re))
   )
+}
+
+# PPML specs (nested + base)
+ppml_specs <- list(
+  make_ppml_spec("benchmark",               "log_revenue", re_nested),
+  make_ppml_spec("benchmark_base",          "log_revenue", re_base),
+  make_ppml_spec("proxy_pooled",            "log_revenue + asinh(proxy_pooled)", re_nested),
+  make_ppml_spec("proxy_pooled_base",       "log_revenue + asinh(proxy_pooled)", re_base),
+  make_ppml_spec("proxy_within_buyer",      "log_revenue + asinh(proxy_fe)", re_nested),
+  make_ppml_spec("proxy_within_buyer_base", "log_revenue + asinh(proxy_fe)", re_base)
 )
 
-# Hurdle specs: each has an extensive (logit) and intensive (Poisson) formula
+# Hurdle specs (nested + base)
 hurdle_specs <- list(
-  list(
-    name        = "hurdle_benchmark",
-    ext_formula = emit ~ log_revenue + year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name        = "hurdle_proxy_pooled",
-    ext_formula = emit ~ log_revenue + asinh(proxy_pooled) +
-                         year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + asinh(proxy_pooled) +
-                       year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name        = "hurdle_proxy_pooled_ind",
-    ext_formula = emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
-                         year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
-                       year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name        = "hurdle_proxy_within_buyer",
-    ext_formula = emit ~ log_revenue + asinh(proxy_fe) +
-                         year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + asinh(proxy_fe) +
-                       year_f + s(nace2d_f, bs = "re")
-  )
+  make_hurdle_spec("hurdle_benchmark",               "log_revenue", re_nested),
+  make_hurdle_spec("hurdle_benchmark_base",          "log_revenue", re_base),
+  make_hurdle_spec("hurdle_proxy_pooled",            "log_revenue + asinh(proxy_pooled)", re_nested),
+  make_hurdle_spec("hurdle_proxy_pooled_base",       "log_revenue + asinh(proxy_pooled)", re_base),
+  make_hurdle_spec("hurdle_proxy_pooled_ind",        "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_nested),
+  make_hurdle_spec("hurdle_proxy_pooled_ind_base",   "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_base),
+  make_hurdle_spec("hurdle_proxy_within_buyer",      "log_revenue + asinh(proxy_fe)", re_nested),
+  make_hurdle_spec("hurdle_proxy_within_buyer_base", "log_revenue + asinh(proxy_fe)", re_base)
 )
 
 # Threshold grid for hurdle
@@ -562,8 +578,21 @@ for (sp in hurdle_specs) {
       hurdle_proxy_pooled_ind_cell_fp_raw <- best_m_raw$cell_fp_severity
       hurdle_proxy_pooled_ind_sy_rho_raw  <- best_m_raw$within_sy_rho_detail
     }
+    # Save firm-level predictions for pooled within-sector rho diagnostic
+    firm_preds_nested <- data.frame(
+      vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
+      y = panel$y[ok], yhat_clip = yhat_cap, stringsAsFactors = FALSE
+    )
   }
-
+  if (nm == "hurdle_proxy_pooled_ind_base") {
+    if (!is.null(best_m_clip)) {
+      hurdle_ind_base_sy_rho_clip <- best_m_clip$within_sy_rho_detail
+    }
+    firm_preds_base <- data.frame(
+      vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
+      y = panel$y[ok], yhat_clip = yhat_cap, stringsAsFactors = FALSE
+    )
+  }
   if (!is.null(best_m_raw)) {
     results[[paste0(nm, "_raw")]] <- data.frame(
       model = nm, variant = "raw", threshold = best_thr_raw,
@@ -670,24 +699,15 @@ cat("Assigned", n_distinct(panel$vat), "firms to", n_sector_folds, "sector folds
 
 # Preserve full factor levels for mgcv
 all_nace2d_levels <- levels(panel$nace2d_f)
+all_nace5d_levels <- levels(panel$nace5d_f)
 all_year_levels   <- levels(panel$year_f)
 
-# (c) LOSOCV hurdle formulas — two variants: without and with indicator
+# (c) LOSOCV hurdle formulas — nested + base variants
 losocv_specs <- list(
-  list(
-    name        = "losocv_hurdle_proxy_pooled",
-    ext_formula = emit ~ log_revenue + asinh(proxy_pooled) +
-                         year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + asinh(proxy_pooled) +
-                       year_f + s(nace2d_f, bs = "re")
-  ),
-  list(
-    name        = "losocv_hurdle_proxy_pooled_ind",
-    ext_formula = emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
-                         year_f + s(nace2d_f, bs = "re"),
-    int_formula = y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +
-                       year_f + s(nace2d_f, bs = "re")
-  )
+  make_hurdle_spec("losocv_hurdle_proxy_pooled",          "log_revenue + asinh(proxy_pooled)", re_nested),
+  make_hurdle_spec("losocv_hurdle_proxy_pooled_base",     "log_revenue + asinh(proxy_pooled)", re_base),
+  make_hurdle_spec("losocv_hurdle_proxy_pooled_ind",      "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_nested),
+  make_hurdle_spec("losocv_hurdle_proxy_pooled_ind_base", "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_base)
 )
 
 for (losocv_sp in losocv_specs) {
@@ -714,6 +734,8 @@ for (losocv_sp in losocv_specs) {
     # Ensure factor levels match the full panel (critical for mgcv RE)
     train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
     test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
+    train$nace5d_f <- factor(train$nace5d, levels = all_nace5d_levels)
+    test$nace5d_f  <- factor(test$nace5d,  levels = all_nace5d_levels)
     train$year_f   <- factor(train$year,   levels = all_year_levels)
     test$year_f    <- factor(test$year,    levels = all_year_levels)
 
@@ -827,6 +849,31 @@ for (losocv_sp in losocv_specs) {
       losocv_hurdle_sy_rho <- this_m$within_sy_rho_detail
     } else if (losocv_nm == "losocv_hurdle_proxy_pooled_ind") {
       losocv_hurdle_ind_sy_rho <- this_m$within_sy_rho_detail
+    } else if (losocv_nm == "losocv_hurdle_proxy_pooled_ind_base") {
+      losocv_hurdle_ind_base_sy_rho <- this_m$within_sy_rho_detail
+    }
+
+    # Save firm-level LOSO predictions for pooled within-sector rho diagnostic
+    if (losocv_nm %in% c("losocv_hurdle_proxy_pooled_ind",
+                          "losocv_hurdle_proxy_pooled_ind_base")) {
+      yhat_best <- pmax(
+        as.numeric(panel$losocv_phat[ok_losocv] > this_thr) *
+          panel$losocv_muhat[ok_losocv], 0
+      )
+      yhat_best_cap <- calibrate_with_cap(
+        yhat_best, panel$emit[ok_losocv], panel$y[ok_losocv],
+        panel$nace2d[ok_losocv], panel$year[ok_losocv], syt
+      )
+      loso_preds <- data.frame(
+        vat = panel$vat[ok_losocv], nace2d = panel$nace2d[ok_losocv],
+        year = panel$year[ok_losocv], y = panel$y[ok_losocv],
+        yhat_clip = yhat_best_cap, stringsAsFactors = FALSE
+      )
+      if (losocv_nm == "losocv_hurdle_proxy_pooled_ind") {
+        loso_preds_nested <- loso_preds
+      } else {
+        loso_preds_base <- loso_preds
+      }
     }
 
   } else {
@@ -883,7 +930,9 @@ sy_rho_saves <- list(
   hurdle_proxy_pooled_ind_sy_rho_raw  = "within_sy_rho_hurdle_proxy_pooled_ind_raw.csv",
   hurdle_proxy_pooled_ind_sy_rho_clip = "within_sy_rho_hurdle_proxy_pooled_ind_cal_clip.csv",
   losocv_hurdle_sy_rho              = "within_sy_rho_losocv_hurdle_proxy_pooled.csv",
-  losocv_hurdle_ind_sy_rho          = "within_sy_rho_losocv_hurdle_proxy_pooled_ind.csv"
+  losocv_hurdle_ind_sy_rho          = "within_sy_rho_losocv_hurdle_proxy_pooled_ind.csv",
+  hurdle_ind_base_sy_rho_clip       = "within_sy_rho_hurdle_proxy_pooled_ind_base_cal_clip.csv",
+  losocv_hurdle_ind_base_sy_rho     = "within_sy_rho_losocv_hurdle_proxy_pooled_ind_base.csv"
 )
 for (v in names(sy_rho_saves)) {
   if (exists(v) && nrow(get(v)) > 0) {
@@ -896,3 +945,157 @@ for (v in names(sy_rho_saves)) {
 cat("\n══════════════════════════════════════════════\n")
 cat("CV performance saved to:", out_path, "\n")
 cat("══════════════════════════════════════════════\n")
+
+
+# ── Nested vs Base RE comparison ──────────────────────────────────────────
+compare_rho_variants <- function(nested_rho, base_rho, label) {
+  merged <- merge(base_rho, nested_rho,
+                  by = c("nace2d", "year"), suffixes = c("_base", "_nested"))
+
+  sector_summary <- merged %>%
+    group_by(nace2d) %>%
+    summarise(
+      n_years    = n(),
+      n_firms    = median(n_firms_base),
+      rho_base   = median(rho_base),
+      rho_nested = median(rho_nested),
+      delta      = median(rho_nested) - median(rho_base),
+      .groups    = "drop"
+    ) %>%
+    arrange(nace2d)
+
+  cat(sprintf("\n── %s ──\n", label))
+  cat(sprintf("%-6s  %5s  %5s  %8s  %8s  %8s\n",
+              "NACE", "Yrs", "Firms", "Base", "Nested", "Delta"))
+  cat(strrep("-", 50), "\n")
+  for (i in seq_len(nrow(sector_summary))) {
+    r <- sector_summary[i, ]
+    cat(sprintf("%-6s  %5d  %5.0f  %8.3f  %8.3f  %+8.3f\n",
+                r$nace2d, r$n_years, r$n_firms,
+                r$rho_base, r$rho_nested, r$delta))
+  }
+  cat(sprintf("\n%-6s  %5d  %5s  %8.3f  %8.3f  %+8.3f\n",
+              "ALL", nrow(merged), "",
+              median(merged$rho_base), median(merged$rho_nested),
+              median(merged$rho_nested) - median(merged$rho_base)))
+
+  # Cell-level wins/losses
+  cat(sprintf("\n  Cells: %d | Nested wins: %d (%.0f%%) | Base wins: %d (%.0f%%) | Ties: %d\n\n",
+              nrow(merged),
+              sum(merged$rho_nested > merged$rho_base),
+              100 * mean(merged$rho_nested > merged$rho_base),
+              sum(merged$rho_nested < merged$rho_base),
+              100 * mean(merged$rho_nested < merged$rho_base),
+              sum(merged$rho_nested == merged$rho_base)))
+}
+
+cat("\n\n═══ Nested vs Base RE: within-sector-year rho comparison ═══\n")
+
+if (exists("hurdle_proxy_pooled_ind_sy_rho_clip") &&
+    exists("hurdle_ind_base_sy_rho_clip")) {
+  compare_rho_variants(
+    hurdle_proxy_pooled_ind_sy_rho_clip,
+    hurdle_ind_base_sy_rho_clip,
+    "Leave-firms-out: hurdle_proxy_pooled_ind (calibrated_clipped)"
+  )
+}
+
+if (exists("losocv_hurdle_ind_sy_rho") &&
+    exists("losocv_hurdle_ind_base_sy_rho")) {
+  compare_rho_variants(
+    losocv_hurdle_ind_sy_rho,
+    losocv_hurdle_ind_base_sy_rho,
+    "LOSO: hurdle_proxy_pooled_ind (calibrated_clipped)"
+  )
+}
+
+# ── Save firm-level predictions for diagnostics ─────────────────────────────
+for (obj_name in c("firm_preds_nested", "firm_preds_base",
+                    "loso_preds_nested", "loso_preds_base")) {
+  if (exists(obj_name)) {
+    write.csv(get(obj_name),
+              file.path(OUTPUT_DIR, paste0(obj_name, ".csv")),
+              row.names = FALSE)
+  }
+}
+
+# ── Pooled within-sector rho (across years, demeaned by sector-year) ────────
+pooled_within_sector_rho <- function(preds, label) {
+  # For each sector-year cell, demean y and yhat
+  preds <- preds %>%
+    group_by(nace2d, year) %>%
+    mutate(
+      y_dm    = y - mean(y),
+      yhat_dm = yhat_clip - mean(yhat_clip)
+    ) %>%
+    ungroup()
+
+  # For each sector, pool all firm-years and compute Spearman rho
+  sector_rho <- preds %>%
+    group_by(nace2d) %>%
+    summarise(
+      n_firmyears = n(),
+      n_years     = n_distinct(year),
+      rho_pooled  = suppressWarnings(
+        cor(y_dm, yhat_dm, method = "spearman", use = "complete.obs")
+      ),
+      .groups = "drop"
+    ) %>%
+    arrange(nace2d)
+
+  cat(sprintf("\n── %s ──\n", label))
+  cat(sprintf("%-6s  %8s  %5s  %10s\n", "NACE", "FirmYrs", "Years", "rho_pooled"))
+  cat(strrep("-", 40), "\n")
+  for (i in seq_len(nrow(sector_rho))) {
+    r <- sector_rho[i, ]
+    cat(sprintf("%-6s  %8d  %5d  %10.3f\n",
+                r$nace2d, r$n_firmyears, r$n_years, r$rho_pooled))
+  }
+  overall <- suppressWarnings(cor(preds$y_dm, preds$yhat_dm,
+                                   method = "spearman", use = "complete.obs"))
+  cat(sprintf("\n%-6s  %8d  %5s  %10.3f\n", "ALL", nrow(preds), "", overall))
+
+  sector_rho
+}
+
+cat("\n\n═══ Pooled within-sector rho (demeaned by sector-year, pooled across years) ═══\n")
+
+if (exists("firm_preds_nested") && exists("firm_preds_base")) {
+  rho_nest <- pooled_within_sector_rho(firm_preds_nested,
+    "Leave-firms-out NESTED: hurdle_proxy_pooled_ind (cal_clip)")
+  rho_base <- pooled_within_sector_rho(firm_preds_base,
+    "Leave-firms-out BASE: hurdle_proxy_pooled_ind (cal_clip)")
+
+  comp <- merge(rho_base, rho_nest, by = "nace2d", suffixes = c("_base", "_nested"))
+  cat("\n── Leave-firms-out: pooled rho comparison ──\n")
+  cat(sprintf("%-6s  %8s  %10s  %10s  %10s\n",
+              "NACE", "FirmYrs", "Base", "Nested", "Delta"))
+  cat(strrep("-", 50), "\n")
+  for (i in seq_len(nrow(comp))) {
+    r <- comp[i, ]
+    cat(sprintf("%-6s  %8d  %10.3f  %10.3f  %+10.3f\n",
+                r$nace2d, r$n_firmyears_base,
+                r$rho_pooled_base, r$rho_pooled_nested,
+                r$rho_pooled_nested - r$rho_pooled_base))
+  }
+}
+
+if (exists("loso_preds_nested") && exists("loso_preds_base")) {
+  lrho_nest <- pooled_within_sector_rho(loso_preds_nested,
+    "LOSO NESTED: hurdle_proxy_pooled_ind (cal_clip)")
+  lrho_base <- pooled_within_sector_rho(loso_preds_base,
+    "LOSO BASE: hurdle_proxy_pooled_ind (cal_clip)")
+
+  lcomp <- merge(lrho_base, lrho_nest, by = "nace2d", suffixes = c("_base", "_nested"))
+  cat("\n── LOSO: pooled rho comparison ──\n")
+  cat(sprintf("%-6s  %8s  %10s  %10s  %10s\n",
+              "NACE", "FirmYrs", "Base", "Nested", "Delta"))
+  cat(strrep("-", 50), "\n")
+  for (i in seq_len(nrow(lcomp))) {
+    r <- lcomp[i, ]
+    cat(sprintf("%-6s  %8d  %10.3f  %10.3f  %+10.3f\n",
+                r$nace2d, r$n_firmyears_base,
+                r$rho_pooled_base, r$rho_pooled_nested,
+                r$rho_pooled_nested - r$rho_pooled_base))
+  }
+}
