@@ -73,6 +73,27 @@ suppliers_fe <- supplier_summary_fe %>%
 cat("Identified suppliers (pooled):       ", length(suppliers_pooled), "\n")
 cat("Identified suppliers (within-buyer): ", length(suppliers_fe), "\n")
 
+# ── Phase 2A: additional supplier sets ────────────────────────────────────
+# Robustness-filtered: suppliers in >= 3 of 4 models at lambda.min
+suppliers_pooled_robust3 <- robustness_pooled %>%
+  filter(n_models >= 3) %>%
+  pull(vat_i_ano)
+
+# Conservative lambda (1se): union of positive coefs at lambda.1se
+suppliers_pooled_1se <- supplier_summary_pooled %>%
+  filter(lambda == "1se", coef > 0) %>%
+  distinct(vat_i_ano) %>%
+  pull(vat_i_ano)
+
+# Coefficient lookup for weighted proxy (enet_asinh model at lambda.min)
+coef_lookup_pooled <- supplier_summary_pooled %>%
+  filter(lambda == "min", model == "enet_asinh", coef > 0) %>%
+  select(vat_i_ano, coef)
+
+cat("Identified suppliers (pooled robust>=3):", length(suppliers_pooled_robust3), "\n")
+cat("Identified suppliers (pooled 1se):      ", length(suppliers_pooled_1se), "\n")
+cat("Suppliers with enet_asinh coef > 0:     ", nrow(coef_lookup_pooled), "\n")
+
 
 # ── Build proxies ────────────────────────────────────────────────────────────
 cat("\nBuilding fuel-consumption proxies...\n")
@@ -82,7 +103,7 @@ b2b_lhs <- b2b %>%
   filter(vat_j_ano %in% lhs$vat, year >= 2005)
 rm(b2b)
 
-# Helper: build proxy from a supplier set
+# Helper: build proxy from a supplier set (unweighted sum of sales)
 build_proxy <- function(b2b_df, supplier_set, proxy_name) {
   b2b_df %>%
     filter(vat_i_ano %in% supplier_set) %>%
@@ -92,8 +113,31 @@ build_proxy <- function(b2b_df, supplier_set, proxy_name) {
     rename_with(~ proxy_name, .cols = "proxy")
 }
 
+# Helper: coefficient-weighted proxy (beta_j x asinh(sales_ij))
+build_weighted_proxy <- function(b2b_df, coef_df, proxy_name) {
+  b2b_df %>%
+    inner_join(coef_df, by = "vat_i_ano") %>%
+    group_by(vat_j_ano, year) %>%
+    summarise(proxy = sum(coef * asinh(corr_sales_ij), na.rm = TRUE),
+              .groups = "drop") %>%
+    rename(vat = vat_j_ano) %>%
+    rename_with(~ proxy_name, .cols = "proxy")
+}
+
+# Original proxies
 proxy_pooled <- build_proxy(b2b_lhs, suppliers_pooled, "proxy_pooled")
 proxy_fe     <- build_proxy(b2b_lhs, suppliers_fe,     "proxy_fe")
+
+# Phase 2A proxy variants
+proxy_weighted <- build_weighted_proxy(b2b_lhs, coef_lookup_pooled, "proxy_weighted")
+proxy_robust3  <- build_proxy(b2b_lhs, suppliers_pooled_robust3, "proxy_robust3")
+proxy_robust3w <- build_weighted_proxy(
+  b2b_lhs,
+  coef_lookup_pooled %>% filter(vat_i_ano %in% suppliers_pooled_robust3),
+  "proxy_robust3w"
+)
+proxy_1se <- build_proxy(b2b_lhs, suppliers_pooled_1se, "proxy_1se")
+
 rm(b2b_lhs)
 
 # Merge nace5d and annual accounts from loocv_training_sample + full annual accounts
@@ -112,26 +156,42 @@ rm(df_annual_accounts_selected_sample)
 
 # Merge proxies into LHS panel
 panel <- lhs %>%
-  left_join(proxy_pooled, by = c("vat", "year")) %>%
-  left_join(proxy_fe,     by = c("vat", "year")) %>%
+  left_join(proxy_pooled,  by = c("vat", "year")) %>%
+  left_join(proxy_fe,      by = c("vat", "year")) %>%
+  left_join(proxy_weighted, by = c("vat", "year")) %>%
+  left_join(proxy_robust3,  by = c("vat", "year")) %>%
+  left_join(proxy_robust3w, by = c("vat", "year")) %>%
+  left_join(proxy_1se,      by = c("vat", "year")) %>%
   left_join(nace5d_lookup, by = c("vat", "year")) %>%
   mutate(
-    proxy_pooled = coalesce(proxy_pooled, 0),
-    proxy_fe     = coalesce(proxy_fe, 0),
-    year_f       = factor(year),
-    nace2d_f     = factor(nace2d),
-    nace4d_f     = factor(nace4d),
-    nace5d_f     = factor(nace5d),
-    emit         = as.integer(y > 0)
+    proxy_pooled   = coalesce(proxy_pooled, 0),
+    proxy_fe       = coalesce(proxy_fe, 0),
+    proxy_weighted = coalesce(proxy_weighted, 0),
+    proxy_robust3  = coalesce(proxy_robust3, 0),
+    proxy_robust3w = coalesce(proxy_robust3w, 0),
+    proxy_1se      = coalesce(proxy_1se, 0),
+    year_f         = factor(year),
+    nace2d_f       = factor(nace2d),
+    nace4d_f       = factor(nace4d),
+    nace5d_f       = factor(nace5d),
+    emit           = as.integer(y > 0)
   )
 rm(nace5d_lookup)
 
 cat("Panel rows:", nrow(panel), "\n")
 cat("Emitters:", sum(panel$emit), sprintf("(%.1f%%)\n", 100 * mean(panel$emit)))
-cat("Proxy coverage (pooled > 0):", sum(panel$proxy_pooled > 0),
+cat("Proxy coverage (pooled > 0):   ", sum(panel$proxy_pooled > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_pooled > 0)))
-cat("Proxy coverage (within-buyer > 0):", sum(panel$proxy_fe > 0),
+cat("Proxy coverage (within-buyer): ", sum(panel$proxy_fe > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_fe > 0)))
+cat("Proxy coverage (weighted > 0): ", sum(panel$proxy_weighted > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_weighted > 0)))
+cat("Proxy coverage (robust3 > 0):  ", sum(panel$proxy_robust3 > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_robust3 > 0)))
+cat("Proxy coverage (robust3w > 0): ", sum(panel$proxy_robust3w > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_robust3w > 0)))
+cat("Proxy coverage (1se > 0):      ", sum(panel$proxy_1se > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_1se > 0)))
 
 # ── Save training sample (for local experimentation) ─────────────────────────
 # Merges core panel columns with ALL annual accounts variables so we have
@@ -144,7 +204,8 @@ if (length(overlap_cols) > 0) aa_lhs <- aa_lhs %>% select(-all_of(overlap_cols))
 
 training_sample <- panel %>%
   select(vat, year, y, log_revenue, nace2d, nace5d, euets, emit,
-         proxy_pooled, proxy_fe) %>%
+         proxy_pooled, proxy_fe,
+         proxy_weighted, proxy_robust3, proxy_robust3w, proxy_1se) %>%
   left_join(aa_lhs, by = c("vat", "year"))
 save(training_sample, file = file.path(PROC_DATA, "training_sample.RData"))
 cat("Saved training sample:", nrow(training_sample), "rows x",
@@ -358,7 +419,17 @@ hurdle_specs <- list(
   make_hurdle_spec("hurdle_proxy_pooled_ind",        "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_nested),
   make_hurdle_spec("hurdle_proxy_pooled_ind_base",   "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_base),
   make_hurdle_spec("hurdle_proxy_within_buyer",      "log_revenue + asinh(proxy_fe)", re_nested),
-  make_hurdle_spec("hurdle_proxy_within_buyer_base", "log_revenue + asinh(proxy_fe)", re_base)
+  make_hurdle_spec("hurdle_proxy_within_buyer_base", "log_revenue + asinh(proxy_fe)", re_base),
+
+  # Phase 2A: hurdle specs for new proxy variants (indicator, nested + base)
+  make_hurdle_spec("hurdle_proxy_weighted_ind",      "log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted)", re_nested),
+  make_hurdle_spec("hurdle_proxy_weighted_ind_base", "log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted)", re_base),
+  make_hurdle_spec("hurdle_proxy_robust3_ind",       "log_revenue + I(proxy_robust3 > 0) + asinh(proxy_robust3)", re_nested),
+  make_hurdle_spec("hurdle_proxy_robust3_ind_base",  "log_revenue + I(proxy_robust3 > 0) + asinh(proxy_robust3)", re_base),
+  make_hurdle_spec("hurdle_proxy_robust3w_ind",      "log_revenue + I(proxy_robust3w > 0) + asinh(proxy_robust3w)", re_nested),
+  make_hurdle_spec("hurdle_proxy_robust3w_ind_base", "log_revenue + I(proxy_robust3w > 0) + asinh(proxy_robust3w)", re_base),
+  make_hurdle_spec("hurdle_proxy_1se_ind",           "log_revenue + I(proxy_1se > 0) + asinh(proxy_1se)", re_nested),
+  make_hurdle_spec("hurdle_proxy_1se_ind_base",      "log_revenue + I(proxy_1se > 0) + asinh(proxy_1se)", re_base)
 )
 
 # Threshold grid for hurdle
