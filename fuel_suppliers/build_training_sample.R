@@ -6,7 +6,7 @@
 #   experimentation. Merges the analysis panel (proxies + sector + emissions)
 #   with ALL annual accounts variables (~228 columns).
 #
-#   Run this on RMD after build_proxy_and_cv.R has produced
+#   Run this on RMD after build_proxy.R has produced
 #   fuel_suppliers_analysis_panel.RData. Then copy training_sample.RData
 #   to local desktop.
 #

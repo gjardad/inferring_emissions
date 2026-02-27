@@ -26,7 +26,8 @@
 #       "Extensive margin":    FPR, TPR, p50, p99
 #
 # INPUTS
-#   {OUTPUT_DIR}/fuel_suppliers_cv_performance.csv
+#   {OUTPUT_DIR}/fuel_suppliers_cv_performance_lofocv.csv
+#   {OUTPUT_DIR}/fuel_suppliers_cv_performance_losocv.csv
 #   {OUTPUT_DIR}/cell_fp_severity_*.csv  (per-cell FP severity, optional)
 #
 # OUTPUTS
@@ -50,10 +51,15 @@ source(file.path(REPO_DIR, "paths.R"))
 
 
 # ── Load CV results ──────────────────────────────────────────────────────────
-cv_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance.csv")
-if (!file.exists(cv_path)) stop("CV results not found: ", cv_path)
+lofocv_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance_lofocv.csv")
+losocv_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance_losocv.csv")
+if (!file.exists(lofocv_path)) stop("LOFOCV results not found: ", lofocv_path)
+if (!file.exists(losocv_path)) stop("LOSOCV results not found: ", losocv_path)
 
-cv <- read.csv(cv_path, stringsAsFactors = FALSE)
+cv <- rbind(
+  read.csv(lofocv_path, stringsAsFactors = FALSE),
+  read.csv(losocv_path, stringsAsFactors = FALSE)
+)
 
 # Load per-cell FP severity CSVs (raw, pre-calibration, pre-cap)
 load_cell_fp <- function(fname) {
