@@ -96,7 +96,7 @@ syt <- panel %>%
   summarise(E_total = sum(y, na.rm = TRUE), n_full = n(), .groups = "drop")
 
 
-# ── Calibration with cap (copied from build_proxy_and_cv.R) ─────────────────
+# ── Calibration with cap (see fuel_suppliers/utils/calibration.R) ────────────
 calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
   df <- data.frame(
     yhat = yhat, emit = emit, y = y,
