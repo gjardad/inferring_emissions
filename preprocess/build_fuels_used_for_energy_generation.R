@@ -54,7 +54,7 @@ df <- fuels_for_energy_use %>%
   rename(year = TIME_PERIOD, obs_value = OBS_VALUE) %>% 
   # exclude total, bioenergy, renewables, biofuels, electricity, heat, nuclear, and waste
   filter(!substr(siec_code, 1, 2) %in% c("RA", "R5", "TO", "BI", "W6", "H8", "E7", "FE", "N9")) %>% 
-  filter(!siec_code %in% c("C0000X0350-0370", "C0350-0370", "O4000XBIO", "O4100_TOT"))
+  filter(!siec_code %in% c("C0000X0350-0370", "C0350-0370", "O4000XBIO", "P1000"))
 
 siec_used_for_energy <- df %>%
   group_by(siec_code, siec_name) %>%
