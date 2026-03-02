@@ -83,6 +83,8 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 **Results are mostly ready**. We are currently going over the logic of the entire exercise to check for inconsistencies and we hope to start writing the paper soon.
 
+**Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
+
 ## Referee 2 Correspondence
 
 This project uses the Referee 2 audit protocol. There are no correspondences with referee 2 yet.
