@@ -8,6 +8,8 @@ The model should be evaluated with respect to its
 2. ability to discriminate between emitters and non-emitters, within and across sectors
 3. ability to correctly rank firms within NACE 2-digit sectors with respect to their emissions
 
+Getting small emitters right is a central goal. In Belgium, large emitters are already observed through the EU ETS, whose regulation threshold is strongly correlated with firm size. The prediction model's value-added is therefore primarily for the non-ETS firms — which tend to be smaller emitters.
+
 ### Research Question: to what extent does business-to-business transaction data help us infer emissions at the firm-year-level?
 
 ### Data Sources
