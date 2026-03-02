@@ -272,13 +272,37 @@ for (sp in ppml_specs) {
 }
 
 # ── Helper: pooled within-sector rho (demeaned by sector-year) ───────────────
+# Returns a named list with two versions:
+#   global       – demean by (sector, year), pool ALL residuals, one Spearman rho
+#   median_sector – demean by (sector, year), Spearman rho per sector (pooling
+#                   years within sector), then median across sectors
 calc_rho_pooled <- function(y, yhat, nace2d, year) {
   df <- data.frame(y = y, yhat = yhat, nace2d = nace2d, year = year)
   df <- df %>%
     group_by(nace2d, year) %>%
     mutate(y_dm = y - mean(y), yhat_dm = yhat - mean(yhat)) %>%
     ungroup()
-  suppressWarnings(cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs"))
+
+  # Global: single rho over all demeaned residuals
+  rho_global <- suppressWarnings(
+    cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs")
+  )
+
+  # Per-sector: Spearman rho within each sector (pooling across years)
+  sector_rhos <- df %>%
+    group_by(nace2d) %>%
+    summarise(
+      rho = suppressWarnings(
+        cor(y_dm, yhat_dm, method = "spearman", use = "complete.obs")
+      ),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    filter(!is.na(rho), n >= 5)
+
+  rho_median_sector <- if (nrow(sector_rhos) > 0) median(sector_rhos$rho) else NA_real_
+
+  list(global = rho_global, median_sector = rho_median_sector)
 }
 
 # ── Hurdle metrics (threshold search on calibrated_clipped RMSE) ─────────────
@@ -323,14 +347,15 @@ for (sp in hurdle_specs) {
 
     # Collect sweep for focal specs
     if (is_focal) {
-      rho_p <- calc_rho_pooled(panel$y[ok], yhat_cap,
-                               panel$nace2d[ok], panel$year[ok])
+      rho_list <- calc_rho_pooled(panel$y[ok], yhat_cap,
+                                  panel$nace2d[ok], panel$year[ok])
       threshold_sweep_rows[[length(threshold_sweep_rows) + 1]] <- data.frame(
         model = nm, threshold = thr,
         nRMSE = m_cap$nrmse_sd, rmse = m_cap$rmse,
         fpr_nonemitters = m_cap$fpr_nonemitters,
         tpr_emitters = m_cap$tpr_emitters,
-        rho_pooled = rho_p,
+        rho_pooled = rho_list$median_sector,
+        rho_pooled_global = rho_list$global,
         within_sy_rho_med = m_cap$within_sy_rho_med,
         within_sy_rho_min = m_cap$within_sy_rho_min,
         within_sy_rho_max = m_cap$within_sy_rho_max,

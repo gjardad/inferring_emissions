@@ -115,13 +115,35 @@ all_year_levels   <- levels(panel$year_f)
 cat("═══ LOSOCV: Leave-One-Sector-Out CV ═══\n")
 
 # Helper: pooled within-sector rho (demeaned by sector-year)
+# Returns a named list with two versions:
+#   global       – demean by (sector, year), pool ALL residuals, one Spearman rho
+#   median_sector – demean by (sector, year), Spearman rho per sector (pooling
+#                   years within sector), then median across sectors
 calc_rho_pooled <- function(y, yhat, nace2d, year) {
   df <- data.frame(y = y, yhat = yhat, nace2d = nace2d, year = year)
   df <- df %>%
     group_by(nace2d, year) %>%
     mutate(y_dm = y - mean(y), yhat_dm = yhat - mean(yhat)) %>%
     ungroup()
-  suppressWarnings(cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs"))
+
+  rho_global <- suppressWarnings(
+    cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs")
+  )
+
+  sector_rhos <- df %>%
+    group_by(nace2d) %>%
+    summarise(
+      rho = suppressWarnings(
+        cor(y_dm, yhat_dm, method = "spearman", use = "complete.obs")
+      ),
+      n = n(),
+      .groups = "drop"
+    ) %>%
+    filter(!is.na(rho), n >= 5)
+
+  rho_median_sector <- if (nrow(sector_rhos) > 0) median(sector_rhos$rho) else NA_real_
+
+  list(global = rho_global, median_sector = rho_median_sector)
 }
 
 results <- list()
@@ -251,14 +273,15 @@ for (losocv_sp in losocv_specs) {
       }
 
       # Collect sweep for all LOSOCV specs
-      rho_p <- calc_rho_pooled(panel$y[ok_losocv], yhat_cap,
-                               panel$nace2d[ok_losocv], panel$year[ok_losocv])
+      rho_list <- calc_rho_pooled(panel$y[ok_losocv], yhat_cap,
+                                  panel$nace2d[ok_losocv], panel$year[ok_losocv])
       losocv_sweep_rows[[length(losocv_sweep_rows) + 1]] <- data.frame(
         model = losocv_nm, threshold = thr,
         nRMSE = m$nrmse_sd, rmse = m$rmse,
         fpr_nonemitters = m$fpr_nonemitters,
         tpr_emitters = m$tpr_emitters,
-        rho_pooled = rho_p,
+        rho_pooled = rho_list$median_sector,
+        rho_pooled_global = rho_list$global,
         within_sy_rho_med = m$within_sy_rho_med,
         within_sy_rho_min = m$within_sy_rho_min,
         within_sy_rho_max = m$within_sy_rho_max,
