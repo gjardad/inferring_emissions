@@ -64,6 +64,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       mean_pred_nonemit = NA_real_, p50_pred_nonemit = NA_real_, p90_pred_nonemit = NA_real_,
       p95_pred_nonemit = NA_real_, p99_pred_nonemit = NA_real_,
       mapd_emitters = NA_real_,
+      median_apd = NA_real_, apd_q25 = NA_real_, apd_q75 = NA_real_,
       TP = NA_integer_, FP = NA_integer_, TN = NA_integer_, FN = NA_integer_,
       nonemit_p50_rank_19 = NA_real_, nonemit_p90_rank_19 = NA_real_,
       nonemit_p99_rank_19 = NA_real_,
@@ -72,6 +73,8 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
       avg_nonemit_p50_rank = NA_real_, avg_nonemit_p99_rank = NA_real_,
       within_sy_rho_med = NA_real_, within_sy_rho_min = NA_real_,
       within_sy_rho_max = NA_real_,
+      rho_pooled = NA_real_, rho_pooled_min = NA_real_, rho_pooled_max = NA_real_,
+      rho_pooled_global = NA_real_,
       within_sy_rho_detail = data.frame(
         nace2d = character(0), year = integer(0),
         rho = numeric(0), n_firms = integer(0),
@@ -109,6 +112,18 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     mean(abs(y[is_emit_true] - yhat[is_emit_true]) / y[is_emit_true])
   } else {
     NA_real_
+  }
+
+  # Median APD among emitters (robust to skewness) with IQR
+  if (any(is_emit_true)) {
+    apd_vec <- abs(y[is_emit_true] - yhat[is_emit_true]) / y[is_emit_true]
+    median_apd <- median(apd_vec)
+    apd_q25    <- unname(quantile(apd_vec, 0.25))
+    apd_q75    <- unname(quantile(apd_vec, 0.75))
+  } else {
+    median_apd <- NA_real_
+    apd_q25    <- NA_real_
+    apd_q75    <- NA_real_
   }
   
   # -----------------------------
@@ -302,6 +317,56 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     stringsAsFactors = FALSE
   )
 
+  # -----------------------------
+  # Pooled within-sector rho: demean by (sector, year), compute Spearman rho
+  # per sector pooling across years, then take median across sectors.
+  # Also compute the global version (all demeaned residuals pooled).
+  # -----------------------------
+  rho_pooled <- NA_real_
+  rho_pooled_min <- NA_real_
+  rho_pooled_max <- NA_real_
+  rho_pooled_global <- NA_real_
+
+  if (!is.null(nace2d) && !is.null(year)) {
+    # Demean y and yhat by (sector, year)
+    all_secs <- sort(unique(nace2d))
+    all_yrs  <- sort(unique(year))
+    y_dm    <- numeric(length(y))
+    yhat_dm <- numeric(length(yhat))
+
+    for (sec in all_secs) {
+      for (yr in all_yrs) {
+        idx <- which(nace2d == sec & year == yr)
+        if (length(idx) == 0) next
+        y_dm[idx]    <- y[idx] - mean(y[idx])
+        yhat_dm[idx] <- yhat[idx] - mean(yhat[idx])
+      }
+    }
+
+    # Global: single rho over all demeaned residuals
+    rho_pooled_global <- suppressWarnings(
+      stats::cor(y_dm, yhat_dm, method = "spearman", use = "complete.obs")
+    )
+    if (!is.finite(rho_pooled_global)) rho_pooled_global <- NA_real_
+
+    # Per-sector: Spearman rho within each sector (pooling across years)
+    sector_rhos <- numeric(0)
+    for (sec in all_secs) {
+      idx <- which(nace2d == sec)
+      if (length(idx) < 5) next
+      rho_sec <- suppressWarnings(
+        stats::cor(y_dm[idx], yhat_dm[idx], method = "spearman", use = "complete.obs")
+      )
+      if (is.finite(rho_sec)) sector_rhos <- c(sector_rhos, rho_sec)
+    }
+
+    if (length(sector_rhos) > 0) {
+      rho_pooled     <- median(sector_rhos)
+      rho_pooled_min <- min(sector_rhos)
+      rho_pooled_max <- max(sector_rhos)
+    }
+  }
+
   # Build per-cell detail data.frame (empty if no cells computed)
   if (length(cell_p50_ranks) > 0) {
     cell_fp_severity <- data.frame(
@@ -369,6 +434,12 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     within_sy_rho_min = within_sy_rho_min,
     within_sy_rho_max = within_sy_rho_max,
 
+    # pooled within-sector rho (demeaned by sector-year)
+    rho_pooled = rho_pooled,
+    rho_pooled_min = rho_pooled_min,
+    rho_pooled_max = rho_pooled_max,
+    rho_pooled_global = rho_pooled_global,
+
     # per-cell detail (data.frame with nace2d, year, p50_rank, p99_rank)
     cell_fp_severity = cell_fp_severity,
 
@@ -377,6 +448,9 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
 
     # emitters-only intensity error summary
     mapd_emitters = mapd_emitters,
+    median_apd = median_apd,
+    apd_q25 = apd_q25,
+    apd_q75 = apd_q75,
 
     # confusion matrix counts
     TP = as.integer(TP),

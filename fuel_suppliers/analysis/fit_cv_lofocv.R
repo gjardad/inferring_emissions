@@ -212,7 +212,9 @@ make_result_row <- function(nm, variant, thr, m) {
     model = nm, variant = variant, threshold = thr,
     n = m$n, nRMSE = m$nrmse_sd,
     rmse = m$rmse, mae = m$mae,
-    mapd_emitters = m$mapd_emitters, spearman = m$spearman,
+    mapd_emitters = m$mapd_emitters,
+    median_apd = m$median_apd, apd_q25 = m$apd_q25, apd_q75 = m$apd_q75,
+    spearman = m$spearman,
     fpr_nonemitters = m$fpr_nonemitters,
     tpr_emitters = m$tpr_emitters,
     emitter_mass_captured = m$emitter_mass_captured,
@@ -227,6 +229,10 @@ make_result_row <- function(nm, variant, thr, m) {
     within_sy_rho_med = m$within_sy_rho_med,
     within_sy_rho_min = m$within_sy_rho_min,
     within_sy_rho_max = m$within_sy_rho_max,
+    rho_pooled = m$rho_pooled,
+    rho_pooled_min = m$rho_pooled_min,
+    rho_pooled_max = m$rho_pooled_max,
+    rho_pooled_global = m$rho_pooled_global,
     stringsAsFactors = FALSE
   )
 }

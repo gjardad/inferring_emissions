@@ -112,7 +112,7 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
     "\\toprule",
     " & \\multicolumn{4}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
     "\\cmidrule(lr){2-5} \\cmidrule(lr){6-9}",
-    "Model & nRMSE & MAPD & $\\rho$ & $\\rho_{s,t}$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
+    "Model & nRMSE & Med.~APD & $\\rho$ & $\\rho_s$ & FPR & TPR & $p_{50}$ & $p_{99}$ \\\\",
     "\\midrule",
     "\\multicolumn{9}{l}{\\textit{Panel A: Leave-firms-out cross-validation}} \\\\",
     "\\addlinespace"
@@ -141,12 +141,12 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
 
     # Prediction accuracy columns
     if (!is.null(r)) {
-      nrmse  <- fmt3(r$nRMSE)
-      mapd   <- fmt3(r$mapd_emitters)
-      rho    <- fmt3(r$spearman)
-      rho_w  <- fmt3(r$within_sy_rho_med)
+      nrmse    <- fmt3(r$nRMSE)
+      med_apd  <- fmt3(r$median_apd)
+      rho      <- fmt3(r$spearman)
+      rho_s    <- fmt3(r$rho_pooled)
     } else {
-      nrmse <- "---"; mapd <- "---"; rho <- "---"; rho_w <- "---"
+      nrmse <- "---"; med_apd <- "---"; rho <- "---"; rho_s <- "---"
     }
 
     # Extensive margin columns
@@ -165,11 +165,12 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
       fpr <- "---"; tpr <- "---"; p50 <- "---"; p99 <- "---"
     }
 
-    # Two-row block: median + [min, max] for rho_w and p50/p99
-    has_rho_range <- !is.null(r) && !is.na(r$within_sy_rho_min) && !is.na(r$within_sy_rho_max)
+    # Two-row block: [IQR] for APD, [min, max] for rho_s, p50/p99 ranges
+    has_second_row <- !is.null(r) && !is.na(r$apd_q25) && !is.na(r$apd_q75)
 
-    if (has_rho_range) {
-      rho_w_range <- fmt_rho_minmax(r$within_sy_rho_min, r$within_sy_rho_max)
+    if (has_second_row) {
+      apd_iqr <- sprintf("{\\scriptsize [%.2f, %.2f]}", r$apd_q25, r$apd_q75)
+      rho_s_range <- fmt_rho_minmax(r$rho_pooled_min, r$rho_pooled_max)
 
       if (!is.null(cell_fp)) {
         p50_range <- fmt_pct_minmax(cell_fp$p50_rank)
@@ -180,18 +181,18 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
       }
 
       line1 <- sprintf(
-        "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & %s \\\\",
-        spec$label, nrmse, mapd, rho, rho_w, fpr, tpr, p50, p99
+        "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & %s \\\\",
+        spec$label, nrmse, med_apd, rho, rho_s, fpr, tpr, p50, p99
       )
       line2 <- sprintf(
-        " & & & & %s & & & %s & %s \\\\",
-        rho_w_range, p50_range, p99_range
+        " & & %s & & %s & & & %s & %s \\\\",
+        apd_iqr, rho_s_range, p50_range, p99_range
       )
       tex <- c(tex, line1, line2)
     } else {
       line <- sprintf(
         "%s & %s & %s & %s & %s & %s & %s & %s & %s \\\\",
-        spec$label, nrmse, mapd, rho, rho_w, fpr, tpr, p50, p99
+        spec$label, nrmse, med_apd, rho, rho_s, fpr, tpr, p50, p99
       )
       tex <- c(tex, line)
     }

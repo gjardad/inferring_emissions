@@ -5,8 +5,8 @@
 #   Formalize the argument that negative within-sector rho values in small
 #   sectors are consistent with a common positive underlying rho (rho*).
 #
-#   For each proxy variant and each N_min cutoff {5, 10, 15, 30}:
-#   1. Split sectors into "large" (n_firms >= N_min) and "small" (< N_min)
+#   For each proxy variant, sample-size assumption, and N_min cutoff:
+#   1. Split sectors into "large" (n >= N_min) and "small" (< N_min)
 #   2. Find the largest rho* such that:
 #      (a) We reject H0: rho_s <= rho* for ALL large sectors (5% one-sided)
 #      (b) Small sectors satisfy a tolerance condition (see variants below)
@@ -17,8 +17,13 @@
 #     relaxed_1sd_80: >= 80% of small sectors within 1 SD of rho*
 #     relaxed_2sd_80: >= 80% of small sectors within 2 SD of rho*
 #
-#   Variance: Var(rho_s) = 1/(n_firms - 1)  [conservative: treats within-firm
-#   observations as fully dependent, so effective n = n_firms not n_firmyears]
+#   Sample-size assumptions (two extremes):
+#     n_firms:     Var(rho_s) = 1/(n_firms - 1)
+#                  Treats within-firm observations as fully dependent.
+#                  Least conservative: wide bands, easier for test to pass.
+#     n_firmyears: Var(rho_s) = 1/(n_firmyears - 1)
+#                  Treats all firm-year observations as independent.
+#                  Most conservative: tight bands, harder for test to pass.
 #
 # INPUT
 #   {OUTPUT_DIR}/rho_pooled_sector_comparison.csv
@@ -60,8 +65,14 @@ Z_ALPHA    <- qnorm(1 - ALPHA)   # 1.645 for 5% one-sided
 
 # Proxy variants to test (column names from the comp CSV)
 proxies <- list(
-  list(name = "pooled",   rho_col = "rho_pooled_pooled",  n_col = "n_firms_pooled"),
-  list(name = "weighted", rho_col = "rho_pooled_weighted", n_col = "n_firms_weighted")
+  list(name = "pooled",   rho_col = "rho_pooled_pooled"),
+  list(name = "weighted", rho_col = "rho_pooled_weighted")
+)
+
+# Sample-size assumptions: two extremes for Var(rho_s) = 1/(n_s - 1)
+n_assumptions <- list(
+  list(label = "n_firms",     col_prefix = "n_firms"),
+  list(label = "n_firmyears", col_prefix = "n_firmyears")
 )
 
 # Test configurations: (k_sd, min_fraction)
@@ -196,117 +207,129 @@ find_rho_star <- function(sectors, n_min, z_alpha, k_sd, min_frac) {
 # ── Run all tests ────────────────────────────────────────────────────────────
 summary_rows <- list()
 
-for (prx in proxies) {
+for (na in n_assumptions) {
   cat("\n")
-  cat(strrep("=", 75), "\n")
-  cat(sprintf("PROXY: %s\n", toupper(prx$name)))
-  cat(strrep("=", 75), "\n")
+  cat(strrep("#", 80), "\n")
+  cat(sprintf("SAMPLE SIZE ASSUMPTION: %s  [Var(rho) = 1/(%s - 1)]\n",
+              toupper(na$label), na$label))
+  cat(strrep("#", 80), "\n")
 
-  sectors <- data.frame(
-    nace2d  = comp$nace2d,
-    n_firms = comp[[prx$n_col]],
-    rho_hat = comp[[prx$rho_col]],
-    stringsAsFactors = FALSE
-  )
-  sectors <- sectors[!is.na(sectors$rho_hat), ]
+  for (prx in proxies) {
+    n_col <- paste0(na$col_prefix, "_", prx$name)
 
-  cat(sprintf("\nTotal sectors: %d\n", nrow(sectors)))
-  cat(sprintf("Variance: Var(rho) = 1/(n_firms - 1)  [conservative]\n"))
-  cat(sprintf("Rejection: alpha = %.2f, z_alpha = %.3f (one-sided)\n", ALPHA, Z_ALPHA))
+    cat("\n")
+    cat(strrep("=", 75), "\n")
+    cat(sprintf("PROXY: %s  |  n = %s\n", toupper(prx$name), na$label))
+    cat(strrep("=", 75), "\n")
 
-  for (n_min in N_MIN_CUTS) {
-    cat(sprintf("\n%s\n", strrep("-", 75)))
-    cat(sprintf("N_min = %d\n", n_min))
-    cat(sprintf("%s\n", strrep("-", 75)))
+    sectors <- data.frame(
+      nace2d  = comp$nace2d,
+      n_firms = comp[[n_col]],
+      rho_hat = comp[[prx$rho_col]],
+      stringsAsFactors = FALSE
+    )
+    sectors <- sectors[!is.na(sectors$rho_hat), ]
 
-    n_large <- sum(sectors$n_firms >= n_min)
-    n_small <- sum(sectors$n_firms <  n_min)
-    cat(sprintf("\n  Large (>= %d firms): %d sectors\n", n_min, n_large))
-    cat(sprintf("  Small (<  %d firms): %d sectors\n", n_min, n_small))
+    cat(sprintf("\nTotal sectors: %d\n", nrow(sectors)))
+    cat(sprintf("Variance: Var(rho) = 1/(%s - 1)\n", na$label))
+    cat(sprintf("Rejection: alpha = %.2f, z_alpha = %.3f (one-sided)\n", ALPHA, Z_ALPHA))
 
-    if (n_large == 0) {
-      cat("  No large sectors -- skipping.\n")
+    for (n_min in N_MIN_CUTS) {
+      cat(sprintf("\n%s\n", strrep("-", 75)))
+      cat(sprintf("N_min = %d\n", n_min))
+      cat(sprintf("%s\n", strrep("-", 75)))
+
+      n_large <- sum(sectors$n_firms >= n_min)
+      n_small <- sum(sectors$n_firms <  n_min)
+      cat(sprintf("\n  Large (>= %d): %d sectors\n", n_min, n_large))
+      cat(sprintf("  Small (<  %d): %d sectors\n", n_min, n_small))
+
+      if (n_large == 0) {
+        cat("  No large sectors -- skipping.\n")
+        for (tc in test_configs) {
+          summary_rows[[length(summary_rows) + 1]] <- data.frame(
+            n_assumption = na$label,
+            proxy = prx$name, n_min = n_min, test = tc$label,
+            n_large = 0, n_small = n_small,
+            rho_star = NA, feasible = NA, frac_ok = NA,
+            n_ok = NA, binding = "NO_LARGE", binding_sector = "",
+            stringsAsFactors = FALSE)
+        }
+        next
+      }
+
       for (tc in test_configs) {
+        cat(sprintf("\n  ── %s (k=%d SD, require >= %.0f%% of small sectors) ──\n",
+                    tc$label, tc$k_sd, 100 * tc$min_frac))
+
+        res <- find_rho_star(sectors, n_min, Z_ALPHA, tc$k_sd, tc$min_frac)
+
+        # Print large sector detail (only for first test config to avoid repetition)
+        if (tc$label == test_configs[[1]]$label) {
+          cat("\n  Large sectors:\n")
+          cat(sprintf("  %-6s  %8s  %10s  %10s  %15s\n",
+                      "NACE", na$label, "rho_hat", "SD", "UB=rho-z*SD"))
+          cat("  ", strrep("-", 55), "\n")
+          ld <- res$large_detail[order(res$large_detail$ub), ]
+          for (i in seq_len(nrow(ld))) {
+            r <- ld[i, ]
+            cat(sprintf("  %-6s  %8d  %10.3f  %10.3f  %15.3f\n",
+                        r$nace2d, r$n_firms, r$rho_hat, r$sd, r$ub))
+          }
+          cat(sprintf("\n  UB from large sectors = %.3f\n", res$ub_large))
+        }
+
+        # Print small sector detail
+        if (res$n_small > 0 && !is.na(res$rho_star)) {
+          cat(sprintf("\n  Small sectors (rho* = %.3f, %d SD band):\n",
+                      res$rho_star, tc$k_sd))
+          cat(sprintf("  %-6s  %8s  %10s  %10s  %12s  %12s  %5s\n",
+                      "NACE", na$label, "rho_hat", "SD",
+                      sprintf("rho*-%dSD", tc$k_sd),
+                      sprintf("rho*+%dSD", tc$k_sd), "OK?"))
+          cat("  ", strrep("-", 65), "\n")
+          sd <- res$small_detail[order(res$small_detail$rho_hat), ]
+          for (i in seq_len(nrow(sd))) {
+            r <- sd[i, ]
+            lo <- res$rho_star - tc$k_sd * r$sd
+            hi <- res$rho_star + tc$k_sd * r$sd
+            cat(sprintf("  %-6s  %8d  %10.3f  %10.3f  %12.3f  %12.3f  %5s\n",
+                        r$nace2d, r$n_firms, r$rho_hat, r$sd, lo, hi,
+                        if (r$within_band) "yes" else "NO"))
+          }
+          cat(sprintf("\n  Within band: %d / %d (%.0f%%)\n",
+                      res$n_ok, res$n_small, 100 * res$frac_ok))
+        }
+
+        # Result
+        feas_label <- if (is.na(res$feasible)) "N/A"
+                      else if (res$feasible) "YES" else "NO"
+        rho_label  <- if (is.na(res$rho_star)) "N/A"
+                      else sprintf("%.3f", res$rho_star)
+
+        cat(sprintf("\n  ==> rho* = %s  |  Feasible: %s", rho_label, feas_label))
+        if (res$feasible) {
+          cat(sprintf("  |  Binding: NACE %s (%s)", res$binding_sector, res$binding))
+        }
+        cat("\n")
+
+        # Store summary
         summary_rows[[length(summary_rows) + 1]] <- data.frame(
-          proxy = prx$name, n_min = n_min, test = tc$label,
-          n_large = 0, n_small = n_small,
-          rho_star = NA, feasible = NA, frac_ok = NA,
-          n_ok = NA, binding = "NO_LARGE", binding_sector = "",
-          stringsAsFactors = FALSE)
+          n_assumption = na$label,
+          proxy    = prx$name,
+          n_min    = n_min,
+          test     = tc$label,
+          n_large  = res$n_large,
+          n_small  = res$n_small,
+          rho_star = if (!is.na(res$rho_star)) round(res$rho_star, 4) else NA,
+          feasible = res$feasible,
+          frac_ok  = if (!is.na(res$frac_ok)) round(res$frac_ok, 3) else NA,
+          n_ok     = res$n_ok,
+          binding  = res$binding,
+          binding_sector = res$binding_sector,
+          stringsAsFactors = FALSE
+        )
       }
-      next
-    }
-
-    for (tc in test_configs) {
-      cat(sprintf("\n  ── %s (k=%d SD, require >= %.0f%% of small sectors) ──\n",
-                  tc$label, tc$k_sd, 100 * tc$min_frac))
-
-      res <- find_rho_star(sectors, n_min, Z_ALPHA, tc$k_sd, tc$min_frac)
-
-      # Print large sector detail (only for first test config to avoid repetition)
-      if (tc$label == test_configs[[1]]$label) {
-        cat("\n  Large sectors:\n")
-        cat(sprintf("  %-6s  %6s  %10s  %10s  %15s\n",
-                    "NACE", "Firms", "rho_hat", "SD", "UB=rho-z*SD"))
-        cat("  ", strrep("-", 53), "\n")
-        ld <- res$large_detail[order(res$large_detail$ub), ]
-        for (i in seq_len(nrow(ld))) {
-          r <- ld[i, ]
-          cat(sprintf("  %-6s  %6d  %10.3f  %10.3f  %15.3f\n",
-                      r$nace2d, r$n_firms, r$rho_hat, r$sd, r$ub))
-        }
-        cat(sprintf("\n  UB from large sectors = %.3f\n", res$ub_large))
-      }
-
-      # Print small sector detail
-      if (res$n_small > 0 && !is.na(res$rho_star)) {
-        cat(sprintf("\n  Small sectors (rho* = %.3f, %d SD band):\n",
-                    res$rho_star, tc$k_sd))
-        cat(sprintf("  %-6s  %6s  %10s  %10s  %12s  %12s  %5s\n",
-                    "NACE", "Firms", "rho_hat", "SD",
-                    sprintf("rho*-%dSD", tc$k_sd),
-                    sprintf("rho*+%dSD", tc$k_sd), "OK?"))
-        cat("  ", strrep("-", 63), "\n")
-        sd <- res$small_detail[order(res$small_detail$rho_hat), ]
-        for (i in seq_len(nrow(sd))) {
-          r <- sd[i, ]
-          lo <- res$rho_star - tc$k_sd * r$sd
-          hi <- res$rho_star + tc$k_sd * r$sd
-          cat(sprintf("  %-6s  %6d  %10.3f  %10.3f  %12.3f  %12.3f  %5s\n",
-                      r$nace2d, r$n_firms, r$rho_hat, r$sd, lo, hi,
-                      if (r$within_band) "yes" else "NO"))
-        }
-        cat(sprintf("\n  Within band: %d / %d (%.0f%%)\n",
-                    res$n_ok, res$n_small, 100 * res$frac_ok))
-      }
-
-      # Result
-      feas_label <- if (is.na(res$feasible)) "N/A"
-                    else if (res$feasible) "YES" else "NO"
-      rho_label  <- if (is.na(res$rho_star)) "N/A"
-                    else sprintf("%.3f", res$rho_star)
-
-      cat(sprintf("\n  ==> rho* = %s  |  Feasible: %s", rho_label, feas_label))
-      if (res$feasible) {
-        cat(sprintf("  |  Binding: NACE %s (%s)", res$binding_sector, res$binding))
-      }
-      cat("\n")
-
-      # Store summary
-      summary_rows[[length(summary_rows) + 1]] <- data.frame(
-        proxy    = prx$name,
-        n_min    = n_min,
-        test     = tc$label,
-        n_large  = res$n_large,
-        n_small  = res$n_small,
-        rho_star = if (!is.na(res$rho_star)) round(res$rho_star, 4) else NA,
-        feasible = res$feasible,
-        frac_ok  = if (!is.na(res$frac_ok)) round(res$frac_ok, 3) else NA,
-        n_ok     = res$n_ok,
-        binding  = res$binding,
-        binding_sector = res$binding_sector,
-        stringsAsFactors = FALSE
-      )
     }
   }
 }
@@ -314,23 +337,23 @@ for (prx in proxies) {
 
 # ── Summary table ────────────────────────────────────────────────────────────
 cat("\n\n")
-cat(strrep("=", 95), "\n")
-cat("SUMMARY: rho* by proxy, N_min, and test variant\n")
-cat(strrep("=", 95), "\n\n")
+cat(strrep("=", 110), "\n")
+cat("SUMMARY: rho* by sample-size assumption, proxy, N_min, and test variant\n")
+cat(strrep("=", 110), "\n\n")
 
 summary_df <- do.call(rbind, summary_rows)
 
-cat(sprintf("%-9s  %5s  %-16s  %5s  %5s  %8s  %8s  %7s  %12s  %8s\n",
-            "Proxy", "N_min", "Test", "Large", "Small", "rho*", "Feasible",
-            "Frac_OK", "Binding", "Sector"))
-cat(strrep("-", 95), "\n")
+cat(sprintf("%-12s  %-9s  %5s  %-16s  %5s  %5s  %8s  %8s  %7s  %12s  %8s\n",
+            "n_assumption", "Proxy", "N_min", "Test", "Large", "Small", "rho*",
+            "Feasible", "Frac_OK", "Binding", "Sector"))
+cat(strrep("-", 110), "\n")
 for (i in seq_len(nrow(summary_df))) {
   r <- summary_df[i, ]
   rho_str  <- if (is.na(r$rho_star)) sprintf("%8s", "N/A") else sprintf("%8.3f", r$rho_star)
   feas_str <- if (is.na(r$feasible)) "N/A" else if (r$feasible) "YES" else "NO"
   frac_str <- if (is.na(r$frac_ok)) sprintf("%7s", "N/A") else sprintf("%6.0f%%", 100 * r$frac_ok)
-  cat(sprintf("%-9s  %5d  %-16s  %5d  %5d  %s  %8s  %7s  %12s  %8s\n",
-              r$proxy, r$n_min, r$test, r$n_large, r$n_small,
+  cat(sprintf("%-12s  %-9s  %5d  %-16s  %5d  %5d  %s  %8s  %7s  %12s  %8s\n",
+              r$n_assumption, r$proxy, r$n_min, r$test, r$n_large, r$n_small,
               rho_str, feas_str, frac_str, r$binding, r$binding_sector))
 }
 
