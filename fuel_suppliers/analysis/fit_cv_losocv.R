@@ -89,7 +89,7 @@ losocv_specs <- list(
 )
 
 # Threshold grid for hurdle
-THRESHOLDS <- seq(0.10, 0.50, by = 0.05)
+THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
 
 # ── Assign sector folds ──────────────────────────────────────────────────────
@@ -114,9 +114,20 @@ all_year_levels   <- levels(panel$year_f)
 # ── LOSOCV loop ──────────────────────────────────────────────────────────────
 cat("═══ LOSOCV: Leave-One-Sector-Out CV ═══\n")
 
+# Helper: pooled within-sector rho (demeaned by sector-year)
+calc_rho_pooled <- function(y, yhat, nace2d, year) {
+  df <- data.frame(y = y, yhat = yhat, nace2d = nace2d, year = year)
+  df <- df %>%
+    group_by(nace2d, year) %>%
+    mutate(y_dm = y - mean(y), yhat_dm = yhat - mean(yhat)) %>%
+    ungroup()
+  suppressWarnings(cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs"))
+}
+
 results <- list()
 losocv_rho_details <- list()
 losocv_firm_preds  <- list()
+losocv_sweep_rows  <- list()
 
 make_result_row <- function(nm, variant, thr, m) {
   data.frame(
@@ -209,7 +220,7 @@ for (losocv_sp in losocv_specs) {
   ok_losocv <- !is.na(panel$losocv_phat) & !is.na(panel$losocv_muhat) & !is.na(panel$y)
 
   if (sum(ok_losocv) > 0) {
-    cat("Searching over LOSOCV thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
+    cat("Searching over LOSOCV thresholds:", length(THRESHOLDS), "points\n")
 
     best_losocv     <- list(rmse = Inf)
     best_losocv_thr <- NA_real_
@@ -238,6 +249,23 @@ for (losocv_sp in losocv_specs) {
         best_losocv_thr <- thr
         best_m_losocv   <- m
       }
+
+      # Collect sweep for all LOSOCV specs
+      rho_p <- calc_rho_pooled(panel$y[ok_losocv], yhat_cap,
+                               panel$nace2d[ok_losocv], panel$year[ok_losocv])
+      losocv_sweep_rows[[length(losocv_sweep_rows) + 1]] <- data.frame(
+        model = losocv_nm, threshold = thr,
+        nRMSE = m$nrmse_sd, rmse = m$rmse,
+        fpr_nonemitters = m$fpr_nonemitters,
+        tpr_emitters = m$tpr_emitters,
+        rho_pooled = rho_p,
+        within_sy_rho_med = m$within_sy_rho_med,
+        within_sy_rho_min = m$within_sy_rho_min,
+        within_sy_rho_max = m$within_sy_rho_max,
+        spearman = m$spearman,
+        mapd_emitters = m$mapd_emitters,
+        stringsAsFactors = FALSE
+      )
     }
 
     this_thr <- best_losocv_thr
@@ -290,6 +318,14 @@ if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 cv_performance <- bind_rows(results)
 out_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance_losocv.csv")
 write.csv(cv_performance, out_path, row.names = FALSE)
+
+# Save threshold sweep for Pareto frontier analysis
+if (length(losocv_sweep_rows) > 0) {
+  losocv_sweep <- bind_rows(losocv_sweep_rows)
+  sweep_path <- file.path(OUTPUT_DIR, "threshold_sweep_losocv.csv")
+  write.csv(losocv_sweep, sweep_path, row.names = FALSE)
+  cat("LOSOCV threshold sweep saved:", nrow(losocv_sweep), "rows to", sweep_path, "\n")
+}
 
 # Save LOSO rho detail CSVs
 for (nm in names(losocv_rho_details)) {

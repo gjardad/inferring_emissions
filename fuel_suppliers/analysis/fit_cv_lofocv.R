@@ -133,7 +133,7 @@ hurdle_specs <- list(
 )
 
 # Threshold grid for hurdle
-THRESHOLDS <- seq(0.10, 0.50, by = 0.05)
+THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
 
 # ── Pre-allocate prediction columns ─────────────────────────────────────────
@@ -271,8 +271,22 @@ for (sp in ppml_specs) {
   results[[paste0(nm, "_clip")]] <- make_result_row(nm, "calibrated_clipped", NA_real_, m_cap)
 }
 
-# ── Hurdle metrics (threshold search, raw + calibrated + clipped) ────────────
-cat("Searching over hurdle thresholds:", paste(THRESHOLDS, collapse = ", "), "\n")
+# ── Helper: pooled within-sector rho (demeaned by sector-year) ───────────────
+calc_rho_pooled <- function(y, yhat, nace2d, year) {
+  df <- data.frame(y = y, yhat = yhat, nace2d = nace2d, year = year)
+  df <- df %>%
+    group_by(nace2d, year) %>%
+    mutate(y_dm = y - mean(y), yhat_dm = yhat - mean(yhat)) %>%
+    ungroup()
+  suppressWarnings(cor(df$y_dm, df$yhat_dm, method = "spearman", use = "complete.obs"))
+}
+
+# ── Hurdle metrics (threshold search on calibrated_clipped RMSE) ─────────────
+cat("Searching over hurdle thresholds:", length(THRESHOLDS), "points\n")
+
+# Focal specs for which we save the full threshold sweep
+FOCAL_SPECS <- c("hurdle_proxy_pooled_ind_base", "hurdle_proxy_weighted_ind_base")
+threshold_sweep_rows <- list()
 
 for (sp in hurdle_specs) {
   nm <- sp$name
@@ -282,37 +296,63 @@ for (sp in hurdle_specs) {
   ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
   if (sum(ok) == 0) next
 
-  # Step 1: find best threshold on raw predictions
-  best_raw  <- list(rmse = Inf)
-  best_thr_raw <- NA_real_
-  best_m_raw   <- NULL
+  is_focal <- nm %in% FOCAL_SPECS
+
+  # Find best threshold by calibrated_clipped RMSE
+  best_clip  <- list(rmse = Inf)
+  best_thr   <- NA_real_
+  best_m_clip   <- NULL
+  best_yhat_cap <- NULL
 
   for (thr in THRESHOLDS) {
     yhat_hard <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
-    m_raw <- calc_metrics(panel$y[ok], yhat_hard, nace2d = panel$nace2d[ok], year = panel$year[ok])
 
-    if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
-      best_raw <- m_raw
-      best_thr_raw <- thr
-      best_m_raw <- m_raw
+    yhat_cap <- calibrate_with_cap(
+      yhat_hard, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok], syt
+    )
+    m_cap <- calc_metrics(panel$y[ok], yhat_cap,
+                          nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+    if (!is.na(m_cap$rmse) && m_cap$rmse < best_clip$rmse) {
+      best_clip     <- m_cap
+      best_thr      <- thr
+      best_m_clip   <- m_cap
+      best_yhat_cap <- yhat_cap
+    }
+
+    # Collect sweep for focal specs
+    if (is_focal) {
+      rho_p <- calc_rho_pooled(panel$y[ok], yhat_cap,
+                               panel$nace2d[ok], panel$year[ok])
+      threshold_sweep_rows[[length(threshold_sweep_rows) + 1]] <- data.frame(
+        model = nm, threshold = thr,
+        nRMSE = m_cap$nrmse_sd, rmse = m_cap$rmse,
+        fpr_nonemitters = m_cap$fpr_nonemitters,
+        tpr_emitters = m_cap$tpr_emitters,
+        rho_pooled = rho_p,
+        within_sy_rho_med = m_cap$within_sy_rho_med,
+        within_sy_rho_min = m_cap$within_sy_rho_min,
+        within_sy_rho_max = m_cap$within_sy_rho_max,
+        spearman = m_cap$spearman,
+        mapd_emitters = m_cap$mapd_emitters,
+        stringsAsFactors = FALSE
+      )
     }
   }
 
-  # Step 2: apply calibration + cap at the raw-optimal threshold
-  yhat_hard <- pmax(as.numeric(phat[ok] > best_thr_raw) * muhat[ok], 0)
+  # Compute raw and calibrated metrics at the chosen threshold
+  yhat_hard <- pmax(as.numeric(phat[ok] > best_thr) * muhat[ok], 0)
+  best_m_raw <- calc_metrics(panel$y[ok], yhat_hard,
+                             nace2d = panel$nace2d[ok], year = panel$year[ok])
 
   yhat_cal <- calibrate_predictions(
     yhat_hard, panel$nace2d[ok], panel$year[ok], syt
   )
-  best_m_cal <- calc_metrics(panel$y[ok], yhat_cal, nace2d = panel$nace2d[ok], year = panel$year[ok])
+  best_m_cal <- calc_metrics(panel$y[ok], yhat_cal,
+                             nace2d = panel$nace2d[ok], year = panel$year[ok])
 
-  yhat_cap <- calibrate_with_cap(
-    yhat_hard, panel$emit[ok], panel$y[ok],
-    panel$nace2d[ok], panel$year[ok], syt
-  )
-  best_m_clip <- calc_metrics(panel$y[ok], yhat_cap, nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-  cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr_raw))
+  cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr))
 
   # Capture per-cell FP severity and within-sector-year rho detail
   if (nm == "hurdle_proxy_pooled") {
@@ -333,7 +373,7 @@ for (sp in hurdle_specs) {
     # Save firm-level predictions for pooled within-sector rho diagnostic
     firm_preds_nested <- data.frame(
       vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
-      y = panel$y[ok], yhat_clip = yhat_cap, stringsAsFactors = FALSE
+      y = panel$y[ok], yhat_clip = best_yhat_cap, stringsAsFactors = FALSE
     )
   }
   if (nm == "hurdle_proxy_pooled_ind_base") {
@@ -342,7 +382,7 @@ for (sp in hurdle_specs) {
     }
     firm_preds_base <- data.frame(
       vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
-      y = panel$y[ok], yhat_clip = yhat_cap, stringsAsFactors = FALSE
+      y = panel$y[ok], yhat_clip = best_yhat_cap, stringsAsFactors = FALSE
     )
   }
   if (nm == "hurdle_proxy_weighted_ind_base") {
@@ -351,17 +391,17 @@ for (sp in hurdle_specs) {
     }
     firm_preds_weighted_base <- data.frame(
       vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
-      y = panel$y[ok], yhat_clip = yhat_cap, stringsAsFactors = FALSE
+      y = panel$y[ok], yhat_clip = best_yhat_cap, stringsAsFactors = FALSE
     )
   }
   if (!is.null(best_m_raw)) {
-    results[[paste0(nm, "_raw")]] <- make_result_row(nm, "raw", best_thr_raw, best_m_raw)
+    results[[paste0(nm, "_raw")]] <- make_result_row(nm, "raw", best_thr, best_m_raw)
   }
   if (!is.null(best_m_cal)) {
-    results[[paste0(nm, "_cal")]] <- make_result_row(nm, "calibrated", best_thr_raw, best_m_cal)
+    results[[paste0(nm, "_cal")]] <- make_result_row(nm, "calibrated", best_thr, best_m_cal)
   }
   if (!is.null(best_m_clip)) {
-    results[[paste0(nm, "_clip")]] <- make_result_row(nm, "calibrated_clipped", best_thr_raw, best_m_clip)
+    results[[paste0(nm, "_clip")]] <- make_result_row(nm, "calibrated_clipped", best_thr, best_m_clip)
   }
 }
 
@@ -378,6 +418,14 @@ if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
 out_path <- file.path(OUTPUT_DIR, "fuel_suppliers_cv_performance_lofocv.csv")
 write.csv(cv_performance, out_path, row.names = FALSE)
+
+# Save threshold sweep for focal specs (Pareto frontier analysis)
+if (length(threshold_sweep_rows) > 0) {
+  threshold_sweep <- bind_rows(threshold_sweep_rows)
+  sweep_path <- file.path(OUTPUT_DIR, "threshold_sweep_lofocv.csv")
+  write.csv(threshold_sweep, sweep_path, row.names = FALSE)
+  cat("Threshold sweep saved:", nrow(threshold_sweep), "rows to", sweep_path, "\n")
+}
 
 # Save per-cell FP severity CSVs
 if (exists("benchmark_cell_fp_raw")) {
