@@ -77,9 +77,14 @@ make_hurdle_spec <- function(name, rhs, re) {
   )
 }
 
-# LOSOCV hurdle specs: {proxy_pooled, proxy_weighted} x {base RE, year-only}
-# All with indicator (I(proxy > 0)) since k-fold showed it consistently helps.
+# LOSOCV hurdle specs
+# Benchmarks (no proxy): isolate the value-add of calibration alone
+# Proxy specs: {proxy_pooled, proxy_weighted} x {base RE, year-only}
+# All proxy specs include indicator (I(proxy > 0)) since k-fold showed it helps.
 losocv_specs <- list(
+  # Benchmarks (no proxy) — for calibrated-benchmark comparison
+  make_hurdle_spec("losocv_hurdle_benchmark_base", "log_revenue", re_base),
+  make_hurdle_spec("losocv_hurdle_benchmark_year", "log_revenue", re_year_only),
   # proxy_pooled + indicator
   make_hurdle_spec("losocv_hurdle_proxy_pooled_ind_base", "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_base),
   make_hurdle_spec("losocv_hurdle_proxy_pooled_ind_year", "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)", re_year_only),
@@ -181,6 +186,93 @@ make_result_row <- function(nm, variant, thr, m) {
   )
 }
 
+
+# ── PPML benchmarks (no threshold search) ─────────────────────────────────
+# PPML models predict positive emissions for all firms (no extensive margin),
+# so they serve as a "calibration-only" baseline: how well can we predict
+# emissions just by knowing sector-year totals and firm revenue?
+ppml_losocv_specs <- list(
+  list(name = "losocv_ppml_benchmark_base",
+       formula = as.formula(paste("y ~ log_revenue +", re_base))),
+  list(name = "losocv_ppml_benchmark_year",
+       formula = as.formula(paste("y ~ log_revenue +", re_year_only)))
+)
+
+cat("═══ LOSOCV: PPML benchmarks ═══\n")
+
+for (ppml_sp in ppml_losocv_specs) {
+  ppml_nm <- ppml_sp$name
+  cat(sprintf("\n── Running LOSOCV: %s ──\n", ppml_nm))
+
+  panel$losocv_yhat_ppml <- NA_real_
+  t0_ppml <- Sys.time()
+
+  for (s_idx in seq_along(sector_levels)) {
+    sec <- sector_levels[s_idx]
+    t0_fold <- Sys.time()
+
+    train_idx <- which(panel$primary_nace2d != sec)
+    test_idx  <- which(panel$primary_nace2d == sec)
+
+    train <- panel[train_idx, ]
+    test  <- panel[test_idx, ]
+
+    # Ensure factor levels match the full panel (critical for mgcv RE)
+    train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
+    test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
+    train$nace5d_f <- factor(train$nace5d, levels = all_nace5d_levels)
+    test$nace5d_f  <- factor(test$nace5d,  levels = all_nace5d_levels)
+    train$year_f   <- factor(train$year,   levels = all_year_levels)
+    test$year_f    <- factor(test$year,    levels = all_year_levels)
+
+    fit <- tryCatch(
+      gam(ppml_sp$formula, data = train, family = poisson(link = "log"), method = "REML"),
+      error = function(e) NULL
+    )
+    if (!is.null(fit)) {
+      preds <- pmax(as.numeric(predict(fit, newdata = test, type = "response")), 0)
+      panel$losocv_yhat_ppml[test_idx] <- preds
+    }
+
+    elapsed_fold <- round(difftime(Sys.time(), t0_fold, units = "secs"), 1)
+    cat(sprintf("  Sector %s (%2d/%d): %4d test obs (%.1fs)\n",
+                sec, s_idx, n_sector_folds, length(test_idx), elapsed_fold))
+  }
+
+  elapsed <- round(difftime(Sys.time(), t0_ppml, units = "mins"), 1)
+  cat(sprintf("LOSOCV %s done (%.1f min)\n\n", ppml_nm, elapsed))
+
+  # Calibrate with cap (no threshold search for PPML)
+  ok <- !is.na(panel$losocv_yhat_ppml) & !is.na(panel$y)
+
+  if (sum(ok) > 0) {
+    yhat_cap <- calibrate_with_cap(
+      panel$losocv_yhat_ppml[ok], panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok], syt
+    )
+    m <- calc_metrics(panel$y[ok], yhat_cap,
+                      nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+    cat(sprintf("%s calibrated+clipped:\n", ppml_nm))
+    cat(sprintf("  nRMSE = %.3f, Spearman = %.3f, FPR = %.3f, TPR = %.3f\n",
+                m$nrmse_sd, m$spearman, m$fpr_nonemitters, m$tpr_emitters))
+
+    results[[ppml_nm]] <- make_result_row(ppml_nm, "calibrated_clipped", NA_real_, m)
+
+    # Store rho detail and firm predictions
+    losocv_rho_details[[ppml_nm]] <- m$within_sy_rho_detail
+    losocv_firm_preds[[ppml_nm]] <- data.frame(
+      vat = panel$vat[ok], nace2d = panel$nace2d[ok],
+      year = panel$year[ok], y = panel$y[ok],
+      yhat_clip = yhat_cap, stringsAsFactors = FALSE
+    )
+  }
+
+  panel$losocv_yhat_ppml <- NULL
+}
+
+
+# ── Hurdle LOSOCV loop ────────────────────────────────────────────────────
 for (losocv_sp in losocv_specs) {
   losocv_nm <- losocv_sp$name
   cat(sprintf("\n── Running LOSOCV: %s ──\n", losocv_nm))

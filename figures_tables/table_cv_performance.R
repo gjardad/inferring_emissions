@@ -2,27 +2,25 @@
 # figures_tables/table_cv_performance.R
 #
 # PURPOSE
-#   Generate prediction performance tables from group k-fold CV and LOSOCV
-#   results. Two versions of the table are produced — one for each proxy:
+#   Generate the main prediction performance table from group k-fold CV and
+#   LOSOCV results using the coefficient-weighted fuel-supply proxy.
 #
-#   enet_cv_performance_pooled.tex   (unweighted fuel-supply proxy)
-#   enet_cv_performance_weighted.tex (coefficient-weighted fuel-supply proxy)
+#   enet_cv_performance_weighted.tex
 #
-#   Each table has the same structure:
+#   Table structure:
 #
 #     Panel A: Leave-firms-out cross-validation
-#       1. PPML                        (benchmark, raw)
-#       2.   + fuel-supply proxy       (proxy_X, raw)
-#       3. Hurdle + proxy              (hurdle_proxy_X, raw)
-#       4.   + fuel-purchase indicator  (hurdle_proxy_X_ind, raw)
-#       5.     + calibration           (hurdle_proxy_X_ind, calibrated_clipped)
+#       1. PPML                              (benchmark_base, raw)
+#       2.   + calibration                   (benchmark_base, calibrated_clipped)
+#       3. Hurdle + proxy + indicator        (hurdle_proxy_weighted_ind_base, raw)
+#       4.   + calibration                   (hurdle_proxy_weighted_ind_base, calibrated_clipped)
 #
 #     Panel B: Leave-one-sector-out cross-validation
-#       6. Sector RE                   (losocv_hurdle_proxy_X_ind_base, cal_clip)
-#       7. Year FE only                (losocv_hurdle_proxy_X_ind_year, cal_clip)
+#       5. PPML + calibration                (losocv_ppml_benchmark_base, calibrated_clipped)
+#       6. Hurdle + proxy + indicator + cal  (losocv_hurdle_proxy_weighted_ind_base, calibrated_clipped)
 #
 #     Columns split into two groups:
-#       "Prediction accuracy": nRMSE, MAPD, Spearman rho, within-sector-year rho
+#       "Prediction accuracy": nRMSE, Med. APD, Spearman rho, within-sector-year rho
 #       "Extensive margin":    FPR, TPR, p50, p99
 #
 # INPUTS
@@ -31,7 +29,6 @@
 #   {OUTPUT_DIR}/cell_fp_severity_*.csv  (per-cell FP severity, optional)
 #
 # OUTPUTS
-#   {OUTPUT_DIR}/enet_cv_performance_pooled.tex
 #   {OUTPUT_DIR}/enet_cv_performance_weighted.tex
 #
 # NOTE
@@ -67,9 +64,7 @@ load_cell_fp <- function(fname) {
   if (file.exists(p)) read.csv(p, stringsAsFactors = FALSE) else NULL
 }
 cell_fp_benchmark_raw    <- load_cell_fp("cell_fp_severity_benchmark_raw.csv")
-cell_fp_proxy_pooled_raw <- load_cell_fp("cell_fp_severity_proxy_pooled_raw.csv")
-cell_fp_hurdle_raw       <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_raw.csv")
-cell_fp_hurdle_ind_raw   <- load_cell_fp("cell_fp_severity_hurdle_proxy_pooled_ind_raw.csv")
+cell_fp_hurdle_ind_raw   <- load_cell_fp("cell_fp_severity_hurdle_proxy_weighted_ind_raw.csv")
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
@@ -95,7 +90,7 @@ fmt_rho_minmax <- function(rmin, rmax) {
 # ===========================================================================
 # Table generation function
 # ===========================================================================
-generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
+generate_table <- function(row_specs, cell_fp_map, panel_b_start = 5) {
   # Extract rows from CSV
   rows <- lapply(row_specs, function(spec) {
     r <- cv[cv$model == spec$model & cv$variant == spec$variant, ]
@@ -197,8 +192,8 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
       tex <- c(tex, line)
     }
 
-    # Visual breaks within panels
-    if (i == 2) tex <- c(tex, "\\addlinespace")  # after PPML block
+    # Visual breaks between model blocks
+    if (i == 2) tex <- c(tex, "\\addlinespace")  # after calibrated benchmark
     if (i == (panel_b_start - 1)) tex <- c(tex, "")  # end of Panel A
   }
 
@@ -208,48 +203,22 @@ generate_table <- function(row_specs, cell_fp_map, panel_b_start = 6) {
 
 
 # ===========================================================================
-# Table 1: Unweighted proxy (proxy_pooled)
-# ===========================================================================
-row_specs_pooled <- list(
-  # Panel A: k-fold CV (all _base variants)
-  list(model = "benchmark_base",                         variant = "raw",                label = "PPML"),
-  list(model = "proxy_pooled_base",                      variant = "raw",                label = "\\quad + fuel-supply proxy"),
-  list(model = "hurdle_proxy_pooled_base",               variant = "raw",                label = "Hurdle + proxy"),
-  list(model = "hurdle_proxy_pooled_ind_base",           variant = "raw",                label = "\\quad + fuel-purchase indicator"),
-  list(model = "hurdle_proxy_pooled_ind_base",           variant = "calibrated_clipped", label = "\\quad\\quad + calibration"),
-  # Panel B: LOSO CV
-  list(model = "losocv_hurdle_proxy_pooled_ind_base",    variant = "calibrated_clipped", label = "Sector RE"),
-  list(model = "losocv_hurdle_proxy_pooled_ind_year",    variant = "calibrated_clipped", label = "Year FE only")
-)
-
-cell_fp_map_pooled <- list(
-  benchmark_base            = cell_fp_benchmark_raw,
-  proxy_pooled_base         = cell_fp_proxy_pooled_raw,
-  hurdle_proxy_pooled_base  = cell_fp_hurdle_raw,
-  hurdle_proxy_pooled_ind_base = cell_fp_hurdle_ind_raw
-)
-
-tex_pooled <- generate_table(row_specs_pooled, cell_fp_map_pooled)
-
-
-# ===========================================================================
-# Table 2: Coefficient-weighted proxy (proxy_weighted)
+# Coefficient-weighted proxy table
 # ===========================================================================
 row_specs_weighted <- list(
-  # Panel A: k-fold CV (all _base variants)
+  # Panel A: k-fold CV — isolate calibration value-add, then B2B value-add
   list(model = "benchmark_base",                          variant = "raw",                label = "PPML"),
-  list(model = "proxy_weighted_base",                     variant = "raw",                label = "\\quad + fuel-supply proxy"),
-  list(model = "hurdle_proxy_weighted_base",              variant = "raw",                label = "Hurdle + proxy"),
-  list(model = "hurdle_proxy_weighted_ind_base",          variant = "raw",                label = "\\quad + fuel-purchase indicator"),
-  list(model = "hurdle_proxy_weighted_ind_base",          variant = "calibrated_clipped", label = "\\quad\\quad + calibration"),
+  list(model = "benchmark_base",                          variant = "calibrated_clipped", label = "\\quad + calibration"),
+  list(model = "hurdle_proxy_weighted_ind_base",          variant = "raw",                label = "Hurdle + proxy + indicator"),
+  list(model = "hurdle_proxy_weighted_ind_base",          variant = "calibrated_clipped", label = "\\quad + calibration"),
   # Panel B: LOSO CV
-  list(model = "losocv_hurdle_proxy_weighted_ind_base",   variant = "calibrated_clipped", label = "Sector RE"),
-  list(model = "losocv_hurdle_proxy_weighted_ind_year",   variant = "calibrated_clipped", label = "Year FE only")
+  list(model = "losocv_ppml_benchmark_base",              variant = "calibrated_clipped", label = "PPML + calibration"),
+  list(model = "losocv_hurdle_proxy_weighted_ind_base",   variant = "calibrated_clipped", label = "Hurdle + proxy + indicator + cal.")
 )
 
-# No per-cell FP severity data for weighted proxy (uses CSV fallback)
 cell_fp_map_weighted <- list(
-  benchmark_base = cell_fp_benchmark_raw
+  benchmark_base                 = cell_fp_benchmark_raw,
+  hurdle_proxy_weighted_ind_base = cell_fp_hurdle_ind_raw
 )
 
 tex_weighted <- generate_table(row_specs_weighted, cell_fp_map_weighted)
@@ -257,10 +226,6 @@ tex_weighted <- generate_table(row_specs_weighted, cell_fp_map_weighted)
 
 # ── Save ──────────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
-
-out_pooled <- file.path(OUTPUT_DIR, "enet_cv_performance_pooled.tex")
-writeLines(tex_pooled, out_pooled)
-cat("Saved pooled proxy table to:", out_pooled, "\n")
 
 out_weighted <- file.path(OUTPUT_DIR, "enet_cv_performance_weighted.tex")
 writeLines(tex_weighted, out_weighted)
