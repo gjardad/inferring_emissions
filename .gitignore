@@ -6,3 +6,6 @@ cache/
 
 # ---- R serialized objects ----
 *.rds
+
+# ---- PDFs (copyrighted papers) ----
+articles/*.pdf
