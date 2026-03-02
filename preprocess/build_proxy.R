@@ -85,6 +85,14 @@ cat("Identified suppliers (pooled 1se):      ", length(suppliers_pooled_1se), "\
 cat("Suppliers with enet_asinh coef > 0:     ", nrow(coef_lookup_pooled), "\n")
 
 
+# ── Load annual accounts (needed for NACE lookup and final export) ──────────
+cat("Loading annual accounts...\n")
+load(file.path(PROC_DATA, "annual_accounts_selected_sample.RData"))
+aa_all <- df_annual_accounts_selected_sample %>%
+  rename(vat = vat_ano)
+rm(df_annual_accounts_selected_sample)
+
+
 # ── Build proxies ────────────────────────────────────────────────────────────
 cat("\nBuilding fuel-consumption proxies...\n")
 
@@ -128,7 +136,23 @@ proxy_robust3w <- build_weighted_proxy(
 )
 proxy_1se <- build_proxy(b2b_lhs, suppliers_pooled_1se, "proxy_1se")
 
-rm(b2b_lhs)
+# Tabachova et al. (2025) benchmark proxy: purchases from pre-selected NACE codes
+# Gas: 3521, 3522, 3523. Oil: 1920, 4671, 4730. Same NACE Rev 2 codes in Belgium.
+TABACHOVA_NACE4D <- c("3521", "3522", "3523", "1920", "4671", "4730")
+
+supplier_nace <- aa_all %>%
+  distinct(vat, nace5d) %>%
+  mutate(nace4d = substr(nace5d, 1, 4))
+
+suppliers_tabachova <- supplier_nace %>%
+  filter(nace4d %in% TABACHOVA_NACE4D) %>%
+  pull(vat)
+
+cat("Tabachova NACE-based suppliers:      ", length(suppliers_tabachova), "\n")
+
+proxy_tabachova <- build_proxy(b2b_lhs, suppliers_tabachova, "proxy_tabachova")
+
+rm(b2b_lhs, supplier_nace)
 
 # Merge nace5d from loocv_training_sample
 load(file.path(PROC_DATA, "loocv_training_sample.RData"))
@@ -138,29 +162,25 @@ nace5d_lookup <- loocv_training_sample %>%
   mutate(nace4d = substr(nace5d, 1, 4))
 rm(loocv_training_sample)
 
-# Load full annual accounts for training_sample export
-load(file.path(PROC_DATA, "annual_accounts_selected_sample.RData"))
-aa_all <- df_annual_accounts_selected_sample %>%
-  rename(vat = vat_ano)
-rm(df_annual_accounts_selected_sample)
-
 # Merge proxies into LHS panel
 panel <- lhs %>%
-  left_join(proxy_pooled,  by = c("vat", "year")) %>%
-  left_join(proxy_fe,      by = c("vat", "year")) %>%
-  left_join(proxy_weighted, by = c("vat", "year")) %>%
-  left_join(proxy_robust3,  by = c("vat", "year")) %>%
-  left_join(proxy_robust3w, by = c("vat", "year")) %>%
-  left_join(proxy_1se,      by = c("vat", "year")) %>%
+  left_join(proxy_pooled,    by = c("vat", "year")) %>%
+  left_join(proxy_fe,        by = c("vat", "year")) %>%
+  left_join(proxy_weighted,  by = c("vat", "year")) %>%
+  left_join(proxy_robust3,   by = c("vat", "year")) %>%
+  left_join(proxy_robust3w,  by = c("vat", "year")) %>%
+  left_join(proxy_1se,       by = c("vat", "year")) %>%
+  left_join(proxy_tabachova, by = c("vat", "year")) %>%
   left_join(nace5d_lookup, by = c("vat", "year")) %>%
   mutate(
-    proxy_pooled   = coalesce(proxy_pooled, 0),
-    proxy_fe       = coalesce(proxy_fe, 0),
-    proxy_weighted = coalesce(proxy_weighted, 0),
-    proxy_robust3  = coalesce(proxy_robust3, 0),
-    proxy_robust3w = coalesce(proxy_robust3w, 0),
-    proxy_1se      = coalesce(proxy_1se, 0),
-    emit           = as.integer(y > 0)
+    proxy_pooled    = coalesce(proxy_pooled, 0),
+    proxy_fe        = coalesce(proxy_fe, 0),
+    proxy_weighted  = coalesce(proxy_weighted, 0),
+    proxy_robust3   = coalesce(proxy_robust3, 0),
+    proxy_robust3w  = coalesce(proxy_robust3w, 0),
+    proxy_1se       = coalesce(proxy_1se, 0),
+    proxy_tabachova = coalesce(proxy_tabachova, 0),
+    emit            = as.integer(y > 0)
   )
 rm(nace5d_lookup)
 
@@ -178,6 +198,8 @@ cat("Proxy coverage (robust3w > 0): ", sum(panel$proxy_robust3w > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_robust3w > 0)))
 cat("Proxy coverage (1se > 0):      ", sum(panel$proxy_1se > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_1se > 0)))
+cat("Proxy coverage (tabachova > 0):", sum(panel$proxy_tabachova > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_tabachova > 0)))
 
 
 # ── Sector-year emission totals (for calibration) ───────────────────────────
@@ -201,7 +223,8 @@ if (length(overlap_cols) > 0) aa_lhs <- aa_lhs %>% select(-all_of(overlap_cols))
 training_sample <- panel %>%
   select(vat, year, y, log_revenue, nace2d, nace5d, euets, emit,
          proxy_pooled, proxy_fe,
-         proxy_weighted, proxy_robust3, proxy_robust3w, proxy_1se) %>%
+         proxy_weighted, proxy_robust3, proxy_robust3w, proxy_1se,
+         proxy_tabachova) %>%
   left_join(aa_lhs, by = c("vat", "year"))
 
 save(training_sample, foldid, K_FOLDS, syt,
