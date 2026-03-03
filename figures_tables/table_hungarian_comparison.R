@@ -4,11 +4,11 @@
 # PURPOSE
 #   Generate the 2x2 Hungarian comparison appendix table, decomposing our
 #   value-added along two dimensions:
-#     Rows:    Proportional allocation (Tabachova method) vs. Hurdle + calibration (ours)
+#     Rows:    Proportional allocation (Tabachova method) vs. Hybrid + calibration (ours)
 #     Columns: Pre-selected NACE codes (Tabachova proxy) vs. Data-driven (our proxy)
 #
 #   Proportional allocation cells are computed on the full sample (no CV) since
-#   the method has no parameters to fit. Hurdle cells use LOFOCV (group k-fold).
+#   the method has no parameters to fit. Hybrid cells use LOFOCV (group k-fold).
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData  (must include proxy_tabachova)
@@ -118,18 +118,17 @@ cat("  nRMSE:", round(m_B$nrmse_sd, 3), "\n")
 
 
 # ===========================================================================
-# CELL C: Tabachova proxy + hurdle + calibration (LOFOCV)
+# CELL C: Tabachova proxy + hybrid + calibration (LOFOCV)
 # ===========================================================================
-cat("\n── Cell C: Tabachova proxy + hurdle + calibration (LOFOCV) ──\n")
+cat("\n── Cell C: Tabachova proxy + hybrid + calibration (LOFOCV) ──\n")
 
 re_base <- "year_f + s(nace2d_f, bs = 're')"
 THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
-# Pre-allocate
-panel$phat_tab  <- NA_real_
-panel$muhat_tab <- NA_real_
+# Pre-allocate (only extensive margin needed for hybrid)
+panel$phat_tab <- NA_real_
 
-cat("Running LOFOCV for Tabachova hurdle (K =", K_FOLDS, ")...\n")
+cat("Running LOFOCV for Tabachova hybrid (K =", K_FOLDS, ")...\n")
 for (k in 1:K_FOLDS) {
   cat(sprintf("  Fold %d/%d ...", k, K_FOLDS))
   t0 <- Sys.time()
@@ -137,7 +136,6 @@ for (k in 1:K_FOLDS) {
   train <- panel[foldid != k, ]
   test  <- panel[foldid == k, ]
   test_idx <- which(foldid == k)
-  train_emit <- train[train$emit == 1, ]
 
   # Extensive margin: logit
   fit_ext <- tryCatch(
@@ -150,30 +148,18 @@ for (k in 1:K_FOLDS) {
     panel$phat_tab[test_idx] <- pmin(pmax(phat, 0), 1)
   }
 
-  # Intensive margin: Poisson on emitters
-  if (nrow(train_emit) > 0) {
-    fit_int <- tryCatch(
-      gam(as.formula(paste("y ~ log_revenue + I(proxy_tabachova > 0) + asinh(proxy_tabachova) +", re_base)),
-          data = train_emit, family = poisson(link = "log"), method = "REML"),
-      error = function(e) NULL
-    )
-    if (!is.null(fit_int)) {
-      muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
-      panel$muhat_tab[test_idx] <- muhat
-    }
-  }
-
   elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
   cat(sprintf(" done (%.1fs)\n", elapsed))
 }
 
 # Threshold search: optimize calibrated_clipped nRMSE
+# Hybrid: yhat_raw = I(phat > thr) * proxy_tabachova
 cat("Searching optimal threshold...\n")
 best_thr_C <- 0.5
 best_nrmse_C <- Inf
 
 for (thr in THRESHOLDS) {
-  yhat_raw <- ifelse(panel$phat_tab > thr, 1, 0) * panel$muhat_tab
+  yhat_raw <- ifelse(panel$phat_tab > thr, 1, 0) * panel$proxy_tabachova
   ok <- !is.na(yhat_raw) & !is.na(panel$y)
   if (sum(ok) == 0) next
   yhat_cal <- calibrate_with_cap(yhat_raw[ok], panel$emit[ok], panel$y[ok],
@@ -187,7 +173,7 @@ for (thr in THRESHOLDS) {
 cat("  Best threshold:", best_thr_C, "-> nRMSE:", round(best_nrmse_C, 3), "\n")
 
 # Final predictions at best threshold
-yhat_C_raw <- ifelse(panel$phat_tab > best_thr_C, 1, 0) * panel$muhat_tab
+yhat_C_raw <- ifelse(panel$phat_tab > best_thr_C, 1, 0) * panel$proxy_tabachova
 ok_C <- !is.na(yhat_C_raw) & !is.na(panel$y)
 yhat_C <- rep(NA_real_, nrow(panel))
 yhat_C[ok_C] <- calibrate_with_cap(yhat_C_raw[ok_C], panel$emit[ok_C], panel$y[ok_C],
@@ -197,14 +183,13 @@ cat("  nRMSE:", round(m_C$nrmse_sd, 3), "\n")
 
 
 # ===========================================================================
-# CELL D: Our proxy + hurdle + calibration (LOFOCV)
+# CELL D: Our proxy + hybrid + calibration (LOFOCV)
 # ===========================================================================
-cat("\n── Cell D: Our proxy + hurdle + calibration (LOFOCV) ──\n")
+cat("\n── Cell D: Our proxy + hybrid + calibration (LOFOCV) ──\n")
 
-panel$phat_ours  <- NA_real_
-panel$muhat_ours <- NA_real_
+panel$phat_ours <- NA_real_
 
-cat("Running LOFOCV for our hurdle (K =", K_FOLDS, ")...\n")
+cat("Running LOFOCV for our hybrid (K =", K_FOLDS, ")...\n")
 for (k in 1:K_FOLDS) {
   cat(sprintf("  Fold %d/%d ...", k, K_FOLDS))
   t0 <- Sys.time()
@@ -212,7 +197,6 @@ for (k in 1:K_FOLDS) {
   train <- panel[foldid != k, ]
   test  <- panel[foldid == k, ]
   test_idx <- which(foldid == k)
-  train_emit <- train[train$emit == 1, ]
 
   fit_ext <- tryCatch(
     gam(as.formula(paste("emit ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +", re_base)),
@@ -224,29 +208,18 @@ for (k in 1:K_FOLDS) {
     panel$phat_ours[test_idx] <- pmin(pmax(phat, 0), 1)
   }
 
-  if (nrow(train_emit) > 0) {
-    fit_int <- tryCatch(
-      gam(as.formula(paste("y ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +", re_base)),
-          data = train_emit, family = poisson(link = "log"), method = "REML"),
-      error = function(e) NULL
-    )
-    if (!is.null(fit_int)) {
-      muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
-      panel$muhat_ours[test_idx] <- muhat
-    }
-  }
-
   elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
   cat(sprintf(" done (%.1fs)\n", elapsed))
 }
 
 # Threshold search
+# Hybrid: yhat_raw = I(phat > thr) * proxy_weighted
 cat("Searching optimal threshold...\n")
 best_thr_D <- 0.5
 best_nrmse_D <- Inf
 
 for (thr in THRESHOLDS) {
-  yhat_raw <- ifelse(panel$phat_ours > thr, 1, 0) * panel$muhat_ours
+  yhat_raw <- ifelse(panel$phat_ours > thr, 1, 0) * panel$proxy_weighted
   ok <- !is.na(yhat_raw) & !is.na(panel$y)
   if (sum(ok) == 0) next
   yhat_cal <- calibrate_with_cap(yhat_raw[ok], panel$emit[ok], panel$y[ok],
@@ -260,7 +233,7 @@ for (thr in THRESHOLDS) {
 cat("  Best threshold:", best_thr_D, "-> nRMSE:", round(best_nrmse_D, 3), "\n")
 
 # Final predictions at best threshold
-yhat_D_raw <- ifelse(panel$phat_ours > best_thr_D, 1, 0) * panel$muhat_ours
+yhat_D_raw <- ifelse(panel$phat_ours > best_thr_D, 1, 0) * panel$proxy_weighted
 ok_D <- !is.na(yhat_D_raw) & !is.na(panel$y)
 yhat_D <- rep(NA_real_, nrow(panel))
 yhat_D[ok_D] <- calibrate_with_cap(yhat_D_raw[ok_D], panel$emit[ok_D], panel$y[ok_D],
@@ -296,8 +269,8 @@ collect <- function(m, label) {
 results <- rbind(
   collect(m_A, "Prop. alloc. + Fuel-linked NACE"),
   collect(m_B, "Prop. alloc. + Elastic net"),
-  collect(m_C, "Hurdle + cal. + Fuel-linked NACE"),
-  collect(m_D, "Hurdle + cal. + Elastic net")
+  collect(m_C, "Hybrid + cal. + Fuel-linked NACE"),
+  collect(m_D, "Hybrid + cal. + Elastic net")
 )
 
 print(results %>% select(label, nRMSE, median_apd, spearman, rho_pooled, fpr, tpr))
@@ -338,7 +311,7 @@ tex <- c(
   make_row(m_B, "Elastic net"),
   "\\addlinespace",
   "\\midrule",
-  "\\multicolumn{7}{l}{\\textit{Panel B: Hurdle + calibration}} \\\\",
+  "\\multicolumn{7}{l}{\\textit{Panel B: Hybrid + calibration}} \\\\",
   "\\addlinespace",
   make_row(m_C, "Fuel-linked NACE"),
   "\\addlinespace",
