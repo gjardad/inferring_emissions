@@ -57,6 +57,12 @@ Access to the full NBB data is restricted to RMD through a VPN connection. RMD d
 When copying files from RMD to local 1, I first need to copy them to local 2, then from local 2 to the cloud (Dropbox/Claude), then from the Claude to local 1.
 In local 1 I have available a downsampled version of the full NBB data sets as well as the full training sample. I built the training sample in RMD and copied it to local 2.**
 
+**Local-to-RMD data sync.** Data files modified on local 1 (e.g., by `build_design_matrix.R` or `build_proxy.R`) are not automatically reflected on RMD. Until the relevant preprocessing script is re-run on RMD with full data, the RMD copy will be out of date. The log below tracks known discrepancies. Before running any analysis on RMD, check this log.
+
+| File | RMD status | What's missing / different |
+|------|-----------|---------------------------|
+| `training_sample.RData` | Out of date | RMD version contains only `training_sample`. Missing: `foldid`, `K_FOLDS`, `syt`. Run `build_design_matrix.R` then `build_proxy.R` on RMD to generate the full version. |
+
 ## Guidelines for specifications
 
 **Design before results.** During estimation and analysis:
