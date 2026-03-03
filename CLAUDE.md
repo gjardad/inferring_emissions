@@ -55,13 +55,14 @@ Feel free to suggest any additional data sets you may think can help.
 **I use three desktops in this project: local 1, local 2, and RMD (remote desktop).
 Access to the full NBB data is restricted to RMD through a VPN connection. RMD doesn't have access to the web browser, but it is connected to GitHub. I can only use the VPN connection through local 2. Local 2 has regular access to the web browser. Local 1 is my personal desktop and it is where I have Claude code and cursor downloaded.
 When copying files from RMD to local 1, I first need to copy them to local 2, then from local 2 to the cloud (Dropbox/Claude), then from the Claude to local 1.
-In local 1 I have available a downsampled version of the full NBB data sets as well as the full training sample. I built the training sample in RMD and copied it to local 2.**
+In local 1 I have available a downsampled version of the full NBB data sets as well as the full training sample. I built the training sample in RMD and copied it to local 2.
+Any script that only requires `training_sample.RData` (e.g., CV scripts, alternative specs, rho comparisons) can be run locally on local 1. RMD is only needed for scripts that access the raw NBB data (e.g., preprocessing, proxy construction).**
 
-**Local-to-RMD data sync.** Data files modified on local 1 (e.g., by `build_design_matrix.R` or `build_proxy.R`) are not automatically reflected on RMD. Until the relevant preprocessing script is re-run on RMD with full data, the RMD copy will be out of date. The log below tracks known discrepancies. Before running any analysis on RMD, check this log.
+**Data sync log.** Some processed data files are out of date on both local 1 and RMD. The log below tracks known discrepancies. Fixing these requires re-running the relevant preprocessing scripts on RMD (which has access to full data), then copying the updated file to local 1.
 
-| File | RMD status | What's missing / different |
-|------|-----------|---------------------------|
-| `training_sample.RData` | Out of date | RMD version contains only `training_sample`. Missing: `foldid`, `K_FOLDS`, `syt`. Run `build_design_matrix.R` then `build_proxy.R` on RMD to generate the full version. |
+| File | Status | What's missing / different | Fix |
+|------|--------|---------------------------|-----|
+| `training_sample.RData` | Out of date on both local 1 and RMD | Both versions contain only `training_sample`. Missing: `foldid`, `K_FOLDS`, `syt`. | Run `build_design_matrix.R` then `build_proxy.R` on RMD, then copy to local 1. |
 
 ## Guidelines for specifications
 
@@ -87,6 +88,8 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 - **Fossil fuel consumption proxy from Customs**: In Belgium, fossil fuels are almost exclusively imported. For this reason, we attempted to model emissions by building a firm-year-level proxy for fossil fuel consumption that consisted on the amount purchased from firms identified from Customs data as fossil fuel importers. The out-of-sample prediction gains from this exercise were modest.
 
+- **Hurdle model with Poisson intensive margin (muhat-based)**: The original hurdle specification used a Poisson GAM intensive margin to predict emission levels among predicted emitters (`yhat = I(phat > tau) * muhat`). This was replaced by the hybrid approach, which uses the raw fuel-supply proxy as the ranking signal instead (`yhat = I(phat > tau) * proxy_weighted`), followed by `calibrate_with_cap`. The hybrid dramatically improved within-sector ranking (rho_s from 0.414 to 0.652 on the training sample) while also improving nRMSE (0.193 to 0.140), with no meaningful loss in FPR or TPR. The Poisson GAM was smoothing away ranking information the proxy naturally contains; the hybrid lets calibration allocate sector-year totals proportionally to the raw proxy signal.
+
 ## Current Status
 
 **Results are mostly ready**. We are currently going over the logic of the entire exercise to check for inconsistencies and we hope to start writing the paper soon.
@@ -94,6 +97,8 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 **Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
 
 **Legacy code.** The `fuel_proxy_legacy/` folder contains earlier proxy-construction scripts that are no longer used. Do not modify, reference, or source anything from this folder. All active proxy construction is handled in `preprocess/`.
+
+**Elastic net hyperparameters not yet tuned.** No sensitivity analysis has been done on the elastic net hyperparameters used to construct the fuel-supply proxy. Currently, `run_elastic_net.R` tests only `alpha = 1.0` (lasso) and `alpha = 0.5` (elastic net), and the weighted proxy uses `alpha = 0.5` with `asinh(sales)` and `lambda.min`. A systematic grid search over alpha values and comparison between `lambda.min` and `lambda.1se` has not been performed. This requires running on RMD (full B2B data).
 
 ## Referee 2 Correspondence
 
