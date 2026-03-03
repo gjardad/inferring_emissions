@@ -87,6 +87,8 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 **Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
 
+**Legacy code.** The `fuel_proxy_legacy/` folder contains earlier proxy-construction scripts that are no longer used. Do not modify, reference, or source anything from this folder. All active proxy construction is handled in `preprocess/`.
+
 ## Referee 2 Correspondence
 
 This project uses the Referee 2 audit protocol. There are no correspondences with referee 2 yet.
