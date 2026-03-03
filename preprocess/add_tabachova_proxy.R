@@ -39,7 +39,7 @@ library(dplyr)
 # ── Load existing training sample ────────────────────────────────────────────
 ts_path <- file.path(PROC_DATA, "training_sample.RData")
 cat("Loading training sample from:", ts_path, "\n")
-load(ts_path)  # loads: training_sample, foldid, K_FOLDS, syt
+ts_objects <- load(ts_path)  # may contain: training_sample, foldid, K_FOLDS, syt
 
 if ("proxy_tabachova" %in% names(training_sample)) {
   cat("proxy_tabachova already exists in training_sample. Overwriting.\n")
@@ -128,9 +128,10 @@ cat("Firms with proxy_tabachova = 0:", sum(training_sample$proxy_tabachova == 0)
     sprintf("(%.1f%%)\n", 100 * mean(training_sample$proxy_tabachova == 0)))
 
 
-# ── Save ─────────────────────────────────────────────────────────────────────
-save(training_sample, foldid, K_FOLDS, syt, file = ts_path)
+# ── Save (preserve whatever objects were originally in the file) ──────────────
+save(list = ts_objects, file = ts_path)
 
 cat("\nSaved updated training sample:", nrow(training_sample), "rows x",
     ncol(training_sample), "cols\n")
+cat("Objects saved:", paste(ts_objects, collapse = ", "), "\n")
 cat("File:", ts_path, "\n")

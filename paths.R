@@ -1,4 +1,5 @@
 if (tolower(Sys.info()[["user"]]) == "jardang") {
+  .libPaths(c("E:/Documents/jardang/r_packages/win-library/4.4.1", .libPaths()))
   DATA_DIR <- "X:/Documents/JARDANG/data"
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
   OUTPUT_DIR <- "X:/Documents/JARDANG/inferring_emissions_output"
