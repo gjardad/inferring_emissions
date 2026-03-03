@@ -349,6 +349,97 @@ comparison.
 
 ---
 
+## Paper Framing: B2B Data as a Growing Resource
+
+### The expansion of e-invoicing
+
+The data infrastructure underlying our approach — firm-to-firm transaction records
+collected by tax authorities — is expanding rapidly worldwide. Mandatory electronic
+invoicing (e-invoicing) systems generate exactly the kind of B2B transaction data
+we use, as a byproduct of tax compliance.
+
+**Latin America** has led the way. Brazil mandated e-invoicing in 2008 (Nota Fiscal
+Eletrônica), Mexico introduced CFDI in 2011, and Chile has required e-invoicing for
+all businesses since 2018. Argentina, Colombia, Ecuador, Peru, and Uruguay all have
+operational systems.
+
+**Asia** followed: India introduced mandatory e-invoicing under GST in 2020 (with
+progressively lower turnover thresholds), South Korea has had mandatory e-invoicing
+for large firms since 2011, and Vietnam mandated it for all transactions in 2022.
+Malaysia and Pakistan have recent mandates as well.
+
+**Europe** is now catching up. The EU's VAT in the Digital Age (ViDA) package,
+adopted in March 2025, will make structured e-invoicing mandatory for
+intra-Community B2B transactions by July 2030 and removes the need for prior EU
+authorization for domestic B2B e-invoicing mandates. Several member states are
+moving ahead of the EU-wide deadline: Italy has had mandatory B2B e-invoicing since
+2019, Belgium will require all VAT-registered businesses to use the Peppol network
+for domestic B2B invoices, Poland's KSeF platform begins mandatory operation in
+2026, and Croatia, Greece, France, Germany, and Spain have all set 2026-2028
+deadlines. Over 90 countries now have e-invoicing mandates in place or in
+implementation.
+
+### The landscape of firm-level energy consumption surveys
+
+The gold standard for estimating firm-level emissions — observing fuel consumption
+by type at the establishment level — requires dedicated energy surveys. A small
+number of countries have maintained such surveys for decades:
+
+- **United States**: Manufacturing Energy Consumption Survey (MECS), conducted
+  quadrennially since 1985 by the EIA. Covers ~15,000 establishments, representing
+  97-98% of manufacturing payroll. Reports consumption by fuel type.
+- **France**: Enquête Annuelle sur la Consommation d'Énergie dans l'Industrie
+  (EACEI), annual. Reports quantities consumed by energy type, costs, and breakdown
+  by use for manufacturing establishments.
+- **Germany**: Erhebung über die Energieverwendung, annual, covering ~47,000
+  establishments in manufacturing and mining with at least 20 employees.
+- **Canada**: Industrial Consumption of Energy Survey (ICE), annual, sampling
+  ~5,000 manufacturing establishments. Reports consumption by fuel type.
+- **Japan**: Survey on Energy Consumption Structure (since 1980), covering ~1,600
+  establishments in energy-intensive industries.
+- **China**: NBS industrial survey covering energy consumption for large and medium
+  enterprises (~3,000 firms/year), complemented by the Top-1,000 Energy-Consuming
+  Enterprises program.
+
+At the EU level, Regulation (EC) 1099/2008 (amended in 2019) made detailed
+industry energy consumption reporting mandatory from reference year 2020, with
+harmonized methodology across member states. However, this reporting is at the
+aggregate sector level — the underlying establishment-level microdata, where it
+exists, remains with national statistical offices and is not uniformly accessible
+to researchers.
+
+These surveys share important limitations. They typically cover only manufacturing
+and mining (not services, transport, or agriculture). They impose size thresholds
+that exclude small establishments. And they require substantial statistical
+infrastructure to design, administer, and maintain — which is why the set of
+countries with such surveys has remained small and largely stable over time.
+
+### What this means for emission estimation
+
+The practical landscape is therefore one where a growing number of countries hold
+comprehensive B2B transaction records (through e-invoicing), while only a handful
+maintain the firm-level energy surveys that would allow direct emission estimation.
+B2B data and energy surveys are not substitutes — the latter provides direct
+observation of fuel quantities by type, which no amount of transaction data can
+replicate. But in the many settings where energy surveys do not exist or do not
+cover the full firm population, the question we address becomes practically
+relevant: how much can be learned about firm-level emissions from transaction
+records that governments already collect?
+
+### Our contribution
+
+We document both the gains and the limitations of using B2B transaction data for
+emission inference. The fuel-supply proxy substantially improves prediction accuracy
+over financial-variable-only approaches, particularly for within-sector firm
+ranking and extensive-margin classification. At the same time, the approach has
+clear shortcomings — including sectors where within-sector ranking breaks down —
+that energy surveys with direct fuel consumption data would not face. We do not
+claim B2B data substitutes for dedicated energy surveys; rather, we show what can
+and what cannot be extracted from transaction networks in settings where such
+surveys do not exist.
+
+---
+
 ## How Our Paper Fits
 
 We bridge strands 1 and 2 using the data infrastructure of strand 3:
