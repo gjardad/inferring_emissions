@@ -3,8 +3,9 @@
 #
 # PURPOSE
 #   Compare within-sector ranking (pooled Spearman rho on demeaned predictions)
-#   for proxy_pooled vs proxy_weighted. Runs hurdle CV with indicator + base RE,
-#   calibrates with cap, then computes per-sector pooled rho.
+#   for proxy_pooled vs proxy_weighted. Runs hybrid CV (logit extensive margin
+#   + proxy ranking, no intensive margin), calibrates with cap, then computes
+#   per-sector pooled rho.
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData (must include proxy_weighted column)
@@ -27,7 +28,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(mgcv)
 
-source(file.path(REPO_DIR, "fuel_proxy", "utils", "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -64,113 +66,34 @@ syt <- panel %>%
   summarise(E_total = sum(y, na.rm = TRUE), n_full = n(), .groups = "drop")
 
 
-# ── Calibration with cap ─────────────────────────────────────────────────────
-calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
-  df <- data.frame(
-    yhat = yhat, emit = emit, y = y,
-    nace2d = nace2d, year = year,
-    idx = seq_along(yhat), stringsAsFactors = FALSE
-  )
-  df <- merge(df, syt, by = c("nace2d", "year"), all.x = TRUE)
-  df <- df[order(df$idx), ]
-
-  result <- rep(NA_real_, nrow(df))
-  cells <- unique(df[, c("nace2d", "year")])
-
-  for (r in seq_len(nrow(cells))) {
-    sec <- cells$nace2d[r]
-    yr  <- cells$year[r]
-    in_cell <- which(df$nace2d == sec & df$year == yr)
-
-    E_total <- df$E_total[in_cell[1]]
-    n_full  <- df$n_full[in_cell[1]]
-
-    if (is.na(E_total) || E_total == 0) {
-      result[in_cell] <- 0
-      next
-    }
-
-    raw    <- df$yhat[in_cell]
-    is_emi <- df$emit[in_cell] == 1
-    is_non <- df$emit[in_cell] == 0
-
-    has_cap <- any(is_emi) && any(is_non)
-    if (has_cap) {
-      cap <- min(df$y[in_cell[is_emi]], na.rm = TRUE) * (1 - 1e-10)
-      if (!is.finite(cap) || cap <= 0) has_cap <- FALSE
-    }
-
-    x       <- rep(0, length(in_cell))
-    active  <- which(raw > 0)
-    if (length(active) == 0) active <- seq_along(in_cell)
-    fixed   <- integer(0)
-    E_rem   <- E_total
-
-    for (iter in seq_len(length(in_cell) + 1)) {
-      r_active <- raw[active]
-      denom    <- sum(r_active, na.rm = TRUE)
-
-      if (denom > 0) {
-        x[active] <- E_rem * r_active / denom
-      } else {
-        x[active] <- E_rem / length(active)
-      }
-
-      if (!has_cap) break
-
-      violations <- active[is_non[active] & x[active] > cap]
-      if (length(violations) == 0) break
-
-      x[violations] <- cap
-      E_rem  <- E_rem - length(violations) * cap
-      fixed  <- c(fixed, violations)
-      active <- setdiff(active, violations)
-
-      if (length(active) == 0) break
-
-      if (E_rem < 0) {
-        x[active] <- 0
-        x[fixed]  <- E_total / length(fixed)
-        break
-      }
-    }
-
-    x <- pmax(x, 0)
-    result[in_cell] <- x
-  }
-
-  result
-}
-
-
-# ── Model specs (only the two we care about) ─────────────────────────────────
+# ── Hybrid model specs: extensive margin (logit) + proxy ranking ──────────────
+# No intensive margin needed; the proxy is the ranking signal directly.
 re_base <- "year_f + s(nace2d_f, bs = 're')"
 
 specs <- list(
   list(
     name = "pooled_ind_base",
     ext_formula = as.formula(paste("emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +", re_base)),
-    int_formula = as.formula(paste("y ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +", re_base))
+    proxy_col = "proxy_pooled"
   ),
   list(
     name = "weighted_ind_base",
     ext_formula = as.formula(paste("emit ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +", re_base)),
-    int_formula = as.formula(paste("y ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +", re_base))
+    proxy_col = "proxy_weighted"
   )
 )
 
-THRESHOLDS <- seq(0.10, 0.50, by = 0.05)
+THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
 
 # ── Pre-allocate ──────────────────────────────────────────────────────────────
 for (sp in specs) {
-  panel[[paste0("phat_", sp$name)]]  <- NA_real_
-  panel[[paste0("muhat_", sp$name)]] <- NA_real_
+  panel[[paste0("phat_", sp$name)]] <- NA_real_
 }
 
 
-# ── Run CV ────────────────────────────────────────────────────────────────────
-cat("\nRunning leave-firms-out CV (2 specs x 10 folds)...\n\n")
+# ── Run CV (extensive margin only) ────────────────────────────────────────────
+cat("\nRunning leave-firms-out CV (2 hybrid specs x 10 folds)...\n\n")
 t0_total <- Sys.time()
 
 for (k in 1:K_FOLDS) {
@@ -180,7 +103,6 @@ for (k in 1:K_FOLDS) {
   train <- panel[foldid != k, ]
   test  <- panel[foldid == k, ]
   test_idx <- which(foldid == k)
-  train_emit <- train[train$emit == 1, ]
 
   for (sp in specs) {
     fit_ext <- tryCatch(
@@ -193,18 +115,6 @@ for (k in 1:K_FOLDS) {
       phat <- pmin(pmax(phat, 0), 1)
       panel[[paste0("phat_", sp$name)]][test_idx] <- phat
     }
-
-    if (nrow(train_emit) > 0) {
-      fit_int <- tryCatch(
-        gam(sp$int_formula, data = train_emit,
-            family = poisson(link = "log"), method = "REML"),
-        error = function(e) { message("  [", sp$name, " int] ", e$message); NULL }
-      )
-      if (!is.null(fit_int)) {
-        muhat <- pmax(as.numeric(predict(fit_int, newdata = test, type = "response")), 0)
-        panel[[paste0("muhat_", sp$name)]][test_idx] <- muhat
-      }
-    }
   }
 
   elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
@@ -215,8 +125,8 @@ elapsed_total <- round(difftime(Sys.time(), t0_total, units = "mins"), 1)
 cat(sprintf("\nCV complete (%.1f min)\n\n", elapsed_total))
 
 
-# ── Threshold search + calibration ────────────────────────────────────────────
-cat("Threshold search + calibration...\n\n")
+# ── Threshold search + calibration (hybrid: phat + proxy ranking) ─────────────
+cat("Threshold search + calibration (hybrid)...\n\n")
 
 firm_preds <- list()
 rho_details <- list()
@@ -224,26 +134,30 @@ rho_details <- list()
 for (sp in specs) {
   nm <- sp$name
   phat  <- panel[[paste0("phat_", nm)]]
-  muhat <- panel[[paste0("muhat_", nm)]]
+  proxy <- panel[[sp$proxy_col]]
 
-  ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
+  ok <- !is.na(phat) & !is.na(proxy) & !is.na(panel$y)
 
-  # Step 1: search threshold by RAW RMSE (calibration comes after)
-  best_raw <- list(rmse = Inf)
+  # Search threshold by calibrated_clipped RMSE
+  best_clip <- list(rmse = Inf)
   best_thr <- NA_real_
 
   for (thr in THRESHOLDS) {
-    yhat_raw <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
-    m_raw <- calc_metrics(panel$y[ok], yhat_raw,
-                          nace2d = panel$nace2d[ok], year = panel$year[ok])
-    if (!is.na(m_raw$rmse) && m_raw$rmse < best_raw$rmse) {
-      best_raw <- m_raw
+    yhat_raw <- pmax(as.numeric(phat[ok] > thr) * proxy[ok], 0)
+    yhat_cap <- calibrate_with_cap(
+      yhat_raw, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok], syt
+    )
+    m <- calc_metrics(panel$y[ok], yhat_cap,
+                      nace2d = panel$nace2d[ok], year = panel$year[ok])
+    if (!is.na(m$rmse) && m$rmse < best_clip$rmse) {
+      best_clip <- m
       best_thr <- thr
     }
   }
 
-  # Step 2: calibrate at chosen threshold, compute final metrics
-  yhat_raw <- pmax(as.numeric(phat[ok] > best_thr) * muhat[ok], 0)
+  # Final metrics at chosen threshold
+  yhat_raw <- pmax(as.numeric(phat[ok] > best_thr) * proxy[ok], 0)
   yhat_cap <- calibrate_with_cap(
     yhat_raw, panel$emit[ok], panel$y[ok],
     panel$nace2d[ok], panel$year[ok], syt

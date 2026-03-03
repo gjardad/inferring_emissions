@@ -31,8 +31,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(mgcv)
 
-source(file.path(REPO_DIR, "fuel_proxy", "utils", "calc_metrics.R"))
-source(file.path(REPO_DIR, "utils", "calibration.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -132,7 +132,30 @@ hurdle_specs <- list(
   make_hurdle_spec("hurdle_proxy_1se_ind_base",      "log_revenue + I(proxy_1se > 0) + asinh(proxy_1se)", re_base)
 )
 
-# Threshold grid for hurdle
+# Hybrid specs: hurdle classification (extensive margin only) + proxy ranking
+# These reuse phat from the corresponding hurdle spec but replace muhat with
+# the raw proxy for the ranking signal. No intensive margin needed.
+make_hybrid_spec <- function(name, rhs, re, proxy_col) {
+  list(
+    name        = name,
+    ext_formula = as.formula(paste("emit ~", rhs, "+", re)),
+    proxy_col   = proxy_col,
+    # phat_source: name of the hurdle spec whose phat to reuse
+    # (hybrid shares the same extensive margin, so phat is identical)
+    phat_source = sub("^hybrid_", "hurdle_", name)
+  )
+}
+
+hybrid_specs <- list(
+  make_hybrid_spec("hybrid_proxy_weighted_ind_base",
+                   "log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted)",
+                   re_base, "proxy_weighted"),
+  make_hybrid_spec("hybrid_proxy_pooled_ind_base",
+                   "log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled)",
+                   re_base, "proxy_pooled")
+)
+
+# Threshold grid for hurdle and hybrid
 THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
 
@@ -437,6 +460,107 @@ for (sp in hurdle_specs) {
 }
 
 
+# ── Hybrid metrics (classification from hurdle phat + proxy ranking) ─────────
+cat("\nComputing hybrid metrics (proxy-based ranking)...\n")
+
+FOCAL_HYBRID <- c("hybrid_proxy_weighted_ind_base", "hybrid_proxy_pooled_ind_base")
+
+for (hsp in hybrid_specs) {
+  nm <- hsp$name
+  phat_src <- hsp$phat_source
+  proxy_col <- hsp$proxy_col
+
+  phat <- panel[[paste0("phat_", phat_src)]]
+  proxy <- panel[[proxy_col]]
+
+  ok <- !is.na(phat) & !is.na(proxy) & !is.na(panel$y)
+  if (sum(ok) == 0) {
+    cat(sprintf("  %s: SKIPPED (no valid predictions)\n", nm))
+    next
+  }
+
+  is_focal <- nm %in% FOCAL_HYBRID
+
+  # Find best threshold by calibrated_clipped RMSE
+  best_clip     <- list(rmse = Inf)
+  best_thr      <- NA_real_
+  best_m_clip   <- NULL
+  best_yhat_cap <- NULL
+
+  for (thr in THRESHOLDS) {
+    yhat_hard <- pmax(as.numeric(phat[ok] > thr) * proxy[ok], 0)
+
+    yhat_cap <- calibrate_with_cap(
+      yhat_hard, panel$emit[ok], panel$y[ok],
+      panel$nace2d[ok], panel$year[ok], syt
+    )
+    m_cap <- calc_metrics(panel$y[ok], yhat_cap,
+                          nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+    if (!is.na(m_cap$rmse) && m_cap$rmse < best_clip$rmse) {
+      best_clip     <- m_cap
+      best_thr      <- thr
+      best_m_clip   <- m_cap
+      best_yhat_cap <- yhat_cap
+    }
+
+    # Collect sweep for focal specs
+    if (is_focal) {
+      rho_list <- calc_rho_pooled(panel$y[ok], yhat_cap,
+                                  panel$nace2d[ok], panel$year[ok])
+      threshold_sweep_rows[[length(threshold_sweep_rows) + 1]] <- data.frame(
+        model = nm, threshold = thr,
+        nRMSE = m_cap$nrmse_sd, rmse = m_cap$rmse,
+        fpr_nonemitters = m_cap$fpr_nonemitters,
+        tpr_emitters = m_cap$tpr_emitters,
+        rho_pooled = rho_list$median_sector,
+        rho_pooled_global = rho_list$global,
+        within_sy_rho_med = m_cap$within_sy_rho_med,
+        within_sy_rho_min = m_cap$within_sy_rho_min,
+        within_sy_rho_max = m_cap$within_sy_rho_max,
+        spearman = m_cap$spearman,
+        mapd_emitters = m_cap$mapd_emitters,
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+
+  # Compute raw metrics at the chosen threshold
+  yhat_hard <- pmax(as.numeric(phat[ok] > best_thr) * proxy[ok], 0)
+  best_m_raw <- calc_metrics(panel$y[ok], yhat_hard,
+                             nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+  yhat_cal <- calibrate_predictions(
+    yhat_hard, panel$nace2d[ok], panel$year[ok], syt
+  )
+  best_m_cal <- calc_metrics(panel$y[ok], yhat_cal,
+                             nace2d = panel$nace2d[ok], year = panel$year[ok])
+
+  cat(sprintf("  %s: best thr=%.2f\n", nm, best_thr))
+
+  # Capture details for the main hybrid spec
+  if (nm == "hybrid_proxy_weighted_ind_base") {
+    if (!is.null(best_m_clip)) {
+      hybrid_weighted_ind_base_sy_rho_clip <- best_m_clip$within_sy_rho_detail
+    }
+    firm_preds_hybrid_weighted_base <- data.frame(
+      vat = panel$vat[ok], nace2d = panel$nace2d[ok], year = panel$year[ok],
+      y = panel$y[ok], yhat_clip = best_yhat_cap, stringsAsFactors = FALSE
+    )
+  }
+
+  if (!is.null(best_m_raw)) {
+    results[[paste0(nm, "_raw")]] <- make_result_row(nm, "raw", best_thr, best_m_raw)
+  }
+  if (!is.null(best_m_cal)) {
+    results[[paste0(nm, "_cal")]] <- make_result_row(nm, "calibrated", best_thr, best_m_cal)
+  }
+  if (!is.null(best_m_clip)) {
+    results[[paste0(nm, "_clip")]] <- make_result_row(nm, "calibrated_clipped", best_thr, best_m_clip)
+  }
+}
+
+
 # ── Combine k-fold results ─────────────────────────────────────────────────
 cv_performance <- bind_rows(results)
 
@@ -493,7 +617,8 @@ sy_rho_saves <- list(
   hurdle_proxy_pooled_ind_sy_rho_raw    = "within_sy_rho_hurdle_proxy_pooled_ind_raw.csv",
   hurdle_proxy_pooled_ind_sy_rho_clip   = "within_sy_rho_hurdle_proxy_pooled_ind_cal_clip.csv",
   hurdle_ind_base_sy_rho_clip           = "within_sy_rho_hurdle_proxy_pooled_ind_base_cal_clip.csv",
-  hurdle_weighted_ind_base_sy_rho_clip  = "within_sy_rho_hurdle_proxy_weighted_ind_base_cal_clip.csv"
+  hurdle_weighted_ind_base_sy_rho_clip  = "within_sy_rho_hurdle_proxy_weighted_ind_base_cal_clip.csv",
+  hybrid_weighted_ind_base_sy_rho_clip  = "within_sy_rho_hybrid_proxy_weighted_ind_base_cal_clip.csv"
 )
 for (v in names(sy_rho_saves)) {
   if (exists(v) && !is.null(get(v)) && nrow(get(v)) > 0) {
@@ -505,7 +630,8 @@ for (v in names(sy_rho_saves)) {
 
 # Save firm-level predictions for diagnostics
 for (obj_name in c("firm_preds_nested", "firm_preds_base",
-                    "firm_preds_weighted_base")) {
+                    "firm_preds_weighted_base",
+                    "firm_preds_hybrid_weighted_base")) {
   if (exists(obj_name)) {
     write.csv(get(obj_name),
               file.path(OUTPUT_DIR, paste0(obj_name, ".csv")),
