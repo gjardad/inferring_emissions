@@ -69,11 +69,7 @@ When copying files from RMD to local 1, I first need to copy them to local 2, th
 In local 1 I have available a downsampled version of the full NBB data sets as well as the full training sample. I built the training sample in RMD and copied it to local 2.
 Any script that only requires `training_sample.RData` (e.g., CV scripts, alternative specs, rho comparisons) can be run locally on local 1. RMD is only needed for scripts that access the raw NBB data (e.g., preprocessing, proxy construction).**
 
-**Data sync log.** Some processed data files are out of date on both local 1 and RMD. The log below tracks known discrepancies. Fixing these requires re-running the relevant preprocessing scripts on RMD (which has access to full data), then copying the updated file to local 1.
-
-| File | Status | What's missing / different | Fix |
-|------|--------|---------------------------|-----|
-| `training_sample.RData` | Out of date on both local 1 and RMD | Both versions contain only `training_sample`. Missing: `foldid`, `K_FOLDS`, `syt`. | Run `build_design_matrix.R` then `build_proxy.R` on RMD, then copy to local 1. |
+**Data sync log.** No known discrepancies.
 
 ## Guidelines for specifications
 
@@ -110,6 +106,9 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 **Legacy code.** The `fuel_proxy_legacy/` folder contains earlier proxy-construction scripts that are no longer used. Do not modify, reference, or source anything from this folder. All active proxy construction is handled in `preprocess/`.
 
 **Excluded from the paper.** The following are not part of the current analysis and should not appear in the text: Customs-based fuel proxy variants, energy balances / SIEC fuel classifications, emission factors and NCVs, fuel concordances (CN-IPCC-SIEC), PRODCOM data. Customs data may appear in an appendix for validation only.
+
+**Re-run local scripts with fixed training_sample.** The pre-2012 fix (PR #49) dropped ~766 mislabeled pre-regulation EU ETS firm-years and rebuilt the proxy. The new `training_sample.RData` is on local 1. All local analysis scripts (CV, figures/tables, within-firm tests) need to be re-run to update results. The new proxy is virtually identical to the old one (correlation 0.998), so results should not change meaningfully.
+
 **Elastic net hyperparameters not yet tuned.** No sensitivity analysis has been done on the elastic net hyperparameters used to construct the fuel-supply proxy. Currently, `run_elastic_net.R` tests only `alpha = 1.0` (lasso) and `alpha = 0.5` (elastic net), and the weighted proxy uses `alpha = 0.5` with `asinh(sales)` and `lambda.min`. A systematic grid search over alpha values and comparison between `lambda.min` and `lambda.1se` has not been performed. This requires running on RMD (full B2B data).
 
 ## Referee 2 Correspondence
