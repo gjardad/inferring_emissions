@@ -32,8 +32,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(mgcv)
 
-source(file.path(REPO_DIR, "fuel_proxy", "utils", "calc_metrics.R"))
-source(file.path(REPO_DIR, "utils", "calibration.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -294,10 +294,10 @@ collect <- function(m, label) {
 }
 
 results <- rbind(
-  collect(m_A, "Prop. alloc. + Tabachova proxy"),
-  collect(m_B, "Prop. alloc. + our proxy"),
-  collect(m_C, "Hurdle + cal. + Tabachova proxy"),
-  collect(m_D, "Hurdle + cal. + our proxy")
+  collect(m_A, "Prop. alloc. + Fuel-linked NACE"),
+  collect(m_B, "Prop. alloc. + Elastic net"),
+  collect(m_C, "Hurdle + cal. + Fuel-linked NACE"),
+  collect(m_D, "Hurdle + cal. + Elastic net")
 )
 
 print(results %>% select(label, nRMSE, median_apd, spearman, rho_pooled, fpr, tpr))
@@ -315,39 +315,34 @@ fmt3 <- function(x) ifelse(is.na(x), "---", sprintf("%.3f", x))
 fmt_pct <- function(x) ifelse(is.na(x), "---", sprintf("%.0f", x * 100))
 
 make_row <- function(m, label) {
-  apd_iqr <- sprintf("{\\scriptsize [%.2f, %.2f]}", m$apd_q25, m$apd_q75)
-  rho_range <- sprintf("{\\scriptsize [%.2f, %.2f]}", m$rho_pooled_min, m$rho_pooled_max)
-
-  line1 <- sprintf(
-    "\\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & %s & \\multirow{2}{*}{%s} & \\multirow{2}{*}{%s} \\\\",
+  sprintf(
+    "%s & %s & %s & %s & %s & %s & %s \\\\",
     label,
     fmt3(m$nrmse_sd), fmt3(m$median_apd),
     fmt3(m$spearman), fmt3(m$rho_pooled),
     fmt3(m$fpr_nonemitters), fmt3(m$tpr_emitters)
   )
-  line2 <- sprintf(" & & %s & & %s & & \\\\", apd_iqr, rho_range)
-  c(line1, line2)
 }
 
 tex <- c(
-  "\\begin{tabular}{l ccccc cc}",
+  "\\begin{tabular}{l cccc cc}",
   "\\toprule",
-  " & \\multicolumn{5}{c}{Prediction accuracy} & \\multicolumn{2}{c}{Extensive margin} \\\\",
-  "\\cmidrule(lr){2-6} \\cmidrule(lr){7-8}",
+  " & \\multicolumn{4}{c}{Prediction accuracy} & \\multicolumn{2}{c}{Extensive margin} \\\\",
+  "\\cmidrule(lr){2-5} \\cmidrule(lr){6-7}",
   "Model & nRMSE & Med.~APD & $\\rho$ & $\\rho_s$ & FPR & TPR \\\\",
   "\\midrule",
-  "\\multicolumn{8}{l}{\\textit{Panel A: Proportional allocation (no estimation, full sample)}} \\\\",
+  "\\multicolumn{7}{l}{\\textit{Panel A: Proportional allocation}} \\\\",
   "\\addlinespace",
-  make_row(m_A, "Tabachova proxy"),
+  make_row(m_A, "Fuel-linked NACE"),
   "\\addlinespace",
-  make_row(m_B, "Our proxy"),
+  make_row(m_B, "Elastic net"),
   "\\addlinespace",
   "\\midrule",
-  "\\multicolumn{8}{l}{\\textit{Panel B: Hurdle + calibration (LOFOCV)}} \\\\",
+  "\\multicolumn{7}{l}{\\textit{Panel B: Hurdle + calibration}} \\\\",
   "\\addlinespace",
-  make_row(m_C, "Tabachova proxy"),
+  make_row(m_C, "Fuel-linked NACE"),
   "\\addlinespace",
-  make_row(m_D, "Our proxy"),
+  make_row(m_D, "Elastic net"),
   "\\bottomrule",
   "\\end{tabular}"
 )
