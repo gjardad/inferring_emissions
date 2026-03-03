@@ -12,12 +12,12 @@
 #     Panel A: Leave-firms-out cross-validation
 #       1. PPML                              (benchmark_base, raw)
 #       2.   + calibration                   (benchmark_base, calibrated_clipped)
-#       3. Hurdle + proxy + indicator        (hurdle_proxy_weighted_ind_base, raw)
-#       4.   + calibration                   (hurdle_proxy_weighted_ind_base, calibrated_clipped)
+#       3. Hybrid + proxy + indicator        (hybrid_proxy_weighted_ind_base, raw)
+#       4.   + calibration                   (hybrid_proxy_weighted_ind_base, calibrated_clipped)
 #
 #     Panel B: Leave-one-sector-out cross-validation
 #       5. PPML + calibration                (losocv_ppml_benchmark_base, calibrated_clipped)
-#       6. Hurdle + proxy + indicator + cal  (losocv_hurdle_proxy_weighted_ind_base, calibrated_clipped)
+#       6. Hybrid + proxy + indicator + cal  (losocv_hybrid_proxy_weighted_ind_base, calibrated_clipped)
 #
 #     Columns split into two groups:
 #       "Prediction accuracy": nRMSE, Med. APD, Spearman rho, within-sector-year rho
@@ -64,7 +64,7 @@ load_cell_fp <- function(fname) {
   if (file.exists(p)) read.csv(p, stringsAsFactors = FALSE) else NULL
 }
 cell_fp_benchmark_raw    <- load_cell_fp("cell_fp_severity_benchmark_raw.csv")
-cell_fp_hurdle_ind_raw   <- load_cell_fp("cell_fp_severity_hurdle_proxy_weighted_ind_raw.csv")
+cell_fp_hybrid_ind_raw   <- load_cell_fp("cell_fp_severity_hybrid_proxy_weighted_ind_raw.csv")
 
 
 # ── Formatting helpers ────────────────────────────────────────────────────────
@@ -209,16 +209,16 @@ row_specs_weighted <- list(
   # Panel A: k-fold CV — isolate calibration value-add, then B2B value-add
   list(model = "benchmark_base",                          variant = "raw",                label = "PPML"),
   list(model = "benchmark_base",                          variant = "calibrated_clipped", label = "\\quad + calibration"),
-  list(model = "hurdle_proxy_weighted_ind_base",          variant = "raw",                label = "Hurdle + proxy + indicator"),
-  list(model = "hurdle_proxy_weighted_ind_base",          variant = "calibrated_clipped", label = "\\quad + calibration"),
+  list(model = "hybrid_proxy_weighted_ind_base",          variant = "raw",                label = "Hybrid + proxy + indicator"),
+  list(model = "hybrid_proxy_weighted_ind_base",          variant = "calibrated_clipped", label = "\\quad + calibration"),
   # Panel B: LOSO CV
   list(model = "losocv_ppml_benchmark_base",              variant = "calibrated_clipped", label = "PPML + calibration"),
-  list(model = "losocv_hurdle_proxy_weighted_ind_base",   variant = "calibrated_clipped", label = "Hurdle + proxy + indicator + cal.")
+  list(model = "losocv_hybrid_proxy_weighted_ind_base",   variant = "calibrated_clipped", label = "Hybrid + proxy + indicator + cal.")
 )
 
 cell_fp_map_weighted <- list(
-  benchmark_base                 = cell_fp_benchmark_raw,
-  hurdle_proxy_weighted_ind_base = cell_fp_hurdle_ind_raw
+  benchmark_base                  = cell_fp_benchmark_raw,
+  hybrid_proxy_weighted_ind_base  = cell_fp_hybrid_ind_raw
 )
 
 tex_weighted <- generate_table(row_specs_weighted, cell_fp_map_weighted)

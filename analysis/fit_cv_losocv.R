@@ -33,8 +33,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(mgcv)
 
-source(file.path(REPO_DIR, "fuel_proxy", "utils", "calc_metrics.R"))
-source(file.path(REPO_DIR, "utils", "calibration.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -93,7 +93,18 @@ losocv_specs <- list(
   make_hurdle_spec("losocv_hurdle_proxy_weighted_ind_year", "log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted)", re_year_only)
 )
 
-# Threshold grid for hurdle
+# Hybrid LOSOCV specs: hurdle classification + proxy ranking
+# These reuse the same extensive margin as the corresponding hurdle spec.
+losocv_hybrid_specs <- list(
+  list(name = "losocv_hybrid_proxy_weighted_ind_base",
+       ext_formula = as.formula(paste("emit ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +", re_base)),
+       proxy_col = "proxy_weighted"),
+  list(name = "losocv_hybrid_proxy_pooled_ind_base",
+       ext_formula = as.formula(paste("emit ~ log_revenue + I(proxy_pooled > 0) + asinh(proxy_pooled) +", re_base)),
+       proxy_col = "proxy_pooled")
+)
+
+# Threshold grid for hurdle and hybrid
 THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
 
@@ -428,6 +439,134 @@ for (losocv_sp in losocv_specs) {
   panel$losocv_phat  <- NULL
   panel$losocv_muhat <- NULL
 }
+
+# ── Hybrid LOSOCV loop ───────────────────────────────────────────────────
+# Hybrid specs: fit only the extensive margin (logit), combine phat with
+# the raw proxy for ranking, then calibrate.
+for (hsp in losocv_hybrid_specs) {
+  h_nm <- hsp$name
+  cat(sprintf("\n── Running LOSOCV: %s ──\n", h_nm))
+
+  panel$losocv_phat <- NA_real_
+
+  cat("Running LOSOCV (", n_sector_folds, " sector folds)...\n", sep = "")
+  t0_hybrid <- Sys.time()
+
+  for (s_idx in seq_along(sector_levels)) {
+    sec <- sector_levels[s_idx]
+    t0_fold <- Sys.time()
+
+    train_idx <- which(panel$primary_nace2d != sec)
+    test_idx  <- which(panel$primary_nace2d == sec)
+
+    train <- panel[train_idx, ]
+    test  <- panel[test_idx, ]
+
+    train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
+    test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
+    train$nace5d_f <- factor(train$nace5d, levels = all_nace5d_levels)
+    test$nace5d_f  <- factor(test$nace5d,  levels = all_nace5d_levels)
+    train$year_f   <- factor(train$year,   levels = all_year_levels)
+    test$year_f    <- factor(test$year,    levels = all_year_levels)
+
+    # Extensive margin only (no intensive margin needed for hybrid)
+    fit_ext <- tryCatch(
+      gam(hsp$ext_formula, data = train,
+          family = binomial(link = "logit"), method = "REML"),
+      error = function(e) NULL
+    )
+    if (!is.null(fit_ext)) {
+      phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
+      phat <- pmin(pmax(phat, 0), 1)
+      panel$losocv_phat[test_idx] <- phat
+    }
+
+    elapsed_fold <- round(difftime(Sys.time(), t0_fold, units = "secs"), 1)
+    cat(sprintf("  Sector %s (%2d/%d): %4d test obs (%.1fs)\n",
+                sec, s_idx, n_sector_folds, length(test_idx), elapsed_fold))
+  }
+
+  elapsed_hybrid <- round(difftime(Sys.time(), t0_hybrid, units = "mins"), 1)
+  cat(sprintf("LOSOCV %s done (%.1f min)\n\n", h_nm, elapsed_hybrid))
+
+  # Combine: phat from logit + proxy for ranking
+  proxy <- panel[[hsp$proxy_col]]
+  ok_hybrid <- !is.na(panel$losocv_phat) & !is.na(proxy) & !is.na(panel$y)
+
+  if (sum(ok_hybrid) > 0) {
+    cat("Searching over LOSOCV thresholds:", length(THRESHOLDS), "points\n")
+
+    best_hybrid     <- list(rmse = Inf)
+    best_hybrid_thr <- NA_real_
+    best_m_hybrid   <- NULL
+
+    for (thr in THRESHOLDS) {
+      yhat_thr <- pmax(as.numeric(panel$losocv_phat[ok_hybrid] > thr) *
+                         proxy[ok_hybrid], 0)
+
+      yhat_cap <- calibrate_with_cap(
+        yhat_thr, panel$emit[ok_hybrid], panel$y[ok_hybrid],
+        panel$nace2d[ok_hybrid], panel$year[ok_hybrid], syt
+      )
+
+      m <- calc_metrics(
+        panel$y[ok_hybrid], yhat_cap,
+        nace2d = panel$nace2d[ok_hybrid], year = panel$year[ok_hybrid]
+      )
+
+      if (!is.na(m$rmse) && m$rmse < best_hybrid$rmse) {
+        best_hybrid     <- m
+        best_hybrid_thr <- thr
+        best_m_hybrid   <- m
+      }
+
+      # Collect sweep
+      rho_list <- calc_rho_pooled(panel$y[ok_hybrid], yhat_cap,
+                                  panel$nace2d[ok_hybrid], panel$year[ok_hybrid])
+      losocv_sweep_rows[[length(losocv_sweep_rows) + 1]] <- data.frame(
+        model = h_nm, threshold = thr,
+        nRMSE = m$nrmse_sd, rmse = m$rmse,
+        fpr_nonemitters = m$fpr_nonemitters,
+        tpr_emitters = m$tpr_emitters,
+        rho_pooled = rho_list$median_sector,
+        rho_pooled_global = rho_list$global,
+        within_sy_rho_med = m$within_sy_rho_med,
+        within_sy_rho_min = m$within_sy_rho_min,
+        within_sy_rho_max = m$within_sy_rho_max,
+        spearman = m$spearman,
+        mapd_emitters = m$mapd_emitters,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    cat(sprintf("%s best threshold: %.2f\n", h_nm, best_hybrid_thr))
+    cat(sprintf("  nRMSE = %.3f, Spearman = %.3f, FPR = %.3f, TPR = %.3f\n",
+                best_m_hybrid$nrmse_sd, best_m_hybrid$spearman,
+                best_m_hybrid$fpr_nonemitters, best_m_hybrid$tpr_emitters))
+
+    results[[h_nm]] <- make_result_row(h_nm, "calibrated_clipped",
+                                        best_hybrid_thr, best_m_hybrid)
+
+    losocv_rho_details[[h_nm]] <- best_m_hybrid$within_sy_rho_detail
+
+    yhat_best <- pmax(
+      as.numeric(panel$losocv_phat[ok_hybrid] > best_hybrid_thr) *
+        proxy[ok_hybrid], 0
+    )
+    yhat_best_cap <- calibrate_with_cap(
+      yhat_best, panel$emit[ok_hybrid], panel$y[ok_hybrid],
+      panel$nace2d[ok_hybrid], panel$year[ok_hybrid], syt
+    )
+    losocv_firm_preds[[h_nm]] <- data.frame(
+      vat = panel$vat[ok_hybrid], nace2d = panel$nace2d[ok_hybrid],
+      year = panel$year[ok_hybrid], y = panel$y[ok_hybrid],
+      yhat_clip = yhat_best_cap, stringsAsFactors = FALSE
+    )
+  }
+
+  panel$losocv_phat <- NULL
+}
+
 
 # Clean up temporary column
 panel$primary_nace2d <- NULL

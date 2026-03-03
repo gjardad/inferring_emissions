@@ -2,20 +2,36 @@
 # analysis/alternative_specs.R
 #
 # PURPOSE
-#   Phase 1 local experimentation: test additional features, functional forms,
-#   and interactions against the current hurdle model baseline.
+#   Comprehensive comparison of all model specifications.
+#   Tests 9 feature groups x 2 proxy variants x 2 architectures:
 #
-#   All specs use leave-firms-out 10-fold CV with hurdle architecture
-#   (logit extensive + Poisson intensive + threshold search), calibrated
-#   with cap. Primary comparison metric: within-sector-year Spearman rho.
+#   Feature groups:
+#     B0: baseline (log_revenue + proxy indicator + asinh proxy)
+#     A1: + capital
+#     A2: + capital intensity
+#     A3: + FTE
+#     A4: + capital + FTE
+#     B1: smooth revenue (s(log_revenue))
+#     B2: smooth proxy in intensive margin only (hurdle only)
+#     B3: smooth both in intensive margin only (hurdle only)
+#     C1: sector-specific proxy slope (random slope on proxy by sector)
+#
+#   Proxy variants: proxy_pooled, proxy_weighted
+#
+#   Architectures:
+#     hurdle: logit ext margin + Poisson int margin + threshold + calibrate_with_cap
+#     hybrid: logit ext margin + raw proxy ranking + threshold + calibrate_with_cap
+#
+#   B2 and B3 hybrid variants are omitted (identical to B0 and B1 hybrid
+#   respectively, since the hybrid architecture has no intensive margin).
+#
+#   Total: 18 hurdle + 14 hybrid = 32 specs.
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData
 #
 # OUTPUT
-#   Console: comparison table + per-sector rho detail
-#   {OUTPUT_DIR}/phase1_spec_comparison.csv
-#   {OUTPUT_DIR}/phase1_rho_detail_{spec}.csv (for baseline + best)
+#   {OUTPUT_DIR}/alternative_specs_comparison.csv
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -32,7 +48,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(mgcv)
 
-source(file.path(REPO_DIR, "fuel_proxy", "utils", "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calc_metrics.R"))
+source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
@@ -43,7 +60,6 @@ rm(training_sample)
 
 
 # ── Prepare panel ────────────────────────────────────────────────────────────
-# Rename annual accounts variables if they have original codes
 if ("turnover_VAT" %in% names(panel) && !"revenue" %in% names(panel)) {
   panel <- panel %>% rename(revenue = turnover_VAT)
 }
@@ -60,12 +76,10 @@ if ("v_0009800" %in% names(panel) && !"value_added" %in% names(panel)) {
   panel <- panel %>% rename(value_added = v_0009800)
 }
 
-# Derived variables
 panel <- panel %>%
   mutate(
     year_f       = factor(year),
     nace2d_f     = factor(nace2d),
-    nace5d_f     = factor(nace5d),
     asinh_capital = asinh(coalesce(capital, 0)),
     asinh_fte     = asinh(coalesce(fte, 0)),
     capital_intensity = asinh(coalesce(capital, 0) / pmax(exp(log_revenue), 1))
@@ -96,153 +110,91 @@ syt <- panel %>%
   summarise(E_total = sum(y, na.rm = TRUE), n_full = n(), .groups = "drop")
 
 
-# ── Calibration with cap (see utils/calibration.R) ────────────
-calibrate_with_cap <- function(yhat, emit, y, nace2d, year, syt) {
-  df <- data.frame(
-    yhat = yhat, emit = emit, y = y,
-    nace2d = nace2d, year = year,
-    idx = seq_along(yhat), stringsAsFactors = FALSE
-  )
-  df <- merge(df, syt, by = c("nace2d", "year"), all.x = TRUE)
-  df <- df[order(df$idx), ]
+# ── Build spec grid ──────────────────────────────────────────────────────────
+re <- "s(nace2d_f, bs = 're')"
 
-  result <- rep(NA_real_, nrow(df))
-  cells <- unique(df[, c("nace2d", "year")])
+build_specs <- function() {
+  specs <- list()
 
-  for (r in seq_len(nrow(cells))) {
-    sec <- cells$nace2d[r]
-    yr  <- cells$year[r]
-    in_cell <- which(df$nace2d == sec & df$year == yr)
+  for (pname in c("pooled", "weighted")) {
+    pvar      <- paste0("proxy_", pname)
+    pi        <- paste0("I(", pvar, " > 0)")
+    pa        <- paste0("asinh(", pvar, ")")
+    pt        <- paste(pi, "+", pa)
+    pt_smooth <- paste(pi, "+ s(", pa, ", k = 5)")
+    pslope    <- paste0("s(nace2d_f, by = ", pa, ", bs = 're')")
 
-    E_total <- df$E_total[in_cell[1]]
-    n_full  <- df$n_full[in_cell[1]]
+    # Each entry: list(id, rev_ext, proxy_ext, rev_int, proxy_int, skip_hybrid)
+    feats <- list(
+      list("B0", "log_revenue", pt,
+                  "log_revenue", pt, FALSE),
+      list("A1", "log_revenue", paste(pt, "+ asinh_capital"),
+                  "log_revenue", paste(pt, "+ asinh_capital"), FALSE),
+      list("A2", "log_revenue", paste(pt, "+ capital_intensity"),
+                  "log_revenue", paste(pt, "+ capital_intensity"), FALSE),
+      list("A3", "log_revenue", paste(pt, "+ asinh_fte"),
+                  "log_revenue", paste(pt, "+ asinh_fte"), FALSE),
+      list("A4", "log_revenue", paste(pt, "+ asinh_capital + asinh_fte"),
+                  "log_revenue", paste(pt, "+ asinh_capital + asinh_fte"), FALSE),
+      list("B1", "s(log_revenue, k = 5)", pt,
+                  "s(log_revenue, k = 5)", pt, FALSE),
+      list("B2", "log_revenue", pt,
+                  "log_revenue", pt_smooth, TRUE),
+      list("B3", "s(log_revenue, k = 5)", pt,
+                  "s(log_revenue, k = 5)", pt_smooth, TRUE),
+      list("C1", "log_revenue", paste(pt, "+", pslope),
+                  "log_revenue", paste(pt, "+", pslope), FALSE)
+    )
 
-    if (is.na(E_total) || E_total == 0) {
-      result[in_cell] <- 0
-      next
-    }
+    for (f in feats) {
+      fid <- f[[1]]
+      ext_rhs <- paste(f[[2]], "+", f[[3]], "+ year_f +", re)
+      int_rhs <- paste(f[[4]], "+", f[[5]], "+ year_f +", re)
 
-    raw    <- df$yhat[in_cell]
-    is_emi <- df$emit[in_cell] == 1
-    is_non <- df$emit[in_cell] == 0
+      # Hurdle spec
+      specs[[length(specs) + 1]] <- list(
+        name = paste0(fid, "_", pname, "_hurdle"),
+        feature = fid, proxy = pname, arch = "hurdle",
+        proxy_col = pvar,
+        ext_formula = as.formula(paste("emit ~", ext_rhs)),
+        int_formula = as.formula(paste("y ~", int_rhs))
+      )
 
-    has_cap <- any(is_emi) && any(is_non)
-    if (has_cap) {
-      cap <- min(df$y[in_cell[is_emi]], na.rm = TRUE) * (1 - 1e-10)
-      if (!is.finite(cap) || cap <= 0) has_cap <- FALSE
-    }
-
-    x       <- rep(0, length(in_cell))
-    active  <- which(raw > 0)
-    if (length(active) == 0) active <- seq_along(in_cell)
-    fixed   <- integer(0)
-    E_rem   <- E_total
-
-    for (iter in seq_len(length(in_cell) + 1)) {
-      r_active <- raw[active]
-      denom    <- sum(r_active, na.rm = TRUE)
-
-      if (denom > 0) {
-        x[active] <- E_rem * r_active / denom
-      } else {
-        x[active] <- E_rem / length(active)
-      }
-
-      if (!has_cap) break
-
-      violations <- active[is_non[active] & x[active] > cap]
-      if (length(violations) == 0) break
-
-      x[violations] <- cap
-      E_rem  <- E_rem - length(violations) * cap
-      fixed  <- c(fixed, violations)
-      active <- setdiff(active, violations)
-
-      if (length(active) == 0) break
-
-      if (E_rem < 0) {
-        x[active] <- 0
-        x[fixed]  <- E_total / length(fixed)
-        break
+      # Hybrid spec (skip B2, B3: identical to B0, B1 hybrid)
+      if (!f[[6]]) {
+        specs[[length(specs) + 1]] <- list(
+          name = paste0(fid, "_", pname, "_hybrid"),
+          feature = fid, proxy = pname, arch = "hybrid",
+          proxy_col = pvar,
+          ext_formula = as.formula(paste("emit ~", ext_rhs)),
+          int_formula = NULL
+        )
       }
     }
-
-    x <- pmax(x, 0)
-    result[in_cell] <- x
   }
 
-  result
+  specs
 }
 
+specs <- build_specs()
 
-# ── Model specifications ────────────────────────────────────────────────────
-# Each spec has: name, ext_formula (logit), int_formula (Poisson)
-# All use base RE: s(nace2d_f, bs = "re")
+THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
 
-re <- "s(nace2d_f, bs = 're')"
-proxy_terms <- "I(proxy_pooled > 0) + asinh(proxy_pooled)"
-
-make_spec <- function(name, ext_rhs, int_rhs) {
-  list(
-    name        = name,
-    ext_formula = as.formula(paste("emit ~", ext_rhs, "+ year_f +", re)),
-    int_formula = as.formula(paste("y ~",    int_rhs, "+ year_f +", re))
-  )
-}
-
-# For specs where both margins use the same RHS (most cases)
-make_spec_same <- function(name, rhs) {
-  make_spec(name, rhs, rhs)
-}
-
-specs <- list(
-  # Baseline
-  make_spec_same("B0_baseline",
-    paste("log_revenue +", proxy_terms)),
-
-  # Group A: additional features
-  make_spec_same("A1_capital",
-    paste("log_revenue +", proxy_terms, "+ asinh_capital")),
-
-  make_spec_same("A2_cap_intensity",
-    paste("log_revenue +", proxy_terms, "+ capital_intensity")),
-
-  make_spec_same("A3_fte",
-    paste("log_revenue +", proxy_terms, "+ asinh_fte")),
-
-  make_spec_same("A4_capital_fte",
-    paste("log_revenue +", proxy_terms, "+ asinh_capital + asinh_fte")),
-
-  # Group B: non-linear functional form
-  make_spec_same("B1_smooth_revenue",
-    paste("s(log_revenue, k = 5) +", proxy_terms)),
-
-  # B2: smooth proxy only in intensive margin
-  make_spec("B2_smooth_proxy",
-    paste("log_revenue +", proxy_terms),
-    "log_revenue + I(proxy_pooled > 0) + s(asinh(proxy_pooled), k = 5)"),
-
-  make_spec("B3_smooth_both",
-    paste("s(log_revenue, k = 5) +", proxy_terms),
-    "s(log_revenue, k = 5) + I(proxy_pooled > 0) + s(asinh(proxy_pooled), k = 5)"),
-
-  # Group C: sector-proxy interaction (random slope)
-  make_spec_same("C1_sector_proxy_slope",
-    paste("log_revenue +", proxy_terms,
-          "+ s(nace2d_f, by = asinh(proxy_pooled), bs = 're')"))
-)
-
-THRESHOLDS <- seq(0.10, 0.50, by = 0.05)
-
-cat("Specs to run:", length(specs), "\n")
+n_hurdle <- sum(sapply(specs, function(s) s$arch == "hurdle"))
+n_hybrid <- sum(sapply(specs, function(s) s$arch == "hybrid"))
+cat(sprintf("Spec grid: %d specs (%d hurdle + %d hybrid)\n",
+            length(specs), n_hurdle, n_hybrid))
 cat("Folds:", K_FOLDS, "\n")
-cat("Thresholds:", paste(THRESHOLDS, collapse = ", "), "\n\n")
+cat("Thresholds:", length(THRESHOLDS), "values from",
+    min(THRESHOLDS), "to", max(THRESHOLDS), "\n\n")
 
 
 # ── Pre-allocate prediction storage ──────────────────────────────────────────
 for (sp in specs) {
-  panel[[paste0("phat_", sp$name)]]  <- NA_real_
-  panel[[paste0("muhat_", sp$name)]] <- NA_real_
+  panel[[paste0("phat_", sp$name)]] <- NA_real_
+  if (sp$arch == "hurdle") {
+    panel[[paste0("muhat_", sp$name)]] <- NA_real_
+  }
 }
 
 
@@ -257,7 +209,6 @@ for (k in 1:K_FOLDS) {
   train <- panel[foldid != k, ]
   test  <- panel[foldid == k, ]
   test_idx <- which(foldid == k)
-
   train_emit <- train[train$emit == 1, ]
 
   for (sp in specs) {
@@ -269,12 +220,11 @@ for (k in 1:K_FOLDS) {
     )
     if (!is.null(fit_ext)) {
       phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
-      phat <- pmin(pmax(phat, 0), 1)
-      panel[[paste0("phat_", sp$name)]][test_idx] <- phat
+      panel[[paste0("phat_", sp$name)]][test_idx] <- pmin(pmax(phat, 0), 1)
     }
 
-    # Intensive margin (Poisson on emitters only)
-    if (nrow(train_emit) > 0) {
+    # Intensive margin (Poisson on emitters only; hurdle architecture only)
+    if (sp$arch == "hurdle" && nrow(train_emit) > 0) {
       fit_int <- tryCatch(
         gam(sp$int_formula, data = train_emit,
             family = poisson(link = "log"), method = "REML"),
@@ -296,29 +246,38 @@ cat(sprintf("\nCV complete (%.1f min)\n\n", elapsed_total))
 
 
 # ── Compute metrics (threshold search + calibration) ─────────────────────────
-cat("Computing metrics...\n\n")
+cat("Computing metrics (threshold search + calibration)...\n\n")
 
 results <- list()
-rho_details <- list()
 
 for (sp in specs) {
   nm <- sp$name
-  phat  <- panel[[paste0("phat_", nm)]]
-  muhat <- panel[[paste0("muhat_", nm)]]
+  phat <- panel[[paste0("phat_", nm)]]
 
-  ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
+  if (sp$arch == "hurdle") {
+    muhat <- panel[[paste0("muhat_", nm)]]
+    ok <- !is.na(phat) & !is.na(muhat) & !is.na(panel$y)
+  } else {
+    proxy <- panel[[sp$proxy_col]]
+    ok <- !is.na(phat) & !is.na(proxy) & !is.na(panel$y)
+  }
+
   if (sum(ok) == 0) {
     cat(sprintf("  %s: SKIPPED (no valid predictions)\n", nm))
     next
   }
 
-  # Search over thresholds using calibrated+clipped predictions
-  best <- list(rmse = Inf)
+  # Search over thresholds using calibrated+clipped RMSE
+  best_rmse <- Inf
   best_thr <- NA_real_
   best_m <- NULL
 
   for (thr in THRESHOLDS) {
-    yhat_raw <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
+    if (sp$arch == "hurdle") {
+      yhat_raw <- pmax(as.numeric(phat[ok] > thr) * muhat[ok], 0)
+    } else {
+      yhat_raw <- pmax(as.numeric(phat[ok] > thr) * proxy[ok], 0)
+    }
 
     yhat_cap <- calibrate_with_cap(
       yhat_raw, panel$emit[ok], panel$y[ok],
@@ -328,10 +287,10 @@ for (sp in specs) {
     m <- calc_metrics(panel$y[ok], yhat_cap,
                       nace2d = panel$nace2d[ok], year = panel$year[ok])
 
-    if (!is.na(m$rmse) && m$rmse < best$rmse) {
-      best     <- m
+    if (!is.na(m$rmse) && m$rmse < best_rmse) {
+      best_rmse <- m$rmse
       best_thr <- thr
-      best_m   <- m
+      best_m <- m
     }
   }
 
@@ -340,109 +299,91 @@ for (sp in specs) {
     next
   }
 
-  cat(sprintf("  %s: thr=%.2f  nRMSE=%.3f  MAPD=%.3f  rho_med=%.3f [%.3f, %.3f]\n",
-              nm, best_thr, best_m$nrmse_sd, best_m$mapd_emitters,
-              best_m$within_sy_rho_med, best_m$within_sy_rho_min,
-              best_m$within_sy_rho_max))
+  cat(sprintf("  %s: thr=%.2f nRMSE=%.3f rho_s=%.3f\n",
+              nm, best_thr, best_m$nrmse_sd, best_m$rho_pooled))
 
   results[[nm]] <- data.frame(
-    spec = nm, threshold = best_thr,
-    n = best_m$n, nRMSE = best_m$nrmse_sd,
-    rmse = best_m$rmse, mae = best_m$mae,
-    mapd_emitters = best_m$mapd_emitters, spearman = best_m$spearman,
+    spec = nm, feature = sp$feature, proxy = sp$proxy,
+    architecture = sp$arch, threshold = best_thr,
+    n = best_m$n,
+    nRMSE = best_m$nrmse_sd,
+    rmse = best_m$rmse,
+    mae = best_m$mae,
+    median_apd = best_m$median_apd,
+    spearman = best_m$spearman,
+    rho_pooled = best_m$rho_pooled,
+    rho_pooled_min = best_m$rho_pooled_min,
+    rho_pooled_max = best_m$rho_pooled_max,
     fpr_nonemitters = best_m$fpr_nonemitters,
     tpr_emitters = best_m$tpr_emitters,
     emitter_mass_captured = best_m$emitter_mass_captured,
-    within_sy_rho_med = best_m$within_sy_rho_med,
-    within_sy_rho_min = best_m$within_sy_rho_min,
-    within_sy_rho_max = best_m$within_sy_rho_max,
     stringsAsFactors = FALSE
   )
-
-  rho_details[[nm]] <- best_m$within_sy_rho_detail
 }
 
 
-# ── Print comparison table ───────────────────────────────────────────────────
+# ── Print comparison tables ──────────────────────────────────────────────────
 comparison <- bind_rows(results)
 
-cat("\n\n══════════════════════════════════════════════════════════════\n")
-cat("Phase 1 specification comparison (leave-firms-out, cal+clip)\n")
-cat("══════════════════════════════════════════════════════════════\n\n")
+cat("\n\n")
+cat("==============================================================\n")
+cat("Alternative specifications comparison (leave-firms-out, cal+clip)\n")
+cat("==============================================================\n")
 
-# Key columns
+# By architecture
+cat("\n-- By architecture (median across specs) --\n")
 print(comparison %>%
-  select(spec, threshold, nRMSE, mapd_emitters, spearman,
-         fpr_nonemitters, tpr_emitters,
-         within_sy_rho_med, within_sy_rho_min),
+  group_by(architecture) %>%
+  summarise(
+    n_specs   = n(),
+    nRMSE_med = round(median(nRMSE, na.rm = TRUE), 3),
+    rho_s_med = round(median(rho_pooled, na.rm = TRUE), 3),
+    FPR_med   = round(median(fpr_nonemitters, na.rm = TRUE), 3),
+    TPR_med   = round(median(tpr_emitters, na.rm = TRUE), 3),
+    .groups = "drop"
+  ), row.names = FALSE)
+
+# By proxy
+cat("\n-- By proxy (median across specs) --\n")
+print(comparison %>%
+  group_by(proxy) %>%
+  summarise(
+    n_specs   = n(),
+    nRMSE_med = round(median(nRMSE, na.rm = TRUE), 3),
+    rho_s_med = round(median(rho_pooled, na.rm = TRUE), 3),
+    .groups = "drop"
+  ), row.names = FALSE)
+
+# By feature (best spec within each feature group)
+cat("\n-- By feature (best rho_s across architecture/proxy) --\n")
+print(comparison %>%
+  group_by(feature) %>%
+  summarise(
+    best_nRMSE = round(min(nRMSE, na.rm = TRUE), 3),
+    best_rho_s = round(max(rho_pooled, na.rm = TRUE), 3),
+    best_spec  = spec[which.max(rho_pooled)],
+    .groups = "drop"
+  ) %>%
+  arrange(desc(best_rho_s)),
   row.names = FALSE)
 
-# Save
+# Full table sorted by rho_s
+cat("\n-- Full table (sorted by rho_s descending) --\n")
+print(comparison %>%
+  arrange(desc(rho_pooled)) %>%
+  select(spec, threshold, nRMSE, spearman, rho_pooled,
+         rho_pooled_min, rho_pooled_max,
+         fpr_nonemitters, tpr_emitters),
+  row.names = FALSE)
+
+
+# ── Save ─────────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
-write.csv(comparison,
-          file.path(OUTPUT_DIR, "phase1_spec_comparison.csv"),
-          row.names = FALSE)
 
+out_fn <- file.path(OUTPUT_DIR, "alternative_specs_comparison.csv")
+write.csv(comparison, out_fn, row.names = FALSE)
+cat(sprintf("\nSaved: %s\n", out_fn))
 
-# ── Per-sector rho comparison: baseline vs each spec ─────────────────────────
-if ("B0_baseline" %in% names(rho_details)) {
-  baseline_rho <- rho_details[["B0_baseline"]]
-
-  cat("\n\n══════════════════════════════════════════════════════════════\n")
-  cat("Per-sector rho: each spec vs baseline\n")
-  cat("══════════════════════════════════════════════════════════════\n")
-
-  for (nm in setdiff(names(rho_details), "B0_baseline")) {
-    spec_rho <- rho_details[[nm]]
-
-    merged <- merge(baseline_rho, spec_rho,
-                    by = c("nace2d", "year"), suffixes = c("_base", "_spec"))
-
-    sector_summary <- merged %>%
-      group_by(nace2d) %>%
-      summarise(
-        n_years    = n(),
-        n_firms    = median(n_firms_base),
-        rho_base   = median(rho_base),
-        rho_spec   = median(rho_spec),
-        delta      = median(rho_spec) - median(rho_base),
-        .groups    = "drop"
-      ) %>%
-      arrange(nace2d)
-
-    # Only print if there's a meaningful difference
-    overall_delta <- median(merged$rho_spec) - median(merged$rho_base)
-
-    cat(sprintf("\n── %s (overall delta: %+.3f) ──\n", nm, overall_delta))
-    cat(sprintf("%-6s  %5s  %5s  %8s  %8s  %8s\n",
-                "NACE", "Yrs", "Firms", "Base", "Spec", "Delta"))
-    cat(strrep("-", 50), "\n")
-    for (i in seq_len(nrow(sector_summary))) {
-      r <- sector_summary[i, ]
-      cat(sprintf("%-6s  %5d  %5.0f  %8.3f  %8.3f  %+8.3f\n",
-                  r$nace2d, r$n_years, r$n_firms,
-                  r$rho_base, r$rho_spec, r$delta))
-    }
-
-    n_wins  <- sum(merged$rho_spec > merged$rho_base)
-    n_loses <- sum(merged$rho_spec < merged$rho_base)
-    n_ties  <- sum(merged$rho_spec == merged$rho_base)
-    cat(sprintf("\n  Cells: %d | Wins: %d (%.0f%%) | Losses: %d (%.0f%%) | Ties: %d\n",
-                nrow(merged), n_wins, 100 * n_wins / nrow(merged),
-                n_loses, 100 * n_loses / nrow(merged), n_ties))
-
-    # Save rho detail
-    write.csv(spec_rho,
-              file.path(OUTPUT_DIR, paste0("phase1_rho_detail_", nm, ".csv")),
-              row.names = FALSE)
-  }
-
-  write.csv(baseline_rho,
-            file.path(OUTPUT_DIR, "phase1_rho_detail_B0_baseline.csv"),
-            row.names = FALSE)
-}
-
-
-cat("\n\n══════════════════════════════════════════════════════════════\n")
-cat("Phase 1 complete. Results saved to:", OUTPUT_DIR, "\n")
-cat("══════════════════════════════════════════════════════════════\n")
+cat("\n==============================================================\n")
+cat("Done.\n")
+cat("==============================================================\n")
