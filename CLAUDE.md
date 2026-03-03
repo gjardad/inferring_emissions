@@ -48,6 +48,17 @@ Processed data (located in DATA_DIR/processed):
 
 	training_sample.RData: firm-year panel used for cross-validation. Contains EU ETS firms (with verified emissions) and non-ETS firms from NACE 19/24 (with emissions set to 0), merged with annual accounts variables, B2B fuel-supply proxies, fold assignments, and sector-year emission totals. Available on local 1.
 
+**Downsampled data on local 1.** The following processed files on local 1 are **downsampled** versions of the full data (which is available only on RMD). The same applies to the corresponding raw .dta files in DATA_DIR/raw/NBB/.
+
+- `annual_accounts_selected_sample.RData` (and `_key_variables` and `_more_selected_sample` variants)
+- `b2b_selected_sample.RData`
+- `df_b2b.RData`
+- `df_trade.RData`
+- `df_national_accounts_with_5digits.RData`
+- `firms_in_selected_sample.RData`
+
+The full training sample (`training_sample.RData`), EUTL data (`firm_year_belgian_euets.RData`, `firm_year_emissions.RData`, `installation_year_emissions.RData`), and all mapping/crosswalk files are NOT downsampled and are available in full on local 1.
+
 Feel free to suggest any additional data sets you may think can help.
 
 ### Hardware setup:
@@ -89,11 +100,13 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 ## Current Status
 
-**Results are mostly ready**. We are currently going over the logic of the entire exercise to check for inconsistencies and we hope to start writing the paper soon.
+**Writing the paper.** Results are ready. We are now drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolete — do not reference, modify, or draw content from it.
 
 **Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
 
 **Legacy code.** The `fuel_proxy_legacy/` folder contains earlier proxy-construction scripts that are no longer used. Do not modify, reference, or source anything from this folder. All active proxy construction is handled in `preprocess/`.
+
+**Excluded from the paper.** The following are not part of the current analysis and should not appear in the text: Customs-based fuel proxy variants, energy balances / SIEC fuel classifications, emission factors and NCVs, fuel concordances (CN-IPCC-SIEC), PRODCOM data. Customs data may appear in an appendix for validation only.
 
 ## Referee 2 Correspondence
 

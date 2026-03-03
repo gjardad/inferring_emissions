@@ -336,11 +336,25 @@ comparison.
 | Out-of-sample design | None (contemporaneous allocation) | LOFOCV + LOSOCV (genuine out-of-sample, including unseen sectors) |
 | Coverage | All VAT-paying firms (Tabachova) or subset of 25K firms (Stangl 2026) | All non-ETS firms across all sectors |
 
-### Related: Belgian B2B data references
+### Related: Belgian B2B data and sample selection references
 
 - **Dhyne, Magerman & Rubinova (2015)** NBB WP No. 288. Introduces the Belgian
   B2B dataset.
 - **Duprez, Dhyne & Komatsu (2023)** NBB WP No. 444. Updated dataset 2002-2021.
+- **Dhyne, Kikkawa, Mogstad & Tintelnot (2020)** "Trade and Domestic Production
+  Networks." *Review of Economic Studies* 88(2), 643-668.
+  - Uses the Belgian B2B + Annual Accounts data. Establishes the standard sample
+    selection criteria we follow: private non-financial sector, positive labor
+    costs, ≥1 FTE, positive output. Removes self-employed and foreign firms
+    without local economic activity.
+- **Dhyne, Kikkawa, Mogstad & Tintelnot (2023)** "Measuring the Share of Imports
+  in Final Consumption." *AEA Papers and Proceedings* 113, 81-86.
+  - Documents a revision of the B2B dataset. Our sample numbers slightly differ
+    from Dhyne et al. (2020) due to this revision.
+- **De Loecker, Fuss & Van Biesebroeck (2014)** "International Competition and
+  Firm Performance: Evidence from Belgium." NBB WP No. 269.
+  - Uses Annual Accounts with the same sample selection criteria as Dhyne et al.
+    (2020). We cite both as precedent for our sample restrictions.
 - **Bernard, Dhyne, Magerman, Manova & Moxnes (2022)** "The Origins of Firm
   Heterogeneity: A Production Network Approach." *JPE* 130(7), 1765-1804.
 - **Pichler, Diem, ..., Magerman, ..., Thurner (2023)** "Building an Alliance to
