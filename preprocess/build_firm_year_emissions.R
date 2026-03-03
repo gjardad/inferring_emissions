@@ -66,23 +66,26 @@ df_account <- read.csv(paste0(RAW_DATA,"/EUTL/Oct_2024_version/account.csv"))
     select(account_id, account_type, bvd_id, installation_id, firm_id) %>% 
     filter(account_type %in% c("100-7","120-0"))
   
-  firm_year_emissions  <- installation_year_emissions %>% 
+  firm_year_emissions  <- installation_year_emissions %>%
     left_join(df_account %>% select(bvd_id, installation_id),
-              by = "installation_id") %>% 
-    distinct() %>% 
+              by = "installation_id") %>%
+    distinct() %>%
     group_by(bvd_id, year) %>%
     summarise(
-      allocated_free = sum(allocatedFree, na.rm = T),
-      allocated_total = sum(allocatedTotal, na.rm = T),
-      emissions = sum(verified, na.rm = TRUE),  # Total verified emissions
-      bvd_id = first(bvd_id),  # Include bvd_id (constant within each group)
-      country_id = first(country_id),  # Include country_id (constant within each group)
-      # activity_id associated with the installation with the largest verified emissions
-      activity_id = activity_id[which.max(verified)],
-      # nace_id associated with the installation with the largest verified emissions
-      nace_id_from_eutl = nace_id[which.max(verified)]
+      allocated_free = sum(allocatedFree, na.rm = TRUE),
+      allocated_total = sum(allocatedTotal, na.rm = TRUE),
+      # If ALL installations have NA verified (= none regulated that year),
+      # emissions should be NA, not 0. If at least one installation has a
+      # compliance record, sum the non-NA values.
+      emissions = if (all(is.na(verified))) NA_real_ else sum(verified, na.rm = TRUE),
+      bvd_id = first(bvd_id),
+      country_id = first(country_id),
+      # activity_id / nace_id from installation with largest verified emissions
+      # (use NA-safe indexing in case all verified are NA)
+      activity_id = if (all(is.na(verified))) first(activity_id) else activity_id[which.max(verified)],
+      nace_id_from_eutl = if (all(is.na(verified))) first(nace_id) else nace_id[which.max(verified)]
     ) %>%
-    ungroup() %>% 
+    ungroup() %>%
     filter(bvd_id != "")
 
 # Save it -------
