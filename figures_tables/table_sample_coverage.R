@@ -87,12 +87,16 @@ agg_selected <- df_annual_accounts_more_selected_sample %>%
 
 # ── 3. EUETS firms in selected sample ───────────────────────────────────────
 
-# Identify which EUETS firms are in the selected sample
-euets_vats <- unique(firm_year_belgian_euets$vat)
-selected_vats <- unique(df_annual_accounts_more_selected_sample$vat_ano)
+# Join on both firm and year so that an EUETS firm only counts in years
+# where it also meets the De Loecker/Dhyne sample-selection criteria
+selected_firm_years <- df_annual_accounts_more_selected_sample %>%
+  select(vat_ano, year) %>%
+  distinct()
 
 euets_in_sample <- firm_year_belgian_euets %>%
-  filter(vat %in% selected_vats, year %in% DISPLAY_YEARS)
+  inner_join(selected_firm_years,
+             by = c("vat" = "vat_ano", "year" = "year")) %>%
+  filter(year %in% DISPLAY_YEARS)
 
 agg_euets <- euets_in_sample %>%
   group_by(year) %>%
@@ -120,8 +124,11 @@ if (has_nir) {
     summarise(emissions_national = sum(co2_emissions, na.rm = TRUE),
               .groups = "drop")
 
-  # Emissions in NACE sectors where EUETS firms are present
-  euets_nace2d <- unique(substr(firm_year_belgian_euets$nace5d, 1, 2))
+  # Emissions in NACE sectors where EUETS firms are present (per year)
+  euets_nace2d_by_year <- firm_year_belgian_euets %>%
+    mutate(nace2d = substr(nace5d, 1, 2)) %>%
+    select(year, nace2d) %>%
+    distinct()
 
   # Map CRF to NACE 2-digit
   crf_nace2d <- crf_to_nace_map %>%
@@ -131,7 +138,8 @@ if (has_nir) {
 
   euets_sector_emissions <- emissions_by_crf_year %>%
     left_join(crf_nace2d, by = "crf") %>%
-    filter(nace2d %in% euets_nace2d, year %in% DISPLAY_YEARS) %>%
+    inner_join(euets_nace2d_by_year, by = c("year", "nace2d")) %>%
+    filter(year %in% DISPLAY_YEARS) %>%
     group_by(year) %>%
     summarise(emissions_euets_sectors = sum(co2_emissions, na.rm = TRUE),
               .groups = "drop")
