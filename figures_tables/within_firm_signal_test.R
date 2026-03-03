@@ -2,14 +2,15 @@
 # figures_tables/within_firm_signal_test.R
 #
 # PURPOSE
-#   Test whether within-firm variation in purchases from elastic-net-identified
-#   suppliers predicts within-firm variation in emissions. This addresses the
-#   concern that the elastic net simply captures suppliers who sell to
-#   high-emitting firms (cross-sectional sorting), rather than fuel suppliers
-#   whose sales causally relate to emissions.
+#   Test whether within-firm variation in the fuel-supply proxy predicts
+#   within-firm variation in emissions. This addresses the concern that the
+#   elastic net simply captures suppliers who sell to high-emitting firms
+#   (cross-sectional sorting), rather than fuel suppliers whose sales
+#   causally relate to emissions.
 #
 #   Two proxies are tested side by side:
-#     (A) Pooled proxy: from suppliers identified by the pooled elastic net
+#     (A) Weighted proxy: coefficient-weighted sum of purchases from
+#         pooled-elastic-net-identified suppliers (the deployed proxy)
 #     (B) Within-buyer proxy: from suppliers identified by the within-buyer
 #         (buyer FE) elastic net
 #
@@ -23,9 +24,7 @@
 #   inherent emission intensity, etc.).
 #
 # INPUTS
-#   - {INT_DATA}/fuel_suppliers_elastic_net_inputs.RData
-#   - {INT_DATA}/fuel_suppliers_elastic_net_results.RData
-#   - {PROC_DATA}/b2b_selected_sample.RData
+#   - {PROC_DATA}/training_sample.RData
 #
 # OUTPUTS (to console + OUTPUT_DIR)
 #   - enet_within_firm_test.csv
@@ -45,57 +44,13 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 
 
-# ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading elastic net inputs...\n")
-load(file.path(INT_DATA, "fuel_suppliers_elastic_net_inputs.RData"))
-
-cat("Loading elastic net results...\n")
-load(file.path(INT_DATA, "fuel_suppliers_elastic_net_results.RData"))
-
-cat("Loading B2B data...\n")
-load(file.path(PROC_DATA, "b2b_selected_sample.RData"))
-b2b <- df_b2b_selected_sample
-rm(df_b2b_selected_sample)
-
-
-# ── Build fuel proxies from both sets of identified suppliers ────────────────
-
-# Helper: build proxy from a set of supplier VATs
-build_proxy <- function(supplier_vats, b2b_data, buyer_vats) {
-  b2b_data %>%
-    filter(vat_i_ano %in% supplier_vats, vat_j_ano %in% buyer_vats, year >= 2005) %>%
-    group_by(vat_j_ano, year) %>%
-    summarise(fuel_proxy = sum(corr_sales_ij, na.rm = TRUE), .groups = "drop") %>%
-    rename(vat = vat_j_ano)
-}
-
-# (A) Pooled proxy
-suppliers_pooled <- supplier_summary_pooled %>%
-  filter(lambda == "min", coef > 0) %>%
-  distinct(vat_i_ano) %>%
-  pull(vat_i_ano)
-
-proxy_pooled_df <- build_proxy(suppliers_pooled, b2b, lhs$vat)
-cat("\nPooled suppliers selected:", length(suppliers_pooled), "\n")
-
-# (B) Within-buyer proxy
-suppliers_fe <- supplier_summary_fe %>%
-  filter(lambda == "min", coef > 0) %>%
-  distinct(vat_i_ano) %>%
-  pull(vat_i_ano)
-
-proxy_fe_df <- build_proxy(suppliers_fe, b2b, lhs$vat)
-cat("Within-buyer suppliers selected:", length(suppliers_fe), "\n")
-
-# Overlap
-n_both <- length(intersect(suppliers_pooled, suppliers_fe))
-cat("Overlap (in both):", n_both, "\n")
-
-rm(b2b)
+# ── Load training sample ────────────────────────────────────────────────────
+cat("Loading training sample...\n")
+load(file.path(PROC_DATA, "training_sample.RData"))
 
 
 # ── Helper: run the full within-firm test for one proxy ──────────────────────
-run_within_firm_test <- function(lhs_panel, proxy_df, proxy_label) {
+run_within_firm_test <- function(panel_data, proxy_col, proxy_label) {
 
   cat("\n\n")
   cat(strrep("#", 70), "\n")
@@ -103,10 +58,9 @@ run_within_firm_test <- function(lhs_panel, proxy_df, proxy_label) {
   cat(strrep("#", 70), "\n")
 
   # Build panel
-  panel <- lhs_panel %>%
-    left_join(proxy_df, by = c("vat", "year")) %>%
+  panel <- panel_data %>%
     mutate(
-      fuel_proxy   = coalesce(fuel_proxy, 0),
+      fuel_proxy   = .data[[proxy_col]],
       asinh_y      = asinh(y),
       asinh_proxy  = asinh(fuel_proxy),
       has_proxy    = as.integer(fuel_proxy > 0),
@@ -301,8 +255,8 @@ run_within_firm_test <- function(lhs_panel, proxy_df, proxy_label) {
 # ══════════════════════════════════════════════════════════════════════════════
 #   RUN FOR BOTH PROXIES
 # ══════════════════════════════════════════════════════════════════════════════
-summary_pooled_proxy <- run_within_firm_test(lhs, proxy_pooled_df, "pooled")
-summary_fe_proxy     <- run_within_firm_test(lhs, proxy_fe_df, "within-buyer")
+summary_weighted <- run_within_firm_test(training_sample, "proxy_weighted", "weighted")
+summary_fe       <- run_within_firm_test(training_sample, "proxy_fe", "within-buyer")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -310,10 +264,10 @@ summary_fe_proxy     <- run_within_firm_test(lhs, proxy_fe_df, "within-buyer")
 # ══════════════════════════════════════════════════════════════════════════════
 cat("\n\n")
 cat(strrep("#", 70), "\n")
-cat("# COMBINED COMPARISON: POOLED vs WITHIN-BUYER PROXY\n")
+cat("# COMBINED COMPARISON: WEIGHTED vs WITHIN-BUYER PROXY\n")
 cat(strrep("#", 70), "\n\n")
 
-summary_table <- bind_rows(summary_pooled_proxy, summary_fe_proxy)
+summary_table <- bind_rows(summary_weighted, summary_fe)
 
 cat(sprintf("  %-15s  %-30s  %8s  %8s  %8s  %10s\n",
             "Proxy", "Specification", "Coef", "SE", "t-stat", "p-value"))
@@ -328,7 +282,7 @@ for (r in seq_len(nrow(summary_table))) {
 
 # Side-by-side attenuation comparison
 cat("\n  Attenuation comparison:\n")
-for (px in c("pooled", "within-buyer")) {
+for (px in c("weighted", "within-buyer")) {
   rows <- summary_table[summary_table$proxy == px, ]
   if (nrow(rows) >= 2) {
     att <- 1 - rows$coef[2] / rows$coef[1]
