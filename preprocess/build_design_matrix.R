@@ -60,20 +60,22 @@ load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 lhs <- loocv_training_sample %>%
   filter(year >= 2005) %>%
   mutate(
-    # Confirmed zeros for non-ETS NACE 19/24 firms (NIR says EU ETS covers
-    # ~100% of fuel-combustion emissions in those sectors)
-    y = ifelse(is.na(emissions), 0, emissions),
+    y = emissions,
     log_revenue = log(pmax(revenue, 1e-12))
   ) %>%
   select(vat, year, y, log_revenue, nace2d, euets) %>%
   arrange(vat, year) %>%
   mutate(row_idx = row_number())
 
-n_na <- sum(is.na(loocv_training_sample$emissions[
-  loocv_training_sample$year >= 2005]))
+# Diagnostic: after upstream fixes, no NAs should remain. EU ETS firm-years
+# without compliance data have been dropped; NACE 19/24 zeros are set upstream.
+n_na <- sum(is.na(lhs$y))
+if (n_na > 0) {
+  warning("Found ", n_na, " NA emissions in LHS panel — check upstream preprocessing.")
+}
 cat("LHS panel:", nrow(lhs), "firm-years,",
     length(unique(lhs$vat)), "unique firms\n")
-cat("  Emissions NAs replaced with 0:", n_na, "\n")
+cat("  Remaining emissions NAs:", n_na, "\n")
 
 
 # ── Identify eligible sellers ────────────────────────────────────────────────

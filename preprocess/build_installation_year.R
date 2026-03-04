@@ -66,10 +66,15 @@ installation_year_emissions <- df_installation %>%
   left_join(df_compliance, by = "installation_id") %>% 
   select(c(installation_id, year, country_id, activity_id, nace_id,
            allocatedFree, allocatedTotal, verified)) %>% 
-  filter(year <= 2023) %>% 
-  mutate(allocatedFree = ifelse(is.na(allocatedFree),0, allocatedFree),
-         allocatedTotal = ifelse(is.na(allocatedTotal),0, allocatedTotal),
-         verified = ifelse(is.na(verified),0, verified)) %>% 
+  filter(year <= 2023) %>%
+  mutate(allocatedFree = ifelse(is.na(allocatedFree), 0, allocatedFree),
+         allocatedTotal = ifelse(is.na(allocatedTotal), 0, allocatedTotal)) %>%
+  # NOTE: verified is intentionally kept as NA when the installation has no
+  # compliance record for that year (= not regulated). This distinguishes
+
+  # "not regulated" (NA) from "regulated with zero emissions" (0).
+  # Previous code replaced NA → 0 here, which mislabeled ~311 firm-years
+  # of pre-regulation EU ETS firms as zero emitters. 
   # make activity_ids consistent
     # in the first two phases of EUETS installations were classified into 1-10 activity ids
     # in phase 3 onwards, installations were classified into 20-99
