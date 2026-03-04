@@ -42,7 +42,7 @@ OUT_DIR <- file.path(OUTPUT_DIR, "model_selection", "losocv")
 
 
 # ── User choice: which classifier? ──────────────────────────────────────────
-CLASSIFIER <- "gam_baseline"
+CLASSIFIER <- "gam_enriched"
 
 
 # ── Load inputs ──────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ syt <- df %>%
 
 
 # ── Threshold search ─────────────────────────────────────────────────────────
-THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
+THRESHOLDS <- seq(0.01, 0.99, by = 0.01)
 
 cat("Searching over thresholds (with proportional allocation)...\n")
 sweep <- data.frame(

@@ -36,7 +36,7 @@ OUT_DIR <- file.path(OUTPUT_DIR, "model_selection", "losocv")
 
 
 # ── User choice: which classifier from script 04? ───────────────────────────
-CLASSIFIER <- "gam_baseline"  # change to e.g. "gam_enriched", "xgb_full", etc.
+CLASSIFIER <- "gam_enriched"
 
 
 # ── Load inputs ──────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ cat(sprintf("Merged: %d firm-year observations\n", nrow(df)))
 
 
 # ── Threshold search ─────────────────────────────────────────────────────────
-THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
+THRESHOLDS <- seq(0.01, 0.99, by = 0.01)
 
 cat("Searching over thresholds...\n")
 sweep <- data.frame(

@@ -139,21 +139,28 @@ for (s in seq_along(sector_levels)) {
   train_idx <- which(panel$primary_nace2d != sec)
   test_idx  <- which(panel$primary_nace2d == sec)
 
-  X_train <- cbind(X_fin[train_idx, ], X_proxy[train_idx, ],
-                   X_year[train_idx, ], X_nace[train_idx, ])
-  X_test  <- cbind(X_fin[test_idx, ],  X_proxy[test_idx, ],
-                   X_year[test_idx, ],  X_nace[test_idx, ])
+  X_train_full <- cbind(X_fin[train_idx, ], X_proxy[train_idx, ],
+                        X_year[train_idx, ], X_nace[train_idx, ])
+  X_test_full  <- cbind(X_fin[test_idx, ],  X_proxy[test_idx, ],
+                        X_year[test_idx, ],  X_nace[test_idx, ])
   y_train <- panel$y[train_idx]
+
+  # Drop zero-variance columns (e.g. held-out sector dummy is all 0 in training)
+  col_var <- apply(X_train_full, 2, var)
+  keep <- which(col_var > 0)
+  X_train <- X_train_full[, keep, drop = FALSE]
+  X_test  <- X_test_full[, keep, drop = FALSE]
+  pf_fold <- penalty_factor[keep]
 
   inner_fid <- inner_foldid[train_idx]
 
   fit <- tryCatch(
     cv.glmnet(
       x = X_train,
-      y = y_train,
-      family = "poisson",
+      y = asinh(y_train),
+      family = "gaussian",
       alpha = ALPHA,
-      penalty.factor = penalty_factor,
+      penalty.factor = pf_fold,
       foldid = inner_fid,
       standardize = TRUE
     ),
@@ -164,7 +171,8 @@ for (s in seq_along(sector_levels)) {
   )
 
   if (!is.null(fit)) {
-    preds <- as.numeric(predict(fit, newx = X_test, s = "lambda.min", type = "response"))
+    raw_preds <- as.numeric(predict(fit, newx = X_test, s = "lambda.min"))
+    preds <- pmax(sinh(raw_preds), 0)
     panel$yhat[test_idx] <- preds
 
     n_coef <- sum(coef(fit, s = "lambda.min")[-1] != 0)
@@ -174,6 +182,7 @@ for (s in seq_along(sector_levels)) {
       n_test = length(test_idx),
       lambda_min = fit$lambda.min,
       n_nonzero_coef = n_coef,
+      n_dropped_cols = length(penalty_factor) - length(keep),
       stringsAsFactors = FALSE
     )
   }
