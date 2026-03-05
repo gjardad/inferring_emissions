@@ -481,3 +481,150 @@ decomposition transparent:
 
 A planned "Hungarian benchmark" specification will replicate the strand 3
 proportional allocation approach in our data for direct comparison.
+
+---
+
+## How the NIR Sector-Year Emission Totals Are Constructed
+
+We use sector-year emission totals from Belgium's National Inventory Report (NIR)
+as calibration targets. This section documents how those totals are built, to
+assess their reliability.
+
+### The IPCC framework: three tiers
+
+Under the UNFCCC, all Annex I countries submit annual greenhouse gas inventories
+following IPCC Guidelines (2006, refined 2019). For fuel combustion (CRF category
+1A), the IPCC defines three tiers of increasing complexity:
+
+- **Tier 1**: Emissions = fuel consumed × default IPCC emission factor. Requires
+  only aggregate fuel consumption data.
+- **Tier 2**: Same structure but uses country-specific emission factors (reflecting
+  national fuel characteristics, combustion technology, etc.).
+- **Tier 3**: Detailed facility-level or technology-specific modeling. Uses
+  plant-level data where available (e.g., EU ETS verified emissions for regulated
+  installations).
+
+Belgium uses a mix of Tier 2 and Tier 3 methods for the energy sector. For
+EU ETS installations, verified emissions are used directly (Tier 3). For non-ETS
+sources, the inventory relies on regional energy balances combined with
+country-specific emission factors (Tier 2).
+
+### Energy balances: the core input
+
+The primary data source for non-ETS combustion emissions is the **regional energy
+balance**. Belgium's inventory is compiled by three regional agencies:
+- **Flanders**: VEKA (Vlaams Energie- en Klimaatagentschap), previously VITO
+  (until 2020).
+- **Wallonia**: AwAC (Agence wallonne de l'air et du climat).
+- **Brussels-Capital**: Bruxelles Environnement.
+
+Each region constructs an energy balance describing the quantities of energy
+imported, produced, transformed, and consumed within the region in a given year.
+
+### How energy balances are constructed
+
+Energy balances are built from multiple data sources:
+
+1. **Mandatory company declarations**: In Belgium and most EU countries, energy
+   companies are required by law to report production, transformation, and sales
+   data. This covers electricity generators, refineries, gas distributors, and
+   large fuel distributors.
+
+2. **Administrative data**: Tax and customs records on fuel imports, exports, and
+   domestic sales. Excise duty records provide particularly granular fuel quantity
+   data.
+
+3. **Surveys**: Targeted surveys of energy suppliers, industry federations, and
+   individual companies. These are used to allocate fuel consumption to end-use
+   sectors. From time to time, detailed surveys targeting specific sub-items
+   (e.g., wood consumption in households) are conducted to improve estimates.
+
+4. **EU ETS data**: From 2013 onward, verified EU ETS data became an increasingly
+   important source for the Flemish energy balance and emission inventory. ETS
+   facility-level fuel consumption is used directly where available.
+
+5. **Statistical models**: Interpolation, extrapolation, and modeling are used to
+   fill gaps, particularly for sectors where direct measurement is incomplete.
+
+The energy balance is organized as a commodity-by-sector matrix. The "final
+consumption" rows are disaggregated by economic sector following NACE Rev. 2
+classifications, though the sectoral granularity varies (typically 10–20 industry
+groupings, not full 2-digit NACE).
+
+### From energy balances to emissions
+
+The conversion from fuel quantities to CO2 emissions is conceptually
+straightforward:
+
+  Emissions = Σ (fuel quantity_f × net calorific value_f × emission factor_f)
+
+where the sum runs over fuel types f. Belgium uses country-specific emission
+factors (Tier 2) for most fuels. For CO2 from fossil fuel combustion, the
+uncertainty is relatively low because CO2 emissions depend almost entirely on
+the carbon content of the fuel, which is well characterized.
+
+### Sectoral allocation (CRF categories)
+
+The NIR reports emissions by CRF (Common Reporting Format) category:
+- **1A1**: Energy industries (power plants, refineries)
+- **1A2**: Manufacturing industries and construction
+- **1A3**: Transport
+- **1A4**: Other sectors (commercial/institutional, residential, agriculture)
+
+Within 1A2 (manufacturing), emissions are further disaggregated by sub-sector
+(iron and steel, chemicals, food processing, etc.), using the energy balance's
+sectoral breakdown plus any available facility-level data.
+
+The CRF-to-NACE crosswalk (in our data: `DATA_DIR/raw/Correspondences_and_dictionaries`)
+maps these CRF categories to NACE Rev. 2 sectors, enabling us to construct
+sector-year calibration targets at the NACE 2-digit level.
+
+### Reliability assessment
+
+**Strengths:**
+- Energy balances are cross-checked for internal consistency: total supply must
+  equal total consumption plus losses plus statistical difference. High
+  statistical differences flag data quality issues.
+- CO2 from fuel combustion has relatively low uncertainty (~2–5% at the national
+  level) because it depends primarily on well-measured carbon content.
+- The Reference Approach (top-down, based on national fuel supply) serves as an
+  independent cross-check on the Sectoral Approach (bottom-up). Belgium reports
+  both, and differences are documented in the NIR.
+- Belgium's inventory undergoes annual expert review by the UNFCCC.
+
+**Limitations:**
+- Sectoral allocation is the main source of uncertainty. While total national
+  fuel consumption is well constrained by supply-side data, allocating it to
+  specific sectors relies on surveys, models, and assumptions that introduce
+  error.
+- The energy balance's sectoral granularity (10–20 groupings) is coarser than
+  NACE 2-digit. The CRF-to-NACE crosswalk introduces additional mapping
+  uncertainty.
+- Small sectors with few facilities may have poorly estimated totals if direct
+  survey coverage is thin.
+- Energy balances are not constructed from firm-level microdata in the way that,
+  say, the MECS survey in the US would allow. They represent a top-down
+  allocation of nationally constrained fuel totals, not a bottom-up aggregation
+  of firm-level consumption.
+
+**Bottom line for our calibration exercise:** The NIR sector-year totals are the
+best available estimates of sectoral combustion emissions, compiled under
+international standards and subject to external review. The main risk is not in
+the total (which is well constrained by fuel supply data) but in the sectoral
+allocation. For our purposes, this means the calibration correctly anchors the
+overall level of emissions within each sector-year, even if the NIR's own
+sectoral split carries some uncertainty.
+
+### Key references
+
+- [Belgium NIR 2024](https://klimaat.be/doc/nir-2024.pdf) — Chapter 3 (Energy)
+  describes the methodology in detail.
+- [Belgium NIR 2023](https://klimaat.be/doc/nir-2023-15042023-final.pdf)
+- [Eurostat Energy Balance Metadata](https://ec.europa.eu/eurostat/cache/metadata/en/nrg_bal_esms.htm)
+  — Describes data collection, validation, and accuracy.
+- [Eurostat Energy Balance Guide](https://ec.europa.eu/eurostat/documents/38154/4956218/ENERGY-BALANCE-GUIDE.pdf)
+  — Methodology for constructing energy balances.
+- [2006 IPCC Guidelines, Vol. 2 (Energy)](https://www.ipcc-nggip.iges.or.jp/public/2006gl/)
+  — Tier 1/2/3 methodology for fuel combustion.
+- [2019 Refinement to IPCC Guidelines](https://www.ipcc.ch/report/2019-refinement-to-the-2006-ipcc-guidelines-for-national-greenhouse-gas-inventories/)
+- [Statbel: Energy Statistics by Economic Sector](https://statbel.fgov.be/en/themes/energy/energy-statistics-economic-sector-and-energy-source)
