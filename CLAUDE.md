@@ -91,27 +91,29 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## Current Status
 
-**Writing the paper.** Results are ready. We are now drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolete — do not reference, modify, or draw content from it.
+Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolete. All tables and figures use the coefficient-weighted fuel-supply proxy only. Fold-specific proxy was updated on 2026-03-05 (all-coefficient variant underperforms positive-only; see `THOUGHTS.md`).
 
-**Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
+### Tables and figures to generate
 
-**Elastic net hyperparameters not yet tuned.** No sensitivity analysis has been done on the elastic net hyperparameters used to construct the fuel-supply proxy. Currently, `run_elastic_net.R` tests only `alpha = 1.0` (lasso) and `alpha = 0.5` (elastic net), and the weighted proxy uses `alpha = 0.5` with `asinh(sales)` and `lambda.min`. A systematic grid search over alpha values and comparison between `lambda.min` and `lambda.1se` has not been performed. This requires running on RMD (full B2B data).
-
-**Fold-specific proxy updated (2026-03-05).** `build_fold_specific_proxy.R` has been re-run on RMD with updated names and `fold_specific_proxy_all` (all EN coefficients, including negative). File copied to local 1 and `models_with_fold_specific_proxy.R` re-run. The all-coefficient variant underperforms the positive-only proxy across all metrics. Discussion in `THOUGHTS.md`.
-
-**TODO: Rows 1–2 restricted to sectors 19/24.** Re-run revenue-proportional and EN-on-financials using only firms in NACE 19 and 24. The hypothesis is that revenue tracks emissions well within EU ETS firms (which are large and within-sector homogeneous), flattering Row 1 relative to Row 2 in the full-sample table. Restricting to 19/24 — where there is genuine extensive-margin variation and smaller firms — should give a fairer comparison.
-
-**TODO: does elastic net on financials mainly capture size?** If yes, show it. If not, consider running EN on full set of covariates (financials + B2B).
-
-**TODO: Negative rho pooling test.** To argue that negative within-sector rho values are due to small N rather than model failure: pool all sectors with negative rho into one pseudo-sector. Split the sample into (a) all firms from sectors with positive rho and (b) firms from the negative-rho sectors. Use group (a) to identify relevant suppliers and build the proxy, then predict emissions for group (b) and compute rho treating the pooled negative-rho group as a single sector. The larger effective N should yield a non-negative rho, supporting the claim that the negatives are sampling noise from thin sectors.
-
-**TODO: Re-run model selection scripts and figures/tables** that depend on the fold-specific proxy, now that `fold_specific_proxy.RData` has been updated.
-
-**TODO: National-aggregate calibration in CV.** The calibration script currently only does sector-year-level calibration. Need to add a national-aggregate calibration exercise that mimics deployment: take total emissions within year in training, subtract the amount covered in the training set for that fold, and distribute the remainder across held-out-fold firms proportionally to the proxy. In deployment, the analogous step is: take national aggregate, subtract EU ETS verified emissions, distribute remainder across non-ETS firms. This is the most conservative calibration and should be the *primary* table in Section 4.5.
-
-**TODO: National-aggregate robustness exercise.** CRF-category emission totals are built from energy balances, which rely on enterprise surveys, supplier reports, and modelling — not a firm-level census. Quality is high for large point-source categories (1A1, large 1A2) but weaker for diffuse, small-emitter sectors (small 1A2, 1A4) — precisely the sectors where our model's value-added is greatest. To address this: (1) explain in the data section how CRF totals are constructed and acknowledge the quality gradient; (2) run a robustness exercise that calibrates using only the national aggregate (one total per year, split across firms via the proxy). If performance holds under this conservative assumption, the model isn't fragile to CRF allocation uncertainty. The gap between national-aggregate and CRF-level calibration quantifies the value of sector-level energy statistics.
-
-**Extensive margin classification experiment (2026-03-03).** `analysis/fit_extensive_margin.R` tests 7 classifiers for the extensive margin (emitter vs non-emitter): GAM proxy-only, GAM baseline, GAM enriched, GAM interaction (proxy × revenue), XGBoost full, XGBoost no-sector, and random forest. Results (LOFOCV on local 1): the current GAM baseline is already strong (FPR=3.9%, TPR=98.1%); XGBoost full edges it marginally (FPR=3.5%, TPR=98.4%). The critical finding is that XGBoost feature importance shows sector identity (`nace2d_int`) accounts for 70% of classification gain, while the fuel-supply proxy contributes only ~2%. When sector is dropped, XGBoost degrades to FPR=13.5%. This confirms the distribution shift concern: in-sample classification is driven by sector, not the proxy, but at deployment to unseen sectors the proxy becomes the marginal signal. Adding capital, FTE, capital intensity, or proxy × revenue interactions does not meaningfully improve over the baseline. After `calibrate_with_cap`, all sector-aware models converge to nRMSE ≈ 0.141–0.145.
+| # | Item | Section | Script | Where | Blocker |
+|---|------|---------|--------|-------|---------|
+| 1 | NIR emissions by sector + EU ETS coverage | proxy 3.1 | needs writing (extend `build_emissions_by_sector_year_from_nir.R`) | local 1 | — |
+| 2 | Sectors 19/24 summary by emitter status | proxy 3.1 | needs writing | local 1 | — |
+| 3 | Supplier characterization | proxy 3.3 | `selected_supplier_nace_profile.R` + `validate_against_cn8.R` (verify format) | local 1 or RMD | — |
+| 4 | OLS proxy regressions (3-col) | proxy 3.3 | `elastic_net_proxy_diagnostics.R` (verify spec) | local 1 | — |
+| 5 | Kernel density proxy by emitter status (19/24) | proxy 3.3 | `elastic_net_proxy_diagnostics.R` or `diagnostic_proxy_classification_19_24.R` (verify) | local 1 | — |
+| 6 | Binscatter: levels vs within-sector ranks | proxy 3.3 | needs writing | local 1 | — |
+| 7 | Sector overlap training vs deployment | pred. perf. 4.1 | needs writing | local 1 | — |
+| 8 | EN on financials vs EN + proxy | pred. perf. 4.3 | partially in `enet_financials_calibrated.R`; needs updated fold-specific proxy | RMD | needs full annual accounts |
+| 9 | Cross-sector proxy threshold transfer (19↔24) | pred. perf. 4.4 | `diagnostic_proxy_classification_19_24.R` (verify cross-sector transfer) | local 1 | — |
+| 10 | **Main results (5-row build-up, nat-agg calibration)** | pred. perf. 4.5 | `models_with_fold_specific_proxy.R` (modify to add nat-agg calibration) | local 1 | **nat-agg calibration not implemented** |
+| 11 | Rows 1–2 restricted to sectors 19/24 | pred. perf. 4.5 | `models_with_fold_specific_proxy.R` (subset evaluation) | local 1 | depends on #10 |
+| 12 | R² decomposition (revenue, EN residual, proxy) | pred. perf. 4.5 | needs writing | local 1 | depends on EN predictions from #10 |
+| 13 | Within-sector rho by sector size | pred. perf. 4.6 | `rho_star_test.R` + `table_rho_star.R` (basic); pooling test needs writing | local 1 (basic) / RMD (pooling) | pooling test needs re-running EN |
+| 14 | Sectoral gains Row 1: sector-year calibration | pred. perf. 4.7 | `models_with_fold_specific_proxy.R` (already exists) | local 1 | — |
+| 15 | Sectoral gains Row 2: LOFOCV | pred. perf. 4.7 | needs LOFOCV fold-specific proxy | RMD | LOFOCV proxy not built |
+| 16 | Classifier battery (GAM, XGBoost, RF) | appendix | `fit_extensive_margin.R` (re-run with fold-specific proxy) | local 1 | stale results, needs re-run |
+| 17 | EN hyperparameter sensitivity (alpha grid) | appendix | `alpha_sensitivity.R` | RMD | not yet run |
 
 ## Model Selection Table
 
