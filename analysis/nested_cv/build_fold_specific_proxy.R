@@ -17,7 +17,7 @@
 #   {PROC_DATA}/loocv_training_sample.RData
 #
 # OUTPUT
-#   {INT_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/fold_specific_proxy.RData
 #     Contains: fs_proxy_panel, sector_fold_map, fold_diagnostics, syt
 #     fs_proxy_panel has two proxy columns:
 #       fold_specific_proxy      — uses only positive EN coefficients
@@ -599,7 +599,7 @@ fs_proxy_panel <- fs_proxy_panel %>%
   select(vat, year, nace2d, y, emit, log_revenue, euets,
          primary_nace2d, fold_k, fold_specific_proxy, fold_specific_proxy_all)
 
-OUT_PATH <- file.path(INT_DATA, "fold_specific_proxy.RData")
+OUT_PATH <- file.path(PROC_DATA, "fold_specific_proxy.RData")
 
 save(fs_proxy_panel, sector_fold_map, fold_diagnostics, syt,
      file = OUT_PATH)
