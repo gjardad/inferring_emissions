@@ -6,7 +6,7 @@
 
 ## Guidelines for evaluating models
 
-The model should be first evaluated with respect to whether it satisfies internal validity: no information from the test set leaks into training.
+The model should be first evaluated with respect to whether it satisfies internal validity: no information from the test set leaks into training. This includes any model parameters, hyperparameters, or variable selection — if a choice is data-dependent (e.g., tuning a threshold, selecting a weight, choosing a transformation parameter), it must be cross-fitted: tuned on the training folds and applied to the held-out fold. Evaluating a data-dependent choice on the same data used to select it is meaningless.
 
 It should also be evaluated with respect to its external validity: it should generalize beyond the training distribution. External validity is impossible to guarantee with certainty in our context, so the goal here is to mitigate any obvious concerns.
 
@@ -87,19 +87,13 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 ## Dropped Analyses
 
-- **Fossil fuel consumption proxy from Customs**: In Belgium, fossil fuels are almost exclusively imported. For this reason, we attempted to model emissions by building a firm-year-level proxy for fossil fuel consumption that consisted on the amount purchased from firms identified from Customs data as fossil fuel importers. The out-of-sample prediction gains from this exercise were modest.
-
-- **Hurdle model with Poisson intensive margin (muhat-based)**: The original hurdle specification used a Poisson GAM intensive margin to predict emission levels among predicted emitters (`yhat = I(phat > tau) * muhat`). This was replaced by the hybrid approach, which uses the raw fuel-supply proxy as the ranking signal instead (`yhat = I(phat > tau) * proxy_weighted`), followed by `calibrate_with_cap`. The hybrid dramatically improved within-sector ranking (rho_s from 0.414 to 0.652 on the training sample) while also improving nRMSE (0.193 to 0.140), with no meaningful loss in FPR or TPR. The Poisson GAM was smoothing away ranking information the proxy naturally contains; the hybrid lets calibration allocate sector-year totals proportionally to the raw proxy signal.
+See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approaches.
 
 ## Current Status
 
 **Writing the paper.** Results are ready. We are now drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolete — do not reference, modify, or draw content from it.
 
 **Weighted proxy only.** Going forward, all tables and figures use only the coefficient-weighted fuel-supply proxy (not the unweighted/pooled variant). The weighted proxy is more intuitive and performs slightly better.
-
-**Legacy code.** The `fuel_proxy_legacy/` folder contains earlier proxy-construction scripts that are no longer used. Do not modify, reference, or source anything from this folder. All active proxy construction is handled in `preprocess/`.
-
-**Excluded from the paper.** The following are not part of the current analysis and should not appear in the text: Customs-based fuel proxy variants, energy balances / SIEC fuel classifications, emission factors and NCVs, fuel concordances (CN-IPCC-SIEC), PRODCOM data. Customs data may appear in an appendix for validation only.
 
 **Elastic net hyperparameters not yet tuned.** No sensitivity analysis has been done on the elastic net hyperparameters used to construct the fuel-supply proxy. Currently, `run_elastic_net.R` tests only `alpha = 1.0` (lasso) and `alpha = 0.5` (elastic net), and the weighted proxy uses `alpha = 0.5` with `asinh(sales)` and `lambda.min`. A systematic grid search over alpha values and comparison between `lambda.min` and `lambda.1se` has not been performed. This requires running on RMD (full B2B data).
 
