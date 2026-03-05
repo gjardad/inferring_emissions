@@ -2,22 +2,22 @@
 # analysis/nested_cv/models_with_fold_specific_proxy.R
 #
 # PURPOSE
-#   Evaluate the nested CV proxy via proportional allocation of sector-year
-#   emission totals. Each firm's fold_specific_proxy was computed from an elastic net
-#   that never saw that firm's sector, so evaluation on the full sample is
-#   honest.
+#   Produce the main results table (5 rows) evaluating prediction models for
+#   firm-level emissions. All rows use the K=5 sector-fold structure from
+#   build_fold_specific_proxy.R for consistency.
 #
-#   Compares:
-#     1. fold_specific_proxy  (nested CV — leakage-free)
-#     2. proxy_weighted (full-sample elastic net — leaked)
-#     3. proxy_tabachova (fixed NACE-code rule — no leakage by construction)
+#   Row 1: Revenue-proportional allocation (Trucost/EEIO baseline)
+#   Row 2: Elastic net on annual accounts covariates (ML literature benchmark)
+#   Row 3: Proxy-proportional allocation (no hurdle)
+#   Row 4: Proxy-proportional + cross-sector percentile hurdle (sectors 19/24)
+#   Row 5: Row 4 + clipping (calibrate_with_cap)
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData
 #   {INT_DATA}/fold_specific_proxy.RData
 #
 # OUTPUT
-#   {OUTPUT_DIR}/nested_cv_proportional_performance.csv
+#   {OUTPUT_DIR}/main_results_table.csv
 #
 # RUNS ON: local 1
 ###############################################################################
@@ -27,6 +27,8 @@ REPO_DIR <- "c:/Users/jota_/Documents/inferring_emissions"
 source(file.path(REPO_DIR, "paths.R"))
 
 library(dplyr)
+library(glmnet)
+library(Matrix)
 
 source(file.path(UTILS_DIR, "calc_metrics.R"))
 source(file.path(UTILS_DIR, "calibration.R"))
@@ -36,8 +38,21 @@ source(file.path(UTILS_DIR, "calibration.R"))
 cat("Loading training sample...\n")
 load(file.path(PROC_DATA, "training_sample.RData"))
 
-cat("Loading nested CV proxy...\n")
-load(file.path(INT_DATA, "fold_specific_proxy.RData"))
+cat("Loading fold-specific proxy...\n")
+# Compatibility: load whichever file exists, rename old names if needed
+if (file.exists(file.path(INT_DATA, "fold_specific_proxy.RData"))) {
+  load(file.path(INT_DATA, "fold_specific_proxy.RData"))
+} else if (file.exists(file.path(INT_DATA, "nested_cv_proxy.RData"))) {
+  cat("  (using old nested_cv_proxy.RData — rename pending on RMD)\n")
+  load(file.path(INT_DATA, "nested_cv_proxy.RData"))
+  fs_proxy_panel <- nested_cv_proxy
+  rm(nested_cv_proxy)
+  if ("proxy_nested" %in% names(fs_proxy_panel)) {
+    fs_proxy_panel <- rename(fs_proxy_panel, fold_specific_proxy = proxy_nested)
+  }
+} else {
+  stop("Neither fold_specific_proxy.RData nor nested_cv_proxy.RData found in INT_DATA")
+}
 
 # Merge fold_specific_proxy and fold_k into training_sample
 panel <- training_sample %>%
@@ -49,14 +64,12 @@ panel <- training_sample %>%
   )
 rm(training_sample, fs_proxy_panel)
 
-cat("Panel:", nrow(panel), "rows,", n_distinct(panel$vat), "firms\n")
-cat("Emitters:", sum(panel$emit), sprintf("(%.1f%%)\n", 100 * mean(panel$emit)))
-cat("fold_specific_proxy > 0:", sum(panel$fold_specific_proxy > 0),
-    sprintf("(%.1f%%)\n", 100 * mean(panel$fold_specific_proxy > 0)))
-cat("proxy_weighted > 0:", sum(panel$proxy_weighted > 0),
-    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_weighted > 0)))
-cat("proxy_tabachova > 0:", sum(panel$proxy_tabachova > 0),
-    sprintf("(%.1f%%)\n\n", 100 * mean(panel$proxy_tabachova > 0)))
+# Revenue: prefer turnover_VAT (raw), fallback to exp(log_revenue)
+if ("turnover_VAT" %in% names(panel)) {
+  panel$revenue <- coalesce(panel$turnover_VAT, exp(panel$log_revenue))
+} else {
+  panel$revenue <- exp(panel$log_revenue)
+}
 
 # Recreate syt if not loaded
 if (!exists("syt")) {
@@ -65,293 +78,334 @@ if (!exists("syt")) {
     summarise(E_total = sum(y, na.rm = TRUE), n_full = n(), .groups = "drop")
 }
 
-
-# ── Proportional allocation for each proxy variant ───────────────────────────
-proxy_variants <- list(
-  list(name = "fold_specific_proxy",    col = "fold_specific_proxy"),
-  list(name = "proxy_weighted",  col = "proxy_weighted"),
-  list(name = "proxy_tabachova", col = "proxy_tabachova")
-)
-
-results <- list()
-
-for (pv in proxy_variants) {
-  cat(sprintf("═══ %s ═══\n", pv$name))
-
-  proxy_vals <- panel[[pv$col]]
-  ok <- !is.na(proxy_vals) & !is.na(panel$y)
-
-  # --- Proportional allocation (no cap) ---
-  yhat_cal <- calibrate_predictions(
-    proxy_vals[ok], panel$nace2d[ok], panel$year[ok], syt
-  )
-
-  m_cal <- calc_metrics(panel$y[ok], yhat_cal,
-                        nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-  cat("  calibrate_predictions (no cap):\n")
-  cat(sprintf("    nRMSE = %.3f, Spearman = %.3f, FPR = %.3f, TPR = %.3f\n",
-              m_cal$nrmse_sd, m_cal$spearman,
-              m_cal$fpr_nonemitters, m_cal$tpr_emitters))
-  cat(sprintf("    within_sy_rho_med = %.3f, rho_pooled = %.3f, rho_pooled_global = %.3f\n",
-              m_cal$within_sy_rho_med, m_cal$rho_pooled, m_cal$rho_pooled_global))
-
-  results[[paste0(pv$name, "_cal")]] <- data.frame(
-    model = pv$name, variant = "calibrated",
-    nRMSE = m_cal$nrmse_sd, rmse = m_cal$rmse,
-    spearman = m_cal$spearman,
-    fpr_nonemitters = m_cal$fpr_nonemitters,
-    tpr_emitters = m_cal$tpr_emitters,
-    emitter_mass_captured = m_cal$emitter_mass_captured,
-    mapd_emitters = m_cal$mapd_emitters,
-    within_sy_rho_med = m_cal$within_sy_rho_med,
-    rho_pooled = m_cal$rho_pooled,
-    rho_pooled_global = m_cal$rho_pooled_global,
-    stringsAsFactors = FALSE
-  )
-
-  # --- Proportional allocation with cap ---
-  yhat_cap <- calibrate_with_cap(
-    proxy_vals[ok], panel$emit[ok], panel$y[ok],
-    panel$nace2d[ok], panel$year[ok], syt
-  )
-
-  m_cap <- calc_metrics(panel$y[ok], yhat_cap,
-                        nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-  cat("  calibrate_with_cap:\n")
-  cat(sprintf("    nRMSE = %.3f, Spearman = %.3f, FPR = %.3f, TPR = %.3f\n",
-              m_cap$nrmse_sd, m_cap$spearman,
-              m_cap$fpr_nonemitters, m_cap$tpr_emitters))
-  cat(sprintf("    within_sy_rho_med = %.3f, rho_pooled = %.3f, rho_pooled_global = %.3f\n",
-              m_cap$within_sy_rho_med, m_cap$rho_pooled, m_cap$rho_pooled_global))
-
-  results[[paste0(pv$name, "_cap")]] <- data.frame(
-    model = pv$name, variant = "calibrated_capped",
-    nRMSE = m_cap$nrmse_sd, rmse = m_cap$rmse,
-    spearman = m_cap$spearman,
-    fpr_nonemitters = m_cap$fpr_nonemitters,
-    tpr_emitters = m_cap$tpr_emitters,
-    emitter_mass_captured = m_cap$emitter_mass_captured,
-    mapd_emitters = m_cap$mapd_emitters,
-    within_sy_rho_med = m_cap$within_sy_rho_med,
-    rho_pooled = m_cap$rho_pooled,
-    rho_pooled_global = m_cap$rho_pooled_global,
-    stringsAsFactors = FALSE
-  )
-
-  cat("\n")
+# Check fold assignment
+n_no_fold <- sum(is.na(panel$fold_k))
+if (n_no_fold > 0) {
+  warning(sprintf("%d firm-years have no fold assignment. Dropping from Row 2.", n_no_fold))
 }
 
-
-# ── Summary: proportional allocation ─────────────────────────────────────────
-cv_proportional <- bind_rows(results)
-
-cat("═══ Proportional allocation summary ═══\n")
-print(cv_proportional %>%
-        select(model, variant, nRMSE, spearman, fpr_nonemitters,
-               tpr_emitters, within_sy_rho_med, rho_pooled_global),
-      row.names = FALSE)
-cat("\n")
+cat("Panel:", nrow(panel), "rows,", n_distinct(panel$vat), "firms\n")
+cat("Emitters:", sum(panel$emit), sprintf("(%.1f%%)\n", 100 * mean(panel$emit)))
+cat("fold_specific_proxy > 0:", sum(panel$fold_specific_proxy > 0),
+    sprintf("(%.1f%%)\n\n", 100 * mean(panel$fold_specific_proxy > 0)))
 
 
-# =============================================================================
-# PART 2: HYBRID — GAM classifier + proxy ranking + calibrate_with_cap
-# =============================================================================
-library(mgcv)
-
-cat("\n═══════════════════════════════════════════════════════════════\n")
-cat("  HYBRID: GAM classifier + proxy ranking (K=5 sector folds)\n")
-cat("═══════════════════════════════════════════════════════════════\n\n")
-
-# Factor variables for mgcv
-panel <- panel %>%
-  mutate(
-    year_f   = factor(year),
-    nace2d_f = factor(nace2d),
-    nace5d_f = factor(nace5d),
-    log_revenue = ifelse(is.na(log_revenue), 0, log_revenue)
-  )
-
-all_nace2d_levels <- levels(panel$nace2d_f)
-all_nace5d_levels <- levels(panel$nace5d_f)
-all_year_levels   <- levels(panel$year_f)
-
-# Threshold grid
-THRESHOLDS <- seq(0.01, 0.60, by = 0.01)
-
-# Helper: make result row
-make_result_row <- function(nm, variant, thr, m) {
+# ── Helpers ──────────────────────────────────────────────────────────────────
+make_result_row <- function(model_name, m) {
   data.frame(
-    model = nm, variant = variant, threshold = thr,
-    nRMSE = m$nrmse_sd, rmse = m$rmse,
-    spearman = m$spearman,
-    fpr_nonemitters = m$fpr_nonemitters,
-    tpr_emitters = m$tpr_emitters,
-    emitter_mass_captured = m$emitter_mass_captured,
-    mapd_emitters = m$mapd_emitters,
-    within_sy_rho_med = m$within_sy_rho_med,
-    rho_pooled = m$rho_pooled,
-    rho_pooled_global = m$rho_pooled_global,
-    stringsAsFactors = FALSE
+    model                = model_name,
+    nrmse_sd             = m$nrmse_sd,
+    median_apd           = m$median_apd,
+    apd_q25              = m$apd_q25,
+    apd_q75              = m$apd_q75,
+    rho_pooled_global    = m$rho_pooled_global,
+    rho_pooled           = m$rho_pooled,
+    rho_pooled_min       = m$rho_pooled_min,
+    rho_pooled_max       = m$rho_pooled_max,
+    fpr_nonemitters      = m$fpr_nonemitters,
+    tpr_emitters         = m$tpr_emitters,
+    avg_nonemit_p50_rank = m$avg_nonemit_p50_rank,
+    avg_nonemit_p99_rank = m$avg_nonemit_p99_rank,
+    stringsAsFactors     = FALSE
   )
 }
 
-# Define hybrid specs:
-#   ext_formula: GAM for emitter classification (binomial)
-#   proxy_col: raw proxy used for within-sector ranking after thresholding
-hybrid_specs <- list(
-  # Benchmark: no proxy in classifier, no proxy for ranking → revenue-based
-  list(name = "ncv_benchmark",
-       ext_formula = emit ~ log_revenue + year_f + s(nace2d_f, bs = "re"),
-       proxy_col = "log_revenue"),
+print_metrics <- function(label, m) {
+  cat(sprintf("\n── %s ──\n", label))
+  cat(sprintf("  nRMSE:    %.3f\n", m$nrmse_sd))
+  cat(sprintf("  Med APD:  %.3f  [IQR: %.3f – %.3f]\n", m$median_apd, m$apd_q25, m$apd_q75))
+  cat(sprintf("  rho_g:    %.3f\n", m$rho_pooled_global))
+  cat(sprintf("  rho_s:    %.3f  [%.3f – %.3f]\n", m$rho_pooled, m$rho_pooled_min, m$rho_pooled_max))
+  cat(sprintf("  FPR:      %.3f   TPR: %.3f\n", m$fpr_nonemitters, m$tpr_emitters))
+  cat(sprintf("  FP p50:   %.3f   FP p99: %.3f\n", m$avg_nonemit_p50_rank, m$avg_nonemit_p99_rank))
+}
 
-  # Nested proxy (leakage-free)
-  list(name = "ncv_hybrid_nested",
-       ext_formula = emit ~ log_revenue + I(fold_specific_proxy > 0) + asinh(fold_specific_proxy) +
-         year_f + s(nace2d_f, bs = "re"),
-       proxy_col = "fold_specific_proxy"),
 
-  # Leaked proxy (full-sample, for comparison)
-  list(name = "ncv_hybrid_leaked",
-       ext_formula = emit ~ log_revenue + I(proxy_weighted > 0) + asinh(proxy_weighted) +
-         year_f + s(nace2d_f, bs = "re"),
-       proxy_col = "proxy_weighted"),
+# =============================================================================
+# ROW 1: Revenue-proportional allocation (Trucost/EEIO baseline)
+# =============================================================================
+cat("═══ ROW 1: Revenue-proportional allocation ═══\n")
 
-  # Tabachova benchmark
-  list(name = "ncv_hybrid_tabachova",
-       ext_formula = emit ~ log_revenue + I(proxy_tabachova > 0) + asinh(proxy_tabachova) +
-         year_f + s(nace2d_f, bs = "re"),
-       proxy_col = "proxy_tabachova")
+yhat_row1 <- calibrate_predictions(
+  pmax(panel$revenue, 0, na.rm = TRUE),
+  panel$nace2d,
+  panel$year,
+  syt
 )
 
-hybrid_results <- list()
-hybrid_sweep   <- list()
+m1 <- calc_metrics(panel$y, yhat_row1, nace2d = panel$nace2d, year = panel$year)
+row1 <- make_result_row("revenue_proportional", m1)
+print_metrics("Row 1: Revenue-proportional", m1)
 
-for (hsp in hybrid_specs) {
-  h_nm <- hsp$name
-  cat(sprintf("\n── %s ──\n", h_nm))
 
-  # Collect phat across folds
-  panel$ncv_phat <- NA_real_
+# =============================================================================
+# ROW 2: Elastic net on financials (ML literature benchmark, NO calibration)
+# =============================================================================
+cat("\n═══ ROW 2: Elastic net on annual accounts covariates ═══\n")
 
+ALPHA   <- 0.5
+K_INNER <- 10L
+SEED    <- 42L
+
+# Identify financial covariates
+v_cols <- grep("^v_[0-9]", names(panel), value = TRUE)
+extra_fin <- intersect(c("turnover_VAT", "inputs_VAT", "investment_VAT"), names(panel))
+fin_cols <- c(v_cols, extra_fin)
+cat(sprintf("Financial covariates: %d columns\n", length(fin_cols)))
+
+# Asinh-transform financial covariates
+X_fin <- as.matrix(panel[, fin_cols])
+X_fin[is.na(X_fin)] <- 0
+X_fin <- asinh(X_fin)
+colnames(X_fin) <- paste0("fin_", fin_cols)
+
+# Year dummies
+year_f <- factor(panel$year)
+X_year <- model.matrix(~ year_f - 1)
+
+# NACE 2-digit dummies
+nace2d_f <- factor(panel$nace2d)
+X_nace <- model.matrix(~ nace2d_f - 1)
+
+cat(sprintf("Feature matrix: %d financial + %d year + %d sector = %d total\n",
+            ncol(X_fin), ncol(X_year), ncol(X_nace),
+            ncol(X_fin) + ncol(X_year) + ncol(X_nace)))
+
+# Penalty factor
+penalty_factor <- c(rep(1, ncol(X_fin)), rep(0, ncol(X_year)), rep(0, ncol(X_nace)))
+
+# Inner CV fold assignment (firm-grouped)
+set.seed(SEED)
+unique_firms <- unique(panel$vat)
+firm_inner_folds <- sample(rep(1:K_INNER, length.out = length(unique_firms)))
+names(firm_inner_folds) <- unique_firms
+inner_foldid <- unname(firm_inner_folds[panel$vat])
+
+# K=5 sector-fold loop
+panel$yhat_en <- NA_real_
+t0_total <- Sys.time()
+
+for (k in sort(unique(na.omit(panel$fold_k)))) {
+  held_out_sectors <- sector_fold_map$nace2d[sector_fold_map$fold_k == k]
+  cat(sprintf("  Fold %d (sectors: %s) ...", k, paste(held_out_sectors, collapse = ", ")))
   t0 <- Sys.time()
 
-  for (k in sort(unique(panel$fold_k))) {
-    held_out_sectors <- sector_fold_map$nace2d[sector_fold_map$fold_k == k]
+  train_idx <- which(!(panel$primary_nace2d %in% held_out_sectors) & !is.na(panel$fold_k))
+  test_idx  <- which(panel$primary_nace2d %in% held_out_sectors & !is.na(panel$fold_k))
 
-    train_idx <- which(!(panel$primary_nace2d %in% held_out_sectors))
-    test_idx  <- which(panel$primary_nace2d %in% held_out_sectors)
+  # Build design matrix
+  X_train_full <- cbind(X_fin[train_idx, ], X_year[train_idx, ], X_nace[train_idx, ])
+  X_test_full  <- cbind(X_fin[test_idx, ],  X_year[test_idx, ],  X_nace[test_idx, ])
 
-    train <- panel[train_idx, ]
-    test  <- panel[test_idx, ]
+  # Drop zero-variance columns
+  col_var <- apply(X_train_full, 2, var)
+  keep <- which(col_var > 0)
+  X_train <- X_train_full[, keep, drop = FALSE]
+  X_test  <- X_test_full[, keep, drop = FALSE]
+  pf_fold <- penalty_factor[keep]
 
-    # Ensure full factor levels for mgcv RE
-    train$nace2d_f <- factor(train$nace2d, levels = all_nace2d_levels)
-    test$nace2d_f  <- factor(test$nace2d,  levels = all_nace2d_levels)
-    train$nace5d_f <- factor(train$nace5d, levels = all_nace5d_levels)
-    test$nace5d_f  <- factor(test$nace5d,  levels = all_nace5d_levels)
-    train$year_f   <- factor(train$year,   levels = all_year_levels)
-    test$year_f    <- factor(test$year,    levels = all_year_levels)
+  inner_fid <- inner_foldid[train_idx]
 
-    # Fit extensive margin GAM
-    fit_ext <- tryCatch(
-      gam(hsp$ext_formula, data = train,
-          family = binomial(link = "logit"), method = "REML"),
-      error = function(e) { cat("  GAM error fold", k, ":", e$message, "\n"); NULL }
-    )
-
-    if (!is.null(fit_ext)) {
-      phat <- as.numeric(predict(fit_ext, newdata = test, type = "response"))
-      phat <- pmin(pmax(phat, 0), 1)
-      panel$ncv_phat[test_idx] <- phat
+  # Fit: Gaussian EN on asinh(y)
+  fit <- tryCatch(
+    cv.glmnet(
+      x = X_train,
+      y = asinh(panel$y[train_idx]),
+      family = "gaussian",
+      alpha = ALPHA,
+      penalty.factor = pf_fold,
+      foldid = inner_fid,
+      standardize = TRUE
+    ),
+    error = function(e) {
+      cat(sprintf(" ERROR: %s\n", e$message))
+      NULL
     }
+  )
 
-    cat(sprintf("  Fold %d: %d train, %d test\n", k, nrow(train), nrow(test)))
+  if (!is.null(fit)) {
+    raw_preds <- as.numeric(predict(fit, newx = X_test, s = "lambda.min"))
+    panel$yhat_en[test_idx] <- pmax(sinh(raw_preds), 0)
   }
 
   elapsed <- round(difftime(Sys.time(), t0, units = "secs"), 1)
-  cat(sprintf("  GAM CV done (%.1fs)\n", elapsed))
-
-  # Combine phat + proxy for threshold sweep
-  proxy_vals <- panel[[hsp$proxy_col]]
-  ok <- !is.na(panel$ncv_phat) & !is.na(proxy_vals) & !is.na(panel$y)
-
-  if (sum(ok) == 0) {
-    cat("  WARNING: No valid predictions. Skipping.\n")
-    panel$ncv_phat <- NULL
-    next
-  }
-
-  cat("  Threshold sweep (", length(THRESHOLDS), " points)...\n", sep = "")
-
-  best_m   <- NULL
-  best_thr <- NA_real_
-  best_rmse <- Inf
-
-  for (thr in THRESHOLDS) {
-    yhat_thr <- pmax(as.numeric(panel$ncv_phat[ok] > thr) * proxy_vals[ok], 0)
-
-    yhat_cap <- calibrate_with_cap(
-      yhat_thr, panel$emit[ok], panel$y[ok],
-      panel$nace2d[ok], panel$year[ok], syt
-    )
-
-    m <- calc_metrics(panel$y[ok], yhat_cap,
-                      nace2d = panel$nace2d[ok], year = panel$year[ok])
-
-    if (!is.na(m$rmse) && m$rmse < best_rmse) {
-      best_m   <- m
-      best_thr <- thr
-      best_rmse <- m$rmse
-    }
-
-    hybrid_sweep[[length(hybrid_sweep) + 1]] <- data.frame(
-      model = h_nm, threshold = thr,
-      nRMSE = m$nrmse_sd, rmse = m$rmse,
-      fpr_nonemitters = m$fpr_nonemitters,
-      tpr_emitters = m$tpr_emitters,
-      within_sy_rho_med = m$within_sy_rho_med,
-      rho_pooled_global = m$rho_pooled_global,
-      spearman = m$spearman,
-      stringsAsFactors = FALSE
-    )
-  }
-
-  cat(sprintf("  Best threshold: %.2f\n", best_thr))
-  cat(sprintf("  nRMSE = %.3f, Spearman = %.3f, FPR = %.3f, TPR = %.3f\n",
-              best_m$nrmse_sd, best_m$spearman,
-              best_m$fpr_nonemitters, best_m$tpr_emitters))
-  cat(sprintf("  within_sy_rho_med = %.3f, rho_pooled_global = %.3f\n",
-              best_m$within_sy_rho_med, best_m$rho_pooled_global))
-
-  hybrid_results[[h_nm]] <- make_result_row(h_nm, "hybrid_capped", best_thr, best_m)
-
-  panel$ncv_phat <- NULL
+  cat(sprintf(" %d train, %d test, %.1fs\n", length(train_idx), length(test_idx), elapsed))
 }
 
+elapsed_total <- round(difftime(Sys.time(), t0_total, units = "mins"), 1)
+cat(sprintf("EN complete (%.1f min)\n", elapsed_total))
 
-# ── Combined summary ────────────────────────────────────────────────────────
-cv_hybrid <- bind_rows(hybrid_results)
+# Clean up large matrices
+rm(X_fin, X_year, X_nace, X_train_full, X_test_full, X_train, X_test)
 
-cat("\n═══ Hybrid model summary ═══\n")
-print(cv_hybrid %>%
-        select(model, threshold, nRMSE, spearman, fpr_nonemitters,
-               tpr_emitters, within_sy_rho_med, rho_pooled_global),
+# Metrics: raw predictions, NO calibration
+ok_en <- !is.na(panel$yhat_en)
+m2 <- calc_metrics(panel$y[ok_en], panel$yhat_en[ok_en],
+                   nace2d = panel$nace2d[ok_en], year = panel$year[ok_en])
+row2 <- make_result_row("enet_financials", m2)
+print_metrics("Row 2: EN on financials (raw, no calibration)", m2)
+
+
+# =============================================================================
+# ROW 3: Proxy-proportional allocation (no hurdle)
+# =============================================================================
+cat("\n═══ ROW 3: Proxy-proportional allocation ═══\n")
+
+yhat_row3 <- calibrate_predictions(
+  panel$fold_specific_proxy,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m3 <- calc_metrics(panel$y, yhat_row3, nace2d = panel$nace2d, year = panel$year)
+row3 <- make_result_row("proxy_proportional", m3)
+print_metrics("Row 3: Proxy-proportional", m3)
+
+
+# =============================================================================
+# ROW 4: Proxy-proportional + cross-sector percentile hurdle (sectors 19/24)
+# =============================================================================
+cat("\n═══ ROW 4: Proxy-proportional + cross-sector percentile hurdle ═══\n")
+
+# Helper: find percentile threshold that maximizes Youden's J (TPR - FPR)
+learn_percentile_threshold <- function(proxy_vals, emit_vals) {
+  pctile_ranks <- ecdf(proxy_vals)(proxy_vals)
+
+  cutoffs <- seq(0.01, 0.99, by = 0.01)
+  best_youden <- -Inf
+  best_p      <- NA_real_
+  best_tpr    <- NA_real_
+  best_fpr    <- NA_real_
+
+  n_emit    <- sum(emit_vals == 1)
+  n_nonemit <- sum(emit_vals == 0)
+
+  for (p in cutoffs) {
+    pred_emit <- as.integer(pctile_ranks >= p)
+    tpr <- if (n_emit > 0)    sum(pred_emit == 1 & emit_vals == 1) / n_emit    else NA_real_
+    fpr <- if (n_nonemit > 0) sum(pred_emit == 1 & emit_vals == 0) / n_nonemit else NA_real_
+
+    youden <- tpr - fpr
+    if (!is.na(youden) && youden > best_youden) {
+      best_youden <- youden
+      best_p      <- p
+      best_tpr    <- tpr
+      best_fpr    <- fpr
+    }
+  }
+
+  list(threshold = best_p, youden = best_youden, tpr = best_tpr, fpr = best_fpr)
+}
+
+# Learn thresholds from sectors 24 and 19
+sec19_idx <- which(panel$nace2d == "19")
+sec24_idx <- which(panel$nace2d == "24")
+
+tau_from_24 <- learn_percentile_threshold(panel$fold_specific_proxy[sec24_idx],
+                                           panel$emit[sec24_idx])
+tau_from_19 <- learn_percentile_threshold(panel$fold_specific_proxy[sec19_idx],
+                                           panel$emit[sec19_idx])
+
+cat(sprintf("  Threshold from sector 24: p* = %.2f (Youden = %.3f, TPR = %.3f, FPR = %.3f)\n",
+            tau_from_24$threshold, tau_from_24$youden, tau_from_24$tpr, tau_from_24$fpr))
+cat(sprintf("  Threshold from sector 19: p* = %.2f (Youden = %.3f, TPR = %.3f, FPR = %.3f)\n",
+            tau_from_19$threshold, tau_from_19$youden, tau_from_19$tpr, tau_from_19$fpr))
+
+# Cross-sector validation: apply each threshold to the other sector
+cross_19 <- {
+  pctile_19 <- ecdf(panel$fold_specific_proxy[sec19_idx])(panel$fold_specific_proxy[sec19_idx])
+  pred_emit_19 <- as.integer(pctile_19 >= tau_from_24$threshold)
+  tpr_19 <- sum(pred_emit_19 == 1 & panel$emit[sec19_idx] == 1) / max(sum(panel$emit[sec19_idx] == 1), 1)
+  fpr_19 <- sum(pred_emit_19 == 1 & panel$emit[sec19_idx] == 0) / max(sum(panel$emit[sec19_idx] == 0), 1)
+  list(tpr = tpr_19, fpr = fpr_19)
+}
+
+cross_24 <- {
+  pctile_24 <- ecdf(panel$fold_specific_proxy[sec24_idx])(panel$fold_specific_proxy[sec24_idx])
+  pred_emit_24 <- as.integer(pctile_24 >= tau_from_19$threshold)
+  tpr_24 <- sum(pred_emit_24 == 1 & panel$emit[sec24_idx] == 1) / max(sum(panel$emit[sec24_idx] == 1), 1)
+  fpr_24 <- sum(pred_emit_24 == 1 & panel$emit[sec24_idx] == 0) / max(sum(panel$emit[sec24_idx] == 0), 1)
+  list(tpr = tpr_24, fpr = fpr_24)
+}
+
+cat(sprintf("  Cross-sector: tau_from_24 on sector 19 → TPR = %.3f, FPR = %.3f\n",
+            cross_19$tpr, cross_19$fpr))
+cat(sprintf("  Cross-sector: tau_from_19 on sector 24 → TPR = %.3f, FPR = %.3f\n",
+            cross_24$tpr, cross_24$fpr))
+
+# Apply thresholds
+panel$thresholded_proxy <- panel$fold_specific_proxy
+
+# Sector 19: apply threshold learned from sector 24
+if (length(sec19_idx) > 0) {
+  pctile_19 <- ecdf(panel$fold_specific_proxy[sec19_idx])(panel$fold_specific_proxy[sec19_idx])
+  panel$thresholded_proxy[sec19_idx] <- ifelse(
+    pctile_19 >= tau_from_24$threshold,
+    panel$fold_specific_proxy[sec19_idx],
+    0
+  )
+}
+
+# Sector 24: apply threshold learned from sector 19
+if (length(sec24_idx) > 0) {
+  pctile_24 <- ecdf(panel$fold_specific_proxy[sec24_idx])(panel$fold_specific_proxy[sec24_idx])
+  panel$thresholded_proxy[sec24_idx] <- ifelse(
+    pctile_24 >= tau_from_19$threshold,
+    panel$fold_specific_proxy[sec24_idx],
+    0
+  )
+}
+
+# Other sectors: no hurdle (proxy > 0 is natural condition)
+
+# Calibrate
+yhat_row4 <- calibrate_predictions(
+  panel$thresholded_proxy,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m4 <- calc_metrics(panel$y, yhat_row4, nace2d = panel$nace2d, year = panel$year)
+row4 <- make_result_row("proxy_hurdle", m4)
+print_metrics("Row 4: Proxy + cross-sector hurdle", m4)
+
+
+# =============================================================================
+# ROW 5: Row 4 + clipping (calibrate_with_cap)
+# =============================================================================
+cat("\n═══ ROW 5: Proxy + hurdle + cap ═══\n")
+
+yhat_row5 <- calibrate_with_cap(
+  panel$thresholded_proxy,
+  panel$emit,
+  panel$y,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m5 <- calc_metrics(panel$y, yhat_row5, nace2d = panel$nace2d, year = panel$year)
+row5 <- make_result_row("proxy_hurdle_cap", m5)
+print_metrics("Row 5: Proxy + hurdle + cap", m5)
+
+
+# =============================================================================
+# ASSEMBLE AND SAVE
+# =============================================================================
+results <- bind_rows(row1, row2, row3, row4, row5)
+results$row <- 1:5
+
+cat("\n\n══════════════ MAIN RESULTS TABLE ══════════════\n")
+print(results %>%
+        select(row, model, nrmse_sd, median_apd, rho_pooled_global,
+               fpr_nonemitters, tpr_emitters, avg_nonemit_p50_rank),
       row.names = FALSE)
-
-# Combine proportional + hybrid results
-cv_all <- bind_rows(cv_proportional, cv_hybrid)
+cat("════════════════════════════════════════════════\n")
 
 # Save
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
-
-out_path <- file.path(OUTPUT_DIR, "nested_cv_performance.csv")
-write.csv(cv_all, out_path, row.names = FALSE)
-cat("\nAll results saved to:", out_path, "\n")
-
-if (length(hybrid_sweep) > 0) {
-  sweep_path <- file.path(OUTPUT_DIR, "nested_cv_threshold_sweep.csv")
-  write.csv(bind_rows(hybrid_sweep), sweep_path, row.names = FALSE)
-  cat("Threshold sweep saved to:", sweep_path, "\n")
-}
+out_path <- file.path(OUTPUT_DIR, "main_results_table.csv")
+write.csv(results, out_path, row.names = FALSE)
+cat("\nResults saved to:", out_path, "\n")

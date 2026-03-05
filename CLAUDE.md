@@ -129,6 +129,8 @@ This project uses the Referee 2 audit protocol. There are no correspondences wit
 
 The fold-specific (leakage-free) fuel-supply proxy variable is called `fold_specific_proxy` in all local code. The R object holding the panel is `fs_proxy_panel`, saved to `fold_specific_proxy.RData`. The version on RMD still uses the old names: variable `proxy_nested`, object `nested_cv_proxy`, file `nested_cv_proxy.RData`. If re-running `build_fold_specific_proxy.R` on RMD, the output will use the updated names.
 
+**TODO:** Re-run `build_fold_specific_proxy.R` on RMD to produce `fold_specific_proxy.RData` with the new names, then copy to local 1. Until then, `models_with_fold_specific_proxy.R` has a compatibility shim that loads the old `nested_cv_proxy.RData` and renames on the fly.
+
 ## Notes for Claude
 
 Only change code after I explicitly tell you to do so. In particular, if I express an idea for code or analysis in the format of a question, answer it before making any changes to code. The exception is if I pose a question of the sort of "can you make X changes to code Y?".
