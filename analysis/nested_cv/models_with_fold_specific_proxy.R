@@ -56,10 +56,12 @@ if (file.exists(file.path(INT_DATA, "fold_specific_proxy.RData"))) {
 
 # Merge fold_specific_proxy and fold_k into training_sample
 panel <- training_sample %>%
-  left_join(fs_proxy_panel %>% select(vat, year, fold_k, fold_specific_proxy, primary_nace2d),
+  left_join(fs_proxy_panel %>% select(vat, year, fold_k, fold_specific_proxy,
+                                       fold_specific_proxy_all, primary_nace2d),
             by = c("vat", "year")) %>%
   mutate(
-    fold_specific_proxy = coalesce(fold_specific_proxy, 0),
+    fold_specific_proxy     = coalesce(fold_specific_proxy, 0),
+    fold_specific_proxy_all = coalesce(fold_specific_proxy_all, 0),
     emit = as.integer(y > 0)
   )
 rm(training_sample, fs_proxy_panel)
@@ -392,10 +394,91 @@ print_metrics("Row 5: Proxy + hurdle + cap", m5)
 
 
 # =============================================================================
+# ROWS 3a–5a: Repeat rows 3–5 with fold_specific_proxy_all (pos + neg coeffs)
+# =============================================================================
+
+# ── ROW 3a: Proxy-proportional (all coefficients) ──
+cat("\n═══ ROW 3a: Proxy-proportional (all coefficients) ═══\n")
+
+yhat_row3a <- calibrate_predictions(
+  panel$fold_specific_proxy_all,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m3a <- calc_metrics(panel$y, yhat_row3a, nace2d = panel$nace2d, year = panel$year)
+row3a <- make_result_row("proxy_proportional_all", m3a)
+print_metrics("Row 3a: Proxy-proportional (all)", m3a)
+
+
+# ── ROW 4a: Proxy (all) + cross-sector percentile hurdle ──
+cat("\n═══ ROW 4a: Proxy (all) + cross-sector percentile hurdle ═══\n")
+
+tau_all_from_24 <- learn_percentile_threshold(panel$fold_specific_proxy_all[sec24_idx],
+                                               panel$emit[sec24_idx])
+tau_all_from_19 <- learn_percentile_threshold(panel$fold_specific_proxy_all[sec19_idx],
+                                               panel$emit[sec19_idx])
+
+cat(sprintf("  Threshold from sector 24: p* = %.2f (Youden = %.3f, TPR = %.3f, FPR = %.3f)\n",
+            tau_all_from_24$threshold, tau_all_from_24$youden, tau_all_from_24$tpr, tau_all_from_24$fpr))
+cat(sprintf("  Threshold from sector 19: p* = %.2f (Youden = %.3f, TPR = %.3f, FPR = %.3f)\n",
+            tau_all_from_19$threshold, tau_all_from_19$youden, tau_all_from_19$tpr, tau_all_from_19$fpr))
+
+panel$thresholded_proxy_all <- panel$fold_specific_proxy_all
+
+if (length(sec19_idx) > 0) {
+  pctile_19a <- ecdf(panel$fold_specific_proxy_all[sec19_idx])(panel$fold_specific_proxy_all[sec19_idx])
+  panel$thresholded_proxy_all[sec19_idx] <- ifelse(
+    pctile_19a >= tau_all_from_24$threshold,
+    panel$fold_specific_proxy_all[sec19_idx],
+    0
+  )
+}
+
+if (length(sec24_idx) > 0) {
+  pctile_24a <- ecdf(panel$fold_specific_proxy_all[sec24_idx])(panel$fold_specific_proxy_all[sec24_idx])
+  panel$thresholded_proxy_all[sec24_idx] <- ifelse(
+    pctile_24a >= tau_all_from_19$threshold,
+    panel$fold_specific_proxy_all[sec24_idx],
+    0
+  )
+}
+
+yhat_row4a <- calibrate_predictions(
+  panel$thresholded_proxy_all,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m4a <- calc_metrics(panel$y, yhat_row4a, nace2d = panel$nace2d, year = panel$year)
+row4a <- make_result_row("proxy_hurdle_all", m4a)
+print_metrics("Row 4a: Proxy (all) + cross-sector hurdle", m4a)
+
+
+# ── ROW 5a: Proxy (all) + hurdle + cap ──
+cat("\n═══ ROW 5a: Proxy (all) + hurdle + cap ═══\n")
+
+yhat_row5a <- calibrate_with_cap(
+  panel$thresholded_proxy_all,
+  panel$emit,
+  panel$y,
+  panel$nace2d,
+  panel$year,
+  syt
+)
+
+m5a <- calc_metrics(panel$y, yhat_row5a, nace2d = panel$nace2d, year = panel$year)
+row5a <- make_result_row("proxy_hurdle_cap_all", m5a)
+print_metrics("Row 5a: Proxy (all) + hurdle + cap", m5a)
+
+
+# =============================================================================
 # ASSEMBLE AND SAVE
 # =============================================================================
-results <- bind_rows(row1, row2, row3, row4, row5)
-results$row <- 1:5
+results <- bind_rows(row1, row2, row3, row4, row5, row3a, row4a, row5a)
+results$row <- seq_len(nrow(results))
 
 cat("\n\n══════════════ MAIN RESULTS TABLE ══════════════\n")
 print(results %>%
