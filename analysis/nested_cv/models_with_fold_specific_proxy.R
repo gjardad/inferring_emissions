@@ -3,18 +3,18 @@
 #
 # PURPOSE
 #   Evaluate the nested CV proxy via proportional allocation of sector-year
-#   emission totals. Each firm's proxy_nested was computed from an elastic net
+#   emission totals. Each firm's fold_specific_proxy was computed from an elastic net
 #   that never saw that firm's sector, so evaluation on the full sample is
 #   honest.
 #
 #   Compares:
-#     1. proxy_nested  (nested CV — leakage-free)
+#     1. fold_specific_proxy  (nested CV — leakage-free)
 #     2. proxy_weighted (full-sample elastic net — leaked)
 #     3. proxy_tabachova (fixed NACE-code rule — no leakage by construction)
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData
-#   {INT_DATA}/nested_cv_proxy.RData
+#   {INT_DATA}/fold_specific_proxy.RData
 #
 # OUTPUT
 #   {OUTPUT_DIR}/nested_cv_proportional_performance.csv
@@ -37,22 +37,22 @@ cat("Loading training sample...\n")
 load(file.path(PROC_DATA, "training_sample.RData"))
 
 cat("Loading nested CV proxy...\n")
-load(file.path(INT_DATA, "nested_cv_proxy.RData"))
+load(file.path(INT_DATA, "fold_specific_proxy.RData"))
 
-# Merge proxy_nested and fold_k into training_sample
+# Merge fold_specific_proxy and fold_k into training_sample
 panel <- training_sample %>%
-  left_join(nested_cv_proxy %>% select(vat, year, fold_k, proxy_nested, primary_nace2d),
+  left_join(fs_proxy_panel %>% select(vat, year, fold_k, fold_specific_proxy, primary_nace2d),
             by = c("vat", "year")) %>%
   mutate(
-    proxy_nested = coalesce(proxy_nested, 0),
+    fold_specific_proxy = coalesce(fold_specific_proxy, 0),
     emit = as.integer(y > 0)
   )
-rm(training_sample, nested_cv_proxy)
+rm(training_sample, fs_proxy_panel)
 
 cat("Panel:", nrow(panel), "rows,", n_distinct(panel$vat), "firms\n")
 cat("Emitters:", sum(panel$emit), sprintf("(%.1f%%)\n", 100 * mean(panel$emit)))
-cat("proxy_nested > 0:", sum(panel$proxy_nested > 0),
-    sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_nested > 0)))
+cat("fold_specific_proxy > 0:", sum(panel$fold_specific_proxy > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(panel$fold_specific_proxy > 0)))
 cat("proxy_weighted > 0:", sum(panel$proxy_weighted > 0),
     sprintf("(%.1f%%)\n", 100 * mean(panel$proxy_weighted > 0)))
 cat("proxy_tabachova > 0:", sum(panel$proxy_tabachova > 0),
@@ -68,7 +68,7 @@ if (!exists("syt")) {
 
 # ── Proportional allocation for each proxy variant ───────────────────────────
 proxy_variants <- list(
-  list(name = "proxy_nested",    col = "proxy_nested"),
+  list(name = "fold_specific_proxy",    col = "fold_specific_proxy"),
   list(name = "proxy_weighted",  col = "proxy_weighted"),
   list(name = "proxy_tabachova", col = "proxy_tabachova")
 )
@@ -208,9 +208,9 @@ hybrid_specs <- list(
 
   # Nested proxy (leakage-free)
   list(name = "ncv_hybrid_nested",
-       ext_formula = emit ~ log_revenue + I(proxy_nested > 0) + asinh(proxy_nested) +
+       ext_formula = emit ~ log_revenue + I(fold_specific_proxy > 0) + asinh(fold_specific_proxy) +
          year_f + s(nace2d_f, bs = "re"),
-       proxy_col = "proxy_nested"),
+       proxy_col = "fold_specific_proxy"),
 
   # Leaked proxy (full-sample, for comparison)
   list(name = "ncv_hybrid_leaked",
