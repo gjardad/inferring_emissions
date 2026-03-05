@@ -14,7 +14,7 @@
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData
-#   {INT_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/fold_specific_proxy.RData
 #
 # OUTPUT
 #   {OUTPUT_DIR}/main_results_table.csv
@@ -39,20 +39,7 @@ cat("Loading training sample...\n")
 load(file.path(PROC_DATA, "training_sample.RData"))
 
 cat("Loading fold-specific proxy...\n")
-# Compatibility: load whichever file exists, rename old names if needed
-if (file.exists(file.path(INT_DATA, "fold_specific_proxy.RData"))) {
-  load(file.path(INT_DATA, "fold_specific_proxy.RData"))
-} else if (file.exists(file.path(INT_DATA, "nested_cv_proxy.RData"))) {
-  cat("  (using old nested_cv_proxy.RData — rename pending on RMD)\n")
-  load(file.path(INT_DATA, "nested_cv_proxy.RData"))
-  fs_proxy_panel <- nested_cv_proxy
-  rm(nested_cv_proxy)
-  if ("proxy_nested" %in% names(fs_proxy_panel)) {
-    fs_proxy_panel <- rename(fs_proxy_panel, fold_specific_proxy = proxy_nested)
-  }
-} else {
-  stop("Neither fold_specific_proxy.RData nor nested_cv_proxy.RData found in INT_DATA")
-}
+load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
 
 # Merge fold_specific_proxy and fold_k into training_sample
 panel <- training_sample %>%

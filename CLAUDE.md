@@ -58,8 +58,6 @@ Processed data (located in DATA_DIR/processed):
 
 	training_sample.RData: firm-year panel used for cross-validation. Contains EU ETS firms (with verified emissions) and non-ETS firms from NACE 19/24 (with emissions set to 0), merged with annual accounts variables, B2B fuel-supply proxies, fold assignments, and sector-year emission totals. Available on local 1.
 
-Intermediate data (located in DATA_DIR/intermediate):
-
 	fold_specific_proxy.RData: fold-specific (leakage-free) fuel-supply proxy panel. Contains `fs_proxy_panel` (5,876 × 11: vat, year, nace2d, y, emit, log_revenue, euets, primary_nace2d, fold_k, fold_specific_proxy, fold_specific_proxy_all), `fold_diagnostics` (per-fold EN summary), `sector_fold_map` (NACE 2-digit to fold assignment), and `syt` (sector-year emission totals). `fold_specific_proxy` uses only positive EN coefficients; `fold_specific_proxy_all` includes all non-zero coefficients (positive and negative). Built by `build_fold_specific_proxy.R` on RMD. Available on local 1.
 
 **Downsampled data on local 1.** The following processed files on local 1 are **downsampled** versions of the full data (which is available only on RMD). The same applies to the corresponding raw .dta files in DATA_DIR/raw/NBB/.
