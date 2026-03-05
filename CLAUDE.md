@@ -2,7 +2,17 @@
 
 ## Project Overview: The aim of the project is to build and evaluate the out-of-sample performance of a prediction model for firm-year-level emissions of greenhouse gases for the universe of firms in Belgium between 2005-2022.
 
-The model should be evaluated with respect to its
+### Research Question: to what extent does business-to-business transaction data help us infer emissions at the firm-year-level?
+
+## Guidelines for evaluating models
+
+The model should be first evaluated with respect to whether it satisfies internal validity: no information from the test set leaks into training.
+
+It should also be evaluated with respect to its external validity: it should generalize beyond the training distribution. External validity is impossible to guarantee with certainty in our context, so the goal here is to mitigate any obvious concerns.
+
+**Concern of distribution shift is real.** Training data consists of all the firms regulated by the EU ETS (for which we observe their yearly emissions) plus non-EUETS firms from sectors with NACE 2-digit codes 19 and 24. We confidently assume emissions are 0 in the latter group, since EU ETS covers nearly 100% of the emissions from fuel combustion in these two sectors. Deployment data consists of all the non-EUETS firms from all other sectors. A lot of sectors that are present in deployment are not present in EU ETS, and vice-versa. It is not clear if conditional on observables distribution of emissions across firms is the same in the two data. Any suggestion in framing or modelling that alleviates this concern is welcome.
+
+If it satisfies internal validity and there's no obvious concerns with respect to external validity, the performance of the model should be evaluated with respect to
 
 1. prediction accuracy in levels
 2. ability to discriminate between emitters and non-emitters, within and across sectors
@@ -10,7 +20,7 @@ The model should be evaluated with respect to its
 
 Getting small emitters right is a central goal. In Belgium, large emitters are already observed through the EU ETS, whose regulation threshold is strongly correlated with firm size. The prediction model's value-added is therefore primarily for the non-ETS firms — which tend to be smaller emitters.
 
-### Research Question: to what extent does business-to-business transaction data help us infer emissions at the firm-year-level?
+**The main innovation of the paper is the use of B2B transactions data** so the set of specifications and the choice of benchmarks should be such that they highlight any prediction improvements from us using this data.
 
 ### Data Sources
 
@@ -48,6 +58,10 @@ Processed data (located in DATA_DIR/processed):
 
 	training_sample.RData: firm-year panel used for cross-validation. Contains EU ETS firms (with verified emissions) and non-ETS firms from NACE 19/24 (with emissions set to 0), merged with annual accounts variables, B2B fuel-supply proxies, fold assignments, and sector-year emission totals. Available on local 1.
 
+Intermediate data (located in DATA_DIR/intermediate):
+
+	fold_specific_proxy.RData: fold-specific (leakage-free) fuel-supply proxy panel. Contains `fs_proxy_panel` (5,876 × 11: vat, year, nace2d, y, emit, log_revenue, euets, primary_nace2d, fold_k, fold_specific_proxy, fold_specific_proxy_all), `fold_diagnostics` (per-fold EN summary), `sector_fold_map` (NACE 2-digit to fold assignment), and `syt` (sector-year emission totals). `fold_specific_proxy` uses only positive EN coefficients; `fold_specific_proxy_all` includes all non-zero coefficients (positive and negative). Built by `build_fold_specific_proxy.R` on RMD. Available on local 1.
+
 **Downsampled data on local 1.** The following processed files on local 1 are **downsampled** versions of the full data (which is available only on RMD). The same applies to the corresponding raw .dta files in DATA_DIR/raw/NBB/.
 
 - `annual_accounts_selected_sample.RData` (and `_key_variables` and `_more_selected_sample` variants)
@@ -57,9 +71,7 @@ Processed data (located in DATA_DIR/processed):
 - `df_national_accounts_with_5digits.RData`
 - `firms_in_selected_sample.RData`
 
-The full training sample (`training_sample.RData`), EUTL data (`firm_year_belgian_euets.RData`, `firm_year_emissions.RData`, `installation_year_emissions.RData`), and all mapping/crosswalk files are NOT downsampled and are available in full on local 1.
-
-Feel free to suggest any additional data sets you may think can help.
+The full training sample (`training_sample.RData` and `fold_specific_proxy.RData`) are NOT downsampled and are available in full on local 1.
 
 ### Hardware setup:
 
@@ -70,22 +82,6 @@ In local 1 I have available a downsampled version of the full NBB data sets as w
 Any script that only requires `training_sample.RData` (e.g., CV scripts, alternative specs, rho comparisons) can be run locally on local 1. RMD is only needed for scripts that access the raw NBB data (e.g., preprocessing, proxy construction).**
 
 **Data sync log.** No known discrepancies.
-
-## Guidelines for specifications
-
-**Design before results.** During estimation and analysis:
-
-- Do NOT express concern or excitement about point estimates
-- Do NOT interpret results as "good" or "bad" until the design is intentional
-- Focus entirely on whether the specification is ideal for deployment
-
-**Concern of distribution shift is real.** Training data consists of all the firms regulated by the EU ETS (for which we observe their yearly emissions) plus non-EUETS firms from sectors with NACE 2-digit codes 19 and 24. We confidently assume emissions are 0 in the latter group, since EU ETS covers nearly 100% of the emissions from fuel combustion in these two sectors. Deployment data consists of all the non-EUETS firms from all other sectors. A lot of sectors that are present in deployment are not present in EU ETS, and vice-versa. It is not clear if conditional on observables distribution of emissions across firms is the same in the two data. Any suggestion in framing or modelling that alleviates this concern is welcome.
-
-**We are only modelling emissions from the combustion of fossil fuels** since EU ETS covers virtually all emissions from industrial processes.
-
-**Domain knowledge matters**. Institutional aspects of the Belgium economy that can help justify modelling choices are welcome. For example, one important features of the Belgium economy is that across all years and fossil fuels, fossil fuels are almost exclusively imported and not domestically produced.
-
-**The main innovation of the paper is the use of B2B transactions data** so the set of specifications and the choice of benchmarks should be such that they highlight any prediction improvements from us using this data.
 
 ### Purpose of the project and audience
 
@@ -132,10 +128,6 @@ This project uses the Referee 2 audit protocol. There are no correspondences wit
 **Critical Rule:** Referee 2 NEVER modifies author code. It only reads, runs, and creates its own replication scripts in `code/replication/`. Only the author (you) modifies your own code in response to referee concerns.
 
 **Important:** Referee reports do NOT belong in this CLAUDE.md file. They are standalone documents in the correspondence directory. This section only tracks status.
-
-## Variable naming: fold-specific proxy
-
-The fold-specific (leakage-free) fuel-supply proxy variable is called `fold_specific_proxy` in all local code. The R object holding the panel is `fs_proxy_panel`, saved to `fold_specific_proxy.RData` in `INT_DATA`. The file also contains `fold_specific_proxy_all` (all EN coefficients including negative). Both RMD and local 1 now use the updated names. `models_with_fold_specific_proxy.R` retains a compatibility shim for the old `nested_cv_proxy.RData` as a fallback.
 
 ## Notes for Claude
 
