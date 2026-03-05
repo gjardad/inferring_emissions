@@ -19,6 +19,9 @@
 # OUTPUT
 #   {INT_DATA}/fold_specific_proxy.RData
 #     Contains: fs_proxy_panel, sector_fold_map, fold_diagnostics, syt
+#     fs_proxy_panel has two proxy columns:
+#       fold_specific_proxy      — uses only positive EN coefficients
+#       fold_specific_proxy_all  — uses all non-zero EN coefficients (pos + neg)
 #
 # RUNS ON: RMD (requires full B2B data)
 ###############################################################################
@@ -263,9 +266,10 @@ cat("  NESTED CV: ", K_OUTER, " outer folds x elastic net (alpha=",
 cat("═══════════════════════════════════════════════════════════════\n\n")
 
 # Storage for fold-specific proxies and diagnostics
-proxy_pieces   <- list()
-diag_rows      <- list()
-supplier_lists <- list()
+proxy_pieces       <- list()
+proxy_pieces_all   <- list()  # all non-zero coefs (pos + neg)
+diag_rows          <- list()
+supplier_lists     <- list()
 
 for (k in seq_len(K_OUTER)) {
   cat(sprintf("\n══ OUTER FOLD %d / %d ═══════════════════════════════════════\n", k, K_OUTER))
@@ -459,15 +463,40 @@ for (k in seq_len(K_OUTER)) {
                           stringsAsFactors = FALSE)
   }
 
+  # ── 8f-bis. Build proxy using ALL non-zero coefficients (pos + neg) ──
+  if (nrow(coef_lookup_k) > 0) {
+    b2b_heldout_all_k <- b2b_lhs[b2b_lhs$vat_j_ano %in% heldout_vats_k, ]
+
+    proxy_all_k <- b2b_heldout_all_k %>%
+      inner_join(coef_lookup_k, by = "vat_i_ano") %>%
+      group_by(vat_j_ano, year) %>%
+      summarise(fold_specific_proxy_all = sum(coef * asinh(corr_sales_ij), na.rm = TRUE),
+                .groups = "drop") %>%
+      rename(vat = vat_j_ano)
+
+    rm(b2b_heldout_all_k)
+  } else {
+    proxy_all_k <- data.frame(vat = character(0), year = integer(0),
+                              fold_specific_proxy_all = numeric(0),
+                              stringsAsFactors = FALSE)
+  }
+
   # Merge onto test_lhs, coalesce missing to 0
   test_proxy_k <- test_lhs %>%
     select(vat, year) %>%
     left_join(proxy_k, by = c("vat", "year")) %>%
-    mutate(fold_specific_proxy = coalesce(fold_specific_proxy, 0))
+    left_join(proxy_all_k, by = c("vat", "year")) %>%
+    mutate(
+      fold_specific_proxy     = coalesce(fold_specific_proxy, 0),
+      fold_specific_proxy_all = coalesce(fold_specific_proxy_all, 0)
+    )
 
-  proxy_pieces[[k]] <- test_proxy_k
+  proxy_pieces[[k]]     <- test_proxy_k %>% select(vat, year, fold_specific_proxy)
+  proxy_pieces_all[[k]] <- test_proxy_k %>% select(vat, year, fold_specific_proxy_all)
 
-  cat("  Held-out firms with proxy > 0:", sum(test_proxy_k$fold_specific_proxy > 0),
+  cat("  Held-out firms with proxy > 0 (pos-only):", sum(test_proxy_k$fold_specific_proxy > 0),
+      "/", nrow(test_proxy_k), "\n")
+  cat("  Held-out firms with proxy_all != 0:", sum(test_proxy_k$fold_specific_proxy_all != 0),
       "/", nrow(test_proxy_k), "\n")
 
   # ── 8g. Store diagnostics ────────────────────────────────────────────
@@ -496,7 +525,7 @@ for (k in seq_len(K_OUTER)) {
   cat(sprintf("Fold %d complete (%.1f min)\n", k, fold_time))
 
   # Clean up fold-specific objects
-  rm(train_lhs, test_lhs, coef_lookup_k, coef_pos_k, proxy_k,
+  rm(train_lhs, test_lhs, coef_lookup_k, coef_pos_k, proxy_k, proxy_all_k,
      test_proxy_k, eligible_sellers_k, eligible_sellers_k_enet,
      seller_map_k, seller_counts_k, pf_k, inner_foldid_k,
      train_firms_k, heldout_vats_k,
@@ -511,17 +540,23 @@ for (k in seq_len(K_OUTER)) {
 cat("\n═══ Assembling output ═══\n")
 
 # Combine all fold-specific proxies
-all_proxies <- bind_rows(proxy_pieces)
+all_proxies     <- bind_rows(proxy_pieces)
+all_proxies_all <- bind_rows(proxy_pieces_all)
 
 # Merge onto full lhs panel
 fs_proxy_panel <- lhs %>%
   left_join(all_proxies, by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy = coalesce(fold_specific_proxy, 0))
+  left_join(all_proxies_all, by = c("vat", "year")) %>%
+  mutate(
+    fold_specific_proxy     = coalesce(fold_specific_proxy, 0),
+    fold_specific_proxy_all = coalesce(fold_specific_proxy_all, 0)
+  )
 
 cat("Nested CV proxy assembled:", nrow(fs_proxy_panel), "rows\n")
-cat("  fold_specific_proxy > 0:", sum(fs_proxy_panel$fold_specific_proxy > 0),
+cat("  fold_specific_proxy > 0 (pos-only):", sum(fs_proxy_panel$fold_specific_proxy > 0),
     sprintf("(%.1f%%)\n", 100 * mean(fs_proxy_panel$fold_specific_proxy > 0)))
-cat("  fold_specific_proxy == 0:", sum(fs_proxy_panel$fold_specific_proxy == 0), "\n")
+cat("  fold_specific_proxy_all != 0 (all coefs):", sum(fs_proxy_panel$fold_specific_proxy_all != 0),
+    sprintf("(%.1f%%)\n", 100 * mean(fs_proxy_panel$fold_specific_proxy_all != 0)))
 
 # Fold diagnostics
 fold_diagnostics <- bind_rows(diag_rows)
@@ -562,7 +597,7 @@ cat("Suppliers in ANY fold:", length(any_fold_suppliers), "\n")
 # Select output columns
 fs_proxy_panel <- fs_proxy_panel %>%
   select(vat, year, nace2d, y, emit, log_revenue, euets,
-         primary_nace2d, fold_k, fold_specific_proxy)
+         primary_nace2d, fold_k, fold_specific_proxy, fold_specific_proxy_all)
 
 OUT_PATH <- file.path(INT_DATA, "fold_specific_proxy.RData")
 
