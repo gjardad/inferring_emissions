@@ -1,5 +1,5 @@
 ###############################################################################
-# analysis/nested_cv/nested_cv_rmd.R
+# analysis/nested_cv/build_fold_specific_proxy.R
 #
 # PURPOSE
 #   Nested cross-validation with elastic net proxy construction inside the CV
