@@ -100,7 +100,7 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 | 1 | NIR emissions by sector + EU ETS coverage | proxy 3.1 | needs writing (extend `build_emissions_by_sector_year_from_nir.R`) | local 1 | — |
 | 2 | Sectors 19/24 summary by emitter status | proxy 3.1 | needs writing | local 1 | — |
 | 3 | Supplier characterization | proxy 3.3 | `selected_supplier_nace_profile.R` + `validate_against_cn8.R` (verify format) | local 1 or RMD | — |
-| 4 | OLS proxy regressions (3-col) | proxy 3.3 | `elastic_net_proxy_diagnostics.R` (verify spec) | local 1 | — |
+| 4 | ~~OLS proxy regressions (4-col)~~ | proxy 3.3 | `figures_tables/table_proxy_ols.R` | local 1 | **done** |
 | 5 | Kernel density proxy by emitter status (19/24) | proxy 3.3 | `elastic_net_proxy_diagnostics.R` or `diagnostic_proxy_classification_19_24.R` (verify) | local 1 | — |
 | 6 | Binscatter: levels vs within-sector ranks | proxy 3.3 | needs writing | local 1 | — |
 | 7 | Sector overlap training vs deployment | pred. perf. 4.1 | needs writing | local 1 | — |
