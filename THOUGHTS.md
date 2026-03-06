@@ -110,11 +110,64 @@ By matching installation geolocations to the 1 km × 1 km NO2 grid, one can assi
 - **Background concentration.** NO2 from traffic, residential heating, and other non-industrial sources contaminates the signal. Differencing against nearby non-industrial cells or using temporal variation (weekday vs weekend, seasonal) could help but adds complexity.
 - **Atmospheric transport.** NO2 disperses from its source, so the grid cell directly above an installation captures only a fraction of its plume. Wind patterns and atmospheric stability affect the spatial footprint.
 
+## Empirical exploration: Climate TRACE vs EUTL for Belgium (2026-03-06)
+
+**Climate TRACE** (climatetrace.org) provides free, publicly available facility-level CO2 emission estimates derived from satellite data + AI/ML. Covers 352M+ assets globally. Belgium data downloaded to `DATA_DIR/raw/Climate TRACE/BEL/`. Covers manufacturing, power, mineral extraction, fossil fuel operations. 128 unique sources in Belgium, with monthly data 2021–2024 and annual 2015–2024.
+
+### Matching EUTL ↔ Climate TRACE
+
+Matched using geolocation: tight geo match (<1 km) or name-confirmed match (1–5 km with bigram Jaccard similarity ≥ 0.25). EUTL has 483 land-based BE installations; CT has 128 sources.
+
+**EUTL → CT:** 161/483 matched (33%). Most unmatched EUTL installations are small combustion plants (activity 20) that CT doesn't track.
+
+**CT → EUTL:** 94/128 matched (73%). 34 unmatched CT sources are mostly food-beverage-tobacco and textiles — small facilities below the EU ETS threshold. These represent CT's incremental coverage beyond EUTL.
+
+**Bottom line on overlap:** CT mostly tracks what EUTL already covers. The incremental value (34 non-ETS sources) is too small to meaningfully expand the training set.
+
+### Emission comparison for matched installations
+
+Panel: 277 installation-year obs, 96 installations, 2021–2023 overlap (after dropping missing/zero on both sides).
+
+**Cross-sectional correlations (pooled):**
+
+| Metric | r |
+|--------|---|
+| Pearson (levels) | 0.455 |
+| Pearson (log) | 0.529 |
+| Spearman (ranks) | 0.548 |
+
+Stable across years (~0.52 log correlation each year).
+
+**Within-installation correlations (time series, ≥3 years):**
+- 90 installations with ≥3 years
+- Median r = 0.83 (both levels and log) — CT tracks year-to-year variation well for individual installations
+- Mean r = 0.54 (dragged down by ~20 installations where CT reports constant emissions, giving NA/zero-variance)
+- Top matches near-perfect: power stations, cement plants, steel mills (r ≈ 1.0)
+
+**Level comparison:**
+- Median CT/EUTL ratio: 1.85 (CT systematically overestimates ~2×)
+- Huge dispersion: p25 = 0.95, p75 = 9.14, mean = 40 (extreme outliers)
+
+### Implications for the extension
+
+1. **CT is not a viable alternative training signal for Belgium.** It covers mostly the same large emitters as EUTL, with only 34 additional non-ETS sources. The cross-sectional rank correlation of 0.55 means it would be a substantially noisier LHS variable than EUTL verified emissions.
+
+2. **CT could serve as validation.** For the 94 matched sources, CT provides an independent check on EUTL data quality. The within-installation correlation of 0.83 is reassuring.
+
+3. **The level bias (CT/EUTL ≈ 1.85) reinforces the ranking-not-levels finding.** Just like the B2B proxy, satellite-derived estimates are better at ranking than at levels — consistent with the paper's calibration approach.
+
+4. **For non-EU countries without emissions registries**, CT could be the training signal despite being noisier. The 0.55 rank correlation with ground truth suggests it carries real information, just with more measurement error. Whether this is enough to identify fuel suppliers via the elastic net is an open empirical question.
+
+5. **The raw Sentinel-5P / LEGO-4-AQ approach (building NO2 measures from scratch) may still have value** over CT's processed estimates, since it would cover all geolocated installations (not just the 128 CT tracks) and could be tailored to combustion-specific NO2 signatures. But this requires substantially more data engineering.
+
 ## Key references to investigate
 
+- **Climate TRACE**: climatetrace.org/data. Free facility-level emission estimates, CC 4.0. Belgium data in `DATA_DIR/raw/Climate TRACE/BEL/`.
 - **LEGO-4-AQ**: 1 km × 1 km NO2 maps for Europe derived from Sentinel-5P TROPOMI, produced by BIRA-IASB. Need to verify temporal coverage and access.
 - **E-PRTR / IED Industrial Reporting**: European Pollutant Release and Transfer Register. Provides installation-level geolocation and reported emissions for large polluters. Could serve dual purpose: geolocation source and partial validation.
 - **Sentinel-5P TROPOMI**: ESA satellite operational since late 2017. Provides daily global coverage of NO2 tropospheric columns at ~5.5 km × 3.5 km native resolution; LEGO-4-AQ downscales this to 1 km.
+- **Carbon Mapper**: carbonmapper.org. Detects methane and CO2 super-emitters at facility scale. Narrower scope than CT.
+- **ESSD Global Power Plant CO2 Catalogue**: High-resolution emission profiles for 16,000+ power plants (2018). essd.copernicus.org/articles/16/337/2024/.
 
 ---
 
