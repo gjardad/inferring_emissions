@@ -69,6 +69,55 @@ Address this transparently: show stylized facts for a range of ranking accuracie
 
 **Framing for the paper:** "Our baseline uses CV residuals to calibrate ranking uncertainty. Because the deployment population differs from the training population, we also show robustness to degraded ranking accuracy."
 
+---
+
+# Extension: Satellite-Derived Emissions via Sentinel-5P and Industrial Geolocation
+
+## Motivation
+
+The method developed in this paper requires two country-level inputs: (1) B2B transaction data, and (2) ground-truth emissions for a subset of firms (here, EU ETS verified emissions) to train the elastic net that identifies fuel suppliers. Without ground-truth emissions, the model cannot be trained — there is no way to learn which suppliers are selling fossil fuels if we never observe who is burning them.
+
+Satellite-derived measures of emissions could remove this dependency on ground-truth firm-level emissions data, potentially making the method applicable to countries or contexts where no emissions registry exists.
+
+## Core idea
+
+Combine two data sources to construct satellite-derived, firm-level emission proxies:
+
+1. **E-PRTR / IED Industrial Reporting**: provides geolocations (lat/lon) of industrial installations across Europe. This pins down where specific firms operate physically.
+
+2. **LEGO-4-AQ dataset**: provides NO2 atmospheric concentration at 1 km × 1 km resolution, derived from Sentinel-5P satellite observations. NO2 is a combustion byproduct and a strong correlate of fossil fuel use.
+
+By matching installation geolocations to the 1 km × 1 km NO2 grid, one can assign each installation a satellite-derived NO2 concentration measure. This becomes a noisy but universally available proxy for combustion activity — no emissions registry needed.
+
+## Implementation roadmap
+
+**Step 1: Build data infrastructure and identify emitters.** Match E-PRTR/IED installation geolocations to the 1 km × 1 km LEGO-4-AQ NO2 grid. For each installation, extract the NO2 concentration from the corresponding grid cell (or average over neighboring cells). Link installations to firms via E-PRTR identifiers. The result is a firm-year panel of satellite-derived NO2 measures — available only for firms with geolocated installations in E-PRTR, not the full universe.
+
+**Step 2: Validate satellite-derived emissions against EUTL.** For the subset of firms present in both EU ETS and E-PRTR, establish that the satellite-derived NO2 measure tracks verified emissions from the EUTL. This is the credibility check: if NO2 concentration at 1 km resolution does not correlate meaningfully with verified CO2 emissions, the extension fails here. Report correlations in levels, ranks, and across sectors.
+
+**Step 3: Use satellite-derived emissions to train the elastic net.** Replace (or supplement) EU ETS verified emissions with the satellite-derived NO2 measure on the LHS of the elastic net. Since satellite data is available only for a subset of firms (those with geolocated installations in E-PRTR), this creates a natural cross-validation design: train on firms with satellite-derived measures, test on the remainder. This mimics the real deployment scenario — learning supplier identities from a noisy but broadly available signal, then predicting for firms where no direct emission measure exists.
+
+## What this buys us
+
+- **Removes the ground-truth bottleneck.** The method becomes applicable in any country with B2B transaction data and satellite coverage (i.e., everywhere Sentinel-5P observes, which is global).
+- **Validation opportunity.** In Belgium, where we have both EU ETS verified emissions and satellite data, we can validate the satellite-derived proxy against the ground truth. This provides a credibility check before applying the method elsewhere.
+- **Complementarity.** Even in countries with emissions registries, satellite data could supplement ground truth for firms/installations not covered by the registry.
+
+## Challenges and limitations
+
+- **NO2 ≠ CO2.** NO2 concentration is a proxy for combustion, not a direct measure of GHG emissions. The mapping from NO2 to CO2 depends on fuel type, combustion technology, and atmospheric conditions. This adds noise relative to verified emissions.
+- **Spatial attribution.** A 1 km × 1 km grid cell may contain multiple installations, making it hard to attribute NO2 to a specific firm. Industrial zones with co-located plants are particularly problematic.
+- **Background concentration.** NO2 from traffic, residential heating, and other non-industrial sources contaminates the signal. Differencing against nearby non-industrial cells or using temporal variation (weekday vs weekend, seasonal) could help but adds complexity.
+- **Atmospheric transport.** NO2 disperses from its source, so the grid cell directly above an installation captures only a fraction of its plume. Wind patterns and atmospheric stability affect the spatial footprint.
+
+## Key references to investigate
+
+- **LEGO-4-AQ**: 1 km × 1 km NO2 maps for Europe derived from Sentinel-5P TROPOMI, produced by BIRA-IASB. Need to verify temporal coverage and access.
+- **E-PRTR / IED Industrial Reporting**: European Pollutant Release and Transfer Register. Provides installation-level geolocation and reported emissions for large polluters. Could serve dual purpose: geolocation source and partial validation.
+- **Sentinel-5P TROPOMI**: ESA satellite operational since late 2017. Provides daily global coverage of NO2 tropospheric columns at ~5.5 km × 3.5 km native resolution; LEGO-4-AQ downscales this to 1 km.
+
+---
+
 ## Related paper
 
 Fava (2025), "Training and Testing with Multiple Splits: A Central Limit Theorem for Split-Sample Estimators" (arXiv:2511.04957). Provides a CLT for split-sample estimators under weak conditions. Most relevant for formally testing whether the B2B proxy significantly improves predictions (model comparison). Reading notes in `articles/split_fava_2025_multiple_splits/notes.md`.
