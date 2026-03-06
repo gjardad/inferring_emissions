@@ -158,7 +158,27 @@ Stable across years (~0.52 log correlation each year).
 
 4. **For non-EU countries without emissions registries**, CT could be the training signal despite being noisier. The 0.55 rank correlation with ground truth suggests it carries real information, just with more measurement error. Whether this is enough to identify fuel suppliers via the elastic net is an open empirical question.
 
-5. **The raw Sentinel-5P / LEGO-4-AQ approach (building NO2 measures from scratch) may still have value** over CT's processed estimates, since it would cover all geolocated installations (not just the 128 CT tracks) and could be tailored to combustion-specific NO2 signatures. But this requires substantially more data engineering.
+5. **The raw Sentinel-5P / LEGO-4-AQ approach (building NO2 measures from scratch) may still have value** over CT's processed estimates, since it would cover all geolocated installations (not just the 128 CT tracks) and could be tailored to combustion-specific NO2 signatures. But this requires substantially more data engineering. **Update:** see the TROPOMI feasibility check below — raw ambient NO2 is not viable.
+
+### Raw TROPOMI NO2 feasibility check (2026-03-06)
+
+**Data:** TROPOMI-inferred annual mean surface NO2 at ~1 km resolution for Europe (2019), from Zenodo record 5484305. Downloaded to `DATA_DIR/raw/S-MESH/TROPOMI_NO2_europe_2019.nc` (314 MB). The dataset uses Sentinel-5P TROPOMI observations downscaled via XGBoost to ~1 km surface-level NO2 (ppb).
+
+**Procedure:** Cropped the European raster to Belgium (2–7°E, 49–52°N; 440 × 330 grid cells). For each of the 483 EUTL Belgian land-based installations, extracted the NO2 value at the nearest 1 km grid cell. Merged with EUTL compliance data for 2019. Final sample: 296 installations with positive verified emissions and valid NO2 values.
+
+**Correlations: NO2 (ppb) vs Verified CO2 Emissions (tCO2), 2019**
+
+| Metric | r |
+|--------|---|
+| Pearson (levels) | 0.171 |
+| Pearson (log-log) | 0.208 |
+| Spearman (ranks) | 0.156 |
+
+All correlations are negligible — far worse than Climate TRACE's ~0.55 Spearman.
+
+**Why it fails:** The top-NO2 installations cluster in the Antwerp port/chemical zone (NO2 ≈ 15–16 ppb), regardless of individual emissions. The bottom-NO2 installations are in rural Wallonia (Bastogne, Vielsalm, Malmedy; NO2 ≈ 3–5 ppb), including a cement plant emitting 418 kt CO2. Ambient NO2 at 1 km resolution reflects **regional pollution load** (industrial density, traffic, urban background), not installation-specific combustion. Within-activity correlations are mostly near zero; the few positive ones (activity 24, 28, 36) have N ≤ 7.
+
+**Implication:** Raw ambient NO2 concentration is not a viable proxy for installation-level CO2 emissions. Climate TRACE's processed estimates — which combine multiple satellite products with ML models calibrated to known emitters — are far superior (Spearman 0.55 vs 0.16). The value of satellite data for this extension lies in **processed, facility-attributed** estimates (like Climate TRACE), not in raw atmospheric concentration fields. Building a custom NO2-to-CO2 pipeline would require plume detection, wind-field correction, and background subtraction — essentially replicating what Climate TRACE already does.
 
 ## Key references to investigate
 
