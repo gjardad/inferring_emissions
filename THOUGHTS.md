@@ -180,6 +180,36 @@ All correlations are negligible — far worse than Climate TRACE's ~0.55 Spearma
 
 **Implication:** Raw ambient NO2 concentration is not a viable proxy for installation-level CO2 emissions. Climate TRACE's processed estimates — which combine multiple satellite products with ML models calibrated to known emitters — are far superior (Spearman 0.55 vs 0.16). The value of satellite data for this extension lies in **processed, facility-attributed** estimates (like Climate TRACE), not in raw atmospheric concentration fields. Building a custom NO2-to-CO2 pipeline would require plume detection, wind-field correction, and background subtraction — essentially replicating what Climate TRACE already does.
 
+### Strategic framing: B2B proxy vs satellite-derived emissions
+
+Two complementary angles for the satellite extension, both valuable:
+
+**Angle 1 (best case): satellite + B2B removes the ground-truth bottleneck.** If properly processed satellite-derived NO2 (via flux inversion — background subtraction, wind-field correction, atmospheric lifetime modeling, fuel-type emission factors) tracks installation-level CO2 well enough, it can replace EUTL verified emissions as the LHS of the elastic net. The method would then require only B2B transaction data + freely available satellite/meteorological data, making it applicable globally without any emissions registry. Script `analysis/active/enet_climate_trace.R` tests a version of this using Climate TRACE's processed estimates as the LHS.
+
+**Angle 2 (defensive): B2B proxy matches or beats satellite.** Even if the satellite-derived measure is not great after corrections, showing that the B2B proxy achieves comparable or better ranking accuracy reinforces the paper's core message: administrative transaction data is a surprisingly powerful signal for emissions, competitive with expensive satellite-based approaches.
+
+**Benchmark comparison (2026-03-06):**
+- Climate TRACE vs EUTL (processed satellite → CO2): global Spearman ≈ 0.55 (128 BE sources)
+- B2B proxy vs EUTL (K=5 LOSOCV, strictest CV): global Spearman ≈ 0.42 (2,839 firm-years)
+- Raw TROPOMI NO2 vs EUTL (no processing): global Spearman ≈ 0.16 (296 installations)
+
+The B2B proxy at 0.42 is already approaching CT's 0.55, and this is under the strictest CV scheme where entire sectors are held out. Under LOFOCV (where same-sector firms remain in training), the B2B proxy should improve — potentially reaching parity with CT. LOSO and LOFOCV scripts are ready to run on RMD (`analysis/active/build_loso_proxy.R`, `analysis/active/build_lofocv_proxy.R`).
+
+**Note on the comparison:** these numbers are not perfectly apples-to-apples. CT operates at the installation level (128 sources), while the B2B proxy operates at the firm level (2,839 firm-years). Multi-installation firms and differences in sample composition make direct comparison imprecise. But the orders of magnitude are informative.
+
+### What a proper NO2 → CO2 pipeline would require
+
+Converting raw satellite NO2 concentration to installation-level CO2 emission estimates requires:
+
+1. **High-frequency NO2 data** — daily TROPOMI L2 swaths or the S-MESH daily 1km product (not the annual mean we used). Daily resolution is essential for plume detection.
+2. **Wind fields** — ERA5 reanalysis (hourly, ~30km), freely available from Copernicus. Needed for flux inversion: trace the observed NO2 plume back to its source.
+3. **Atmospheric chemistry parameters** — NO2 photolysis rates, OH radical concentrations, boundary layer height. Available from ERA5 and chemical transport models.
+4. **Installation geolocations** — E-PRTR/IED for Europe, or EUTL coordinates (already available).
+5. **Background NO2 subtraction** — isolate the facility-specific plume from regional/urban NO2. Methods: upwind/downwind differencing, weekend/weekday contrasts, or chemical transport model baselines.
+6. **Fuel-type-specific NO2/CO2 emission factors** — the ratio varies ~3× between gas and coal. E-PRTR reports fuel types for some installations but coverage is incomplete.
+
+Items 1, 2, 3, 4 are freely available. The hard part is the atmospheric modeling expertise (flux inversion) and fuel-type information (item 6). This is essentially what Climate TRACE does with their ML pipeline. Pursuing this would require a collaborator with atmospheric science expertise or substantial self-investment in the methodology.
+
 ## Key references to investigate
 
 - **Climate TRACE**: climatetrace.org/data. Free facility-level emission estimates, CC 4.0. Belgium data in `DATA_DIR/raw/Climate TRACE/BEL/`.
