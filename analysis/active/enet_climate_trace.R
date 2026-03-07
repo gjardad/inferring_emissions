@@ -23,8 +23,8 @@
 #   {PROC_DATA}/b2b_selected_sample.RData
 #   {PROC_DATA}/loocv_training_sample.RData
 #   {RAW_DATA}/Climate TRACE/BEL/             (CT source-level CSVs)
-#   {RAW_DATA}/EUTL/Oct_2024_version/         (installation.csv, compliance.csv)
-#   {PROC_DATA}/EUTL_Belgium.RData            (installation-to-VAT mapping)
+#   {RAW_DATA}/EUTL/Oct_2024_version/         (installation.csv, account.csv)
+#   {RAW_DATA}/NBB/EUTL_Belgium.dta           (BvD-to-VAT mapping)
 #
 # OUTPUTS
 #   {PROC_DATA}/enet_climate_trace_results.RData
@@ -55,6 +55,7 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(Matrix)
 library(glmnet)
+library(haven)
 
 # Try to set up parallel backend for cv.glmnet
 USE_PARALLEL <- FALSE
@@ -213,22 +214,27 @@ ct_eutl_match <- bind_rows(matches)
 cat("CT sources matched to EUTL:", nrow(ct_eutl_match), "out of",
     nrow(ct_sources), "\n")
 
-# Load EUTL-to-VAT mapping
-load(file.path(PROC_DATA, "EUTL_Belgium.RData"))
-eutl_vat_cols <- names(eutl_belgium)
-cat("EUTL_Belgium columns:", paste(eutl_vat_cols, collapse = ", "), "\n")
+# Load EUTL-to-VAT mapping via account.csv + EUTL_Belgium.dta
+# Chain: installation_id -> account.csv (bvd_id) -> EUTL_Belgium.dta (vat_ano)
+df_account <- read.csv(file.path(RAW_DATA, "EUTL", "Oct_2024_version", "account.csv"),
+                       stringsAsFactors = FALSE)
+df_account <- df_account %>%
+  filter(accountType_id %in% c("100-7", "120-0")) %>%
+  select(installation_id, bvd_id = bvdId) %>%
+  distinct()
 
-if ("installation_id" %in% eutl_vat_cols && "vat" %in% eutl_vat_cols) {
-  eutl_vat <- eutl_belgium %>% select(installation_id, vat)
-} else if ("id" %in% eutl_vat_cols && "vat_ano" %in% eutl_vat_cols) {
-  eutl_vat <- eutl_belgium %>% select(installation_id = id, vat = vat_ano)
-} else {
-  cat("WARNING: Could not identify installation_id and vat columns.\n")
-  cat("Available columns:", paste(eutl_vat_cols, collapse = ", "), "\n")
-  cat("Trying first two columns as installation_id and vat...\n")
-  eutl_vat <- eutl_belgium[, 1:2]
-  names(eutl_vat) <- c("installation_id", "vat")
-}
+df_belgium_euets <- read_dta(file.path(RAW_DATA, "NBB", "EUTL_Belgium.dta")) %>%
+  select(bvd_id = bvdid, vat = vat_ano) %>%
+  distinct()
+
+eutl_vat <- df_account %>%
+  left_join(df_belgium_euets, by = "bvd_id") %>%
+  filter(!is.na(vat)) %>%
+  select(installation_id, vat) %>%
+  distinct()
+
+cat("EUTL installations with VAT:", nrow(eutl_vat), "\n")
+rm(df_account, df_belgium_euets)
 
 # Map matched CT sources to VATs
 ct_eutl_match <- ct_eutl_match %>%
