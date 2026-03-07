@@ -120,13 +120,14 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 | Step | Task | Script | Where | Status |
 |------|------|--------|-------|--------|
 | A | **Full-sample proxy R² upper bound** — report in paper (proxy 3.3 or 3.4). Shows R²=0.41 vs CV R²=0.17; gap due to supplier non-overlap across sectors. | `figures_tables/r2_full_sample_enet.R` | local 1 | **done** (results ready, needs formatting for paper) |
-| B1 | **LOSO proxy** — run EN leaving one sector out at a time (29 folds). | `analysis/active/build_loso_proxy.R` | RMD | needs running (or run all via `run_all_cv_exercises.R`) |
-| B2 | **Firm-fold CV proxy** — run EN with K=10 firm-level folds, stratified by sector. | `analysis/active/build_firmfoldcv_proxy.R` | RMD | needs running |
-| B3 | Copy `loso_proxy.RData` and `firmfoldcv_proxy.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | blocked on B1/B2 |
+| B1 | **LOSO proxy** — run EN leaving one sector out at a time (29 folds). | `analysis/active/build_loso_proxy.R` | RMD | **done** |
+| B2 | **Firm-fold CV proxy** — run EN with K=10 firm-level folds, stratified by sector. | `analysis/active/build_firmfoldcv_proxy.R` | RMD | **done** |
+| B3 | Copy `loso_proxy.RData` and `firmfoldcv_proxy.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | **done** |
 | B4 | Evaluate LOSO and firm-fold CV proxies locally (OOS prediction metrics). | needs writing (adapt `models_with_fold_specific_proxy.R`) | local 1 | blocked on B3 |
-| C1 | **Climate TRACE EN** — train EN with CT emissions as LHS; build proxy for non-CT EUTL firms. | `analysis/active/enet_climate_trace.R` | RMD | needs running |
-| C2 | Copy `enet_climate_trace_results.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | blocked on C1 |
+| C1 | **Climate TRACE EN** — train EN with CT emissions as LHS; build proxy for non-CT EUTL firms. | `analysis/active/enet_climate_trace.R` | RMD | **done** |
+| C2 | Copy `enet_climate_trace_results.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | **done** |
 | C3 | Evaluate CT-trained proxy locally against EUTL verified emissions on test set. | needs writing | local 1 | blocked on C2 |
+| D | **(Maybe) Sector-level bootstrap CIs** — resample sectors with replacement to build CIs on proxy correlations, AUC, etc. Useful for testing significance of LOSO vs K=5 differences. | needs writing | local 1 | — |
 
 **Paper reporting plan:**
 - Full-sample R² upper bound goes in proxy diagnostics (Section 3.3/3.4) to motivate the supplier-overlap discussion.
