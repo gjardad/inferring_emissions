@@ -29,11 +29,13 @@
 # OUTPUTS
 #   {PROC_DATA}/enet_climate_trace_results.RData
 #     Contains:
-#       ct_proxy_panel    — test-set firms with CT-trained proxy values
-#       ct_train_panel    — training-set firms (CT-matched) with fitted values
-#       ct_coef_lookup    — selected suppliers with coefficients
-#       ct_eutl_match     — EUTL-to-CT matching table
-#       ct_fold_assignment — which firms are train vs test
+#       ct_proxy_panel      — test-set firms with CT-trained proxy values
+#       ct_train_panel      — training-set firms (CT-matched) with fitted values
+#       ct_coef_lookup      — all non-zero suppliers with coefficients
+#       ct_coef_pos         — positive-coef suppliers only
+#       ct_diagnostics      — single-row diagnostics (same format as fold diags)
+#       ct_eutl_match       — EUTL-to-CT matching table
+#       ct_fold_assignment  — which firms are train vs test
 #
 # RUNS ON: RMD (requires full B2B data)
 ###############################################################################
@@ -54,6 +56,17 @@ library(dplyr)
 library(Matrix)
 library(glmnet)
 
+# Try to set up parallel backend for cv.glmnet
+USE_PARALLEL <- FALSE
+n_cores <- max(1L, parallel::detectCores(logical = FALSE) - 2L)
+if (n_cores > 1L && requireNamespace("doParallel", quietly = TRUE)) {
+  doParallel::registerDoParallel(cores = n_cores)
+  USE_PARALLEL <- TRUE
+  cat("Parallel backend registered with", n_cores, "cores\n")
+} else {
+  cat("Running sequentially (doParallel not available or single core)\n")
+}
+
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 K_INNER        <- 10L
@@ -65,10 +78,21 @@ GEO_LOOSE_KM   <- 5.0
 NAME_SIM_THRESH <- 0.25
 
 
+# ── Helper: rank-based AUC ──────────────────────────────────────────────────
+compute_auc <- function(y_bin, score) {
+  y_bin <- as.integer(y_bin)
+  n1 <- sum(y_bin == 1L)
+  n0 <- sum(y_bin == 0L)
+  if (n1 == 0L || n0 == 0L) return(NA_real_)
+  r <- rank(score, ties.method = "average")
+  (sum(r[y_bin == 1L]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
+
+
 # =============================================================================
 # STEP 1: Load Climate TRACE Belgium data
 # =============================================================================
-cat("══ STEP 1: Loading Climate TRACE data ══\n")
+cat("== STEP 1: Loading Climate TRACE data ==\n")
 
 ct_dir <- file.path(RAW_DATA, "Climate TRACE", "BEL", "DATA")
 ct_files <- list.files(ct_dir, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
@@ -95,7 +119,7 @@ cat("CT year range:", range(ct$year), "\n\n")
 # =============================================================================
 # STEP 2: Load EUTL installations and match to Climate TRACE
 # =============================================================================
-cat("══ STEP 2: Matching EUTL installations to Climate TRACE ══\n")
+cat("== STEP 2: Matching EUTL installations to Climate TRACE ==\n")
 
 # Load EUTL installation data
 inst <- read.csv(file.path(RAW_DATA, "EUTL", "Oct_2024_version", "installation.csv"),
@@ -175,12 +199,9 @@ cat("CT sources matched to EUTL:", nrow(ct_eutl_match), "out of",
 
 # Load EUTL-to-VAT mapping
 load(file.path(PROC_DATA, "EUTL_Belgium.RData"))
-# Expected: data frame with installation_id and vat columns
-# Adjust column names if needed
 eutl_vat_cols <- names(eutl_belgium)
 cat("EUTL_Belgium columns:", paste(eutl_vat_cols, collapse = ", "), "\n")
 
-# Try common column name patterns
 if ("installation_id" %in% eutl_vat_cols && "vat" %in% eutl_vat_cols) {
   eutl_vat <- eutl_belgium %>% select(installation_id, vat)
 } else if ("id" %in% eutl_vat_cols && "vat_ano" %in% eutl_vat_cols) {
@@ -203,7 +224,7 @@ cat("CT sources matched to VAT:", sum(!is.na(ct_eutl_match$vat)), "\n\n")
 # =============================================================================
 # STEP 3: Load training sample and identify train/test split
 # =============================================================================
-cat("══ STEP 3: Building train/test split ══\n")
+cat("== STEP 3: Building train/test split ==\n")
 
 load(file.path(PROC_DATA, "loocv_training_sample.RData"))
 
@@ -230,7 +251,6 @@ cat("Test firms (not in CT):", n_distinct(lhs$vat[!lhs$ct_matched]), "\n")
 cat("Test firm-years:", sum(!lhs$ct_matched), "\n\n")
 
 # Build CT emissions panel at firm-year level
-# Aggregate CT emissions by installation -> VAT -> firm-year
 ct_firm_year <- ct %>%
   inner_join(ct_eutl_match %>% filter(!is.na(vat)) %>%
                select(source_id, installation_id, vat),
@@ -254,7 +274,9 @@ cat("CT year coverage in training:", paste(sort(unique(train_lhs$year)), collaps
 # =============================================================================
 # STEP 4: Load B2B and build design matrix
 # =============================================================================
-cat("══ STEP 4: Building design matrix ══\n")
+cat("== STEP 4: Building design matrix ==\n")
+
+t0_total <- Sys.time()
 
 cat("Loading B2B data...\n")
 load(file.path(PROC_DATA, "b2b_selected_sample.RData"))
@@ -355,7 +377,7 @@ cat("Full design matrix:", nrow(X_full), "x", ncol(X_full),
 # =============================================================================
 # STEP 5: Run elastic net with CT emissions as LHS
 # =============================================================================
-cat("══ STEP 5: Running elastic net (CT emissions as LHS) ══\n")
+cat("== STEP 5: Running elastic net (CT emissions as LHS) ==\n")
 
 set.seed(SEED)
 inner_foldid <- sample(rep(1:K_INNER, length.out = nrow(train_lhs)))
@@ -375,13 +397,17 @@ fit_ct <- cv.glmnet(
   alpha          = ALPHA,
   penalty.factor = pf,
   foldid         = inner_foldid,
-  standardize    = TRUE
+  standardize    = TRUE,
+  parallel       = USE_PARALLEL
 )
 enet_time <- round(difftime(Sys.time(), t0, units = "mins"), 1)
 
+lambda_min_ct <- fit_ct$lambda.min
+cv_rmse_ct    <- sqrt(min(fit_ct$cvm))
+
 cat("cv.glmnet time:", enet_time, "min\n")
-cat("lambda.min:", signif(fit_ct$lambda.min, 4), "\n")
-cat("CV RMSE:", round(sqrt(min(fit_ct$cvm)), 2), "\n")
+cat("lambda.min:", signif(lambda_min_ct, 4), "\n")
+cat("CV RMSE:", round(cv_rmse_ct, 2), "\n")
 
 # Extract supplier coefficients
 co <- coef(fit_ct, s = "lambda.min")
@@ -396,9 +422,12 @@ ct_coef_lookup <- data.frame(
 
 ct_coef_pos <- ct_coef_lookup %>% filter(coef > 0)
 
+n_selected_pos <- nrow(ct_coef_pos)
+n_selected_neg <- sum(ct_coef_lookup$coef < 0)
+
 cat("\nNon-zero suppliers:", nrow(ct_coef_lookup),
-    "| positive:", nrow(ct_coef_pos),
-    "| negative:", sum(ct_coef_lookup$coef < 0), "\n\n")
+    "| positive:", n_selected_pos,
+    "| negative:", n_selected_neg, "\n\n")
 
 rm(X_full, fit_ct)
 
@@ -406,12 +435,13 @@ rm(X_full, fit_ct)
 # =============================================================================
 # STEP 6: Build proxy for test set (non-CT EUTL firms)
 # =============================================================================
-cat("══ STEP 6: Building CT-trained proxy for test set ══\n")
+cat("== STEP 6: Building CT-trained proxy for test set ==\n")
 
 test_lhs <- lhs %>% filter(!ct_matched)
 test_vats <- unique(test_lhs$vat)
 
-if (nrow(ct_coef_pos) > 0) {
+# ── Positive-only proxy (test set) ─────────────────────────────────────────
+if (n_selected_pos > 0) {
   b2b_test <- b2b_lhs[b2b_lhs$vat_j_ano %in% test_vats, ]
 
   ct_proxy_test <- b2b_test %>%
@@ -428,8 +458,25 @@ if (nrow(ct_coef_pos) > 0) {
                                ct_proxy = numeric(0))
 }
 
-# Also build proxy for training set (in-sample, for diagnostics)
-if (nrow(ct_coef_pos) > 0) {
+# ── All-coefficient proxy (test set) ───────────────────────────────────────
+if (nrow(ct_coef_lookup) > 0) {
+  b2b_test_all <- b2b_lhs[b2b_lhs$vat_j_ano %in% test_vats, ]
+
+  ct_proxy_test_all <- b2b_test_all %>%
+    inner_join(ct_coef_lookup, by = "vat_i_ano") %>%
+    group_by(vat_j_ano, year) %>%
+    summarise(ct_proxy_all = sum(coef * asinh(corr_sales_ij), na.rm = TRUE),
+              .groups = "drop") %>%
+    rename(vat = vat_j_ano)
+
+  rm(b2b_test_all)
+} else {
+  ct_proxy_test_all <- data.frame(vat = character(0), year = integer(0),
+                                   ct_proxy_all = numeric(0))
+}
+
+# ── Positive-only proxy (train set, for diagnostics) ───────────────────────
+if (n_selected_pos > 0) {
   b2b_train_all <- b2b_lhs[b2b_lhs$vat_j_ano %in% train_lhs$vat, ]
 
   ct_proxy_train <- b2b_train_all %>%
@@ -445,16 +492,41 @@ if (nrow(ct_coef_pos) > 0) {
                                 ct_proxy = numeric(0))
 }
 
+# ── All-coefficient proxy (train set) ──────────────────────────────────────
+if (nrow(ct_coef_lookup) > 0) {
+  b2b_train_all2 <- b2b_lhs[b2b_lhs$vat_j_ano %in% train_lhs$vat, ]
+
+  ct_proxy_train_all <- b2b_train_all2 %>%
+    inner_join(ct_coef_lookup, by = "vat_i_ano") %>%
+    group_by(vat_j_ano, year) %>%
+    summarise(ct_proxy_all = sum(coef * asinh(corr_sales_ij), na.rm = TRUE),
+              .groups = "drop") %>%
+    rename(vat = vat_j_ano)
+
+  rm(b2b_train_all2)
+} else {
+  ct_proxy_train_all <- data.frame(vat = character(0), year = integer(0),
+                                    ct_proxy_all = numeric(0))
+}
+
 rm(b2b_lhs)
 
 # Merge onto panels
 ct_proxy_panel <- test_lhs %>%
   left_join(ct_proxy_test, by = c("vat", "year")) %>%
-  mutate(ct_proxy = coalesce(ct_proxy, 0))
+  left_join(ct_proxy_test_all, by = c("vat", "year")) %>%
+  mutate(
+    ct_proxy     = coalesce(ct_proxy, 0),
+    ct_proxy_all = coalesce(ct_proxy_all, 0)
+  )
 
 ct_train_panel <- train_lhs %>%
   left_join(ct_proxy_train, by = c("vat", "year")) %>%
-  mutate(ct_proxy = coalesce(ct_proxy, 0))
+  left_join(ct_proxy_train_all, by = c("vat", "year")) %>%
+  mutate(
+    ct_proxy     = coalesce(ct_proxy, 0),
+    ct_proxy_all = coalesce(ct_proxy_all, 0)
+  )
 
 cat("Test panel:", nrow(ct_proxy_panel), "firm-years,",
     n_distinct(ct_proxy_panel$vat), "firms\n")
@@ -465,15 +537,71 @@ cat("  with ct_proxy > 0:", sum(ct_train_panel$ct_proxy > 0), "\n\n")
 
 
 # =============================================================================
-# STEP 7: Quick diagnostic — correlations on test set
+# STEP 7: Diagnostics
 # =============================================================================
-cat("══ STEP 7: Test-set diagnostics ══\n")
+cat("== STEP 7: Diagnostics ==\n")
 
-eval_sub <- ct_proxy_panel %>%
-  filter(y > 0, ct_proxy > 0)
+total_time <- round(difftime(Sys.time(), t0_total, units = "mins"), 1)
 
+# Coefficient distribution (positive only)
+if (n_selected_pos > 0) {
+  coef_pos_mean   <- mean(ct_coef_pos$coef)
+  coef_pos_median <- median(ct_coef_pos$coef)
+  coef_pos_sd     <- if (n_selected_pos > 1) sd(ct_coef_pos$coef) else NA_real_
+} else {
+  coef_pos_mean <- coef_pos_median <- coef_pos_sd <- NA_real_
+}
+
+# Proxy coverage (test set)
+n_test_fy <- nrow(ct_proxy_panel)
+n_test_emitter_fy <- sum(ct_proxy_panel$emit)
+share_test_proxy_gt0 <- if (n_test_fy > 0) mean(ct_proxy_panel$ct_proxy > 0) else NA_real_
+share_test_emitter_proxy_gt0 <- if (n_test_emitter_fy > 0) {
+  mean(ct_proxy_panel$ct_proxy[ct_proxy_panel$emit == 1L] > 0)
+} else {
+  NA_real_
+}
+
+# Proxy quality on test set (against EUTL verified emissions)
+cor_proxy_y <- if (sum(ct_proxy_panel$y > 0 & ct_proxy_panel$ct_proxy > 0) > 5) {
+  cor(ct_proxy_panel$y, ct_proxy_panel$ct_proxy, use = "complete.obs")
+} else {
+  NA_real_
+}
+
+auc_emit <- compute_auc(ct_proxy_panel$emit, ct_proxy_panel$ct_proxy)
+
+ct_diagnostics <- data.frame(
+  n_train_firms                 = n_distinct(train_lhs$vat),
+  n_test_firms                  = n_distinct(test_lhs$vat),
+  n_train_firmyears             = nrow(train_lhs),
+  n_test_firmyears              = n_test_fy,
+  n_train_emitter_fy            = sum(train_lhs$emit),
+  n_test_emitter_fy             = n_test_emitter_fy,
+  n_eligible_sellers            = length(eligible_sellers),
+  n_selected_pos                = n_selected_pos,
+  n_selected_neg                = n_selected_neg,
+  lambda_min                    = lambda_min_ct,
+  cv_rmse                       = cv_rmse_ct,
+  coef_pos_mean                 = coef_pos_mean,
+  coef_pos_median               = coef_pos_median,
+  coef_pos_sd                   = coef_pos_sd,
+  share_test_firms_proxy_gt0    = share_test_proxy_gt0,
+  share_test_emitters_proxy_gt0 = share_test_emitter_proxy_gt0,
+  cor_proxy_y                   = cor_proxy_y,
+  auc_emit                      = auc_emit,
+  runtime_min                   = as.numeric(total_time),
+  stringsAsFactors              = FALSE
+)
+
+# Print diagnostics
+cat("\n-- CT diagnostics --\n")
+print(t(ct_diagnostics))
+
+# Also report correlations
+eval_sub <- ct_proxy_panel %>% filter(y > 0, ct_proxy > 0)
 if (nrow(eval_sub) > 5) {
-  cat("Test firms with y > 0 and ct_proxy > 0:", nrow(eval_sub), "\n")
+  cat("\nTest firms with y > 0 and ct_proxy > 0:", nrow(eval_sub), "\n")
   cat(sprintf("Pearson(log y, log ct_proxy):  %.3f\n",
               cor(log(eval_sub$y), log(eval_sub$ct_proxy))))
   cat(sprintf("Spearman(y, ct_proxy):         %.3f\n",
@@ -482,17 +610,14 @@ if (nrow(eval_sub) > 5) {
   cat("Too few test observations with both y > 0 and ct_proxy > 0:", nrow(eval_sub), "\n")
 }
 
-# Also report in-sample fit
-eval_train <- ct_train_panel %>%
-  filter(ct_emissions > 0, ct_proxy > 0)
-
+# In-sample fit
+eval_train <- ct_train_panel %>% filter(ct_emissions > 0, ct_proxy > 0)
 if (nrow(eval_train) > 5) {
   cat("\nIn-sample (train) diagnostics:\n")
   cat(sprintf("Pearson(log ct_emissions, log ct_proxy): %.3f\n",
               cor(log(eval_train$ct_emissions), log(eval_train$ct_proxy))))
   cat(sprintf("Spearman(ct_emissions, ct_proxy):        %.3f\n",
               cor(eval_train$ct_emissions, eval_train$ct_proxy, method = "spearman")))
-  # Also check against EUTL emissions
   eval_train_eutl <- eval_train %>% filter(y > 0)
   if (nrow(eval_train_eutl) > 5) {
     cat(sprintf("Pearson(log EUTL_y, log ct_proxy):        %.3f\n",
@@ -512,15 +637,22 @@ ct_fold_assignment <- lhs %>%
 
 OUT_PATH <- file.path(PROC_DATA, "enet_climate_trace_results.RData")
 save(ct_proxy_panel, ct_train_panel, ct_coef_lookup, ct_coef_pos,
-     ct_eutl_match, ct_fold_assignment,
+     ct_diagnostics, ct_eutl_match, ct_fold_assignment,
      file = OUT_PATH)
 
-cat("\n══════════════════════════════════════════════\n")
+cat("\n==============================================\n")
 cat("Saved to:", OUT_PATH, "\n")
 cat("  ct_proxy_panel:", nrow(ct_proxy_panel), "rows (test set)\n")
 cat("  ct_train_panel:", nrow(ct_train_panel), "rows (train set)\n")
-cat("  ct_coef_lookup:", nrow(ct_coef_lookup), "rows (selected suppliers)\n")
+cat("  ct_coef_lookup:", nrow(ct_coef_lookup), "rows (all non-zero suppliers)\n")
 cat("  ct_coef_pos:   ", nrow(ct_coef_pos), "rows (positive coefs)\n")
+cat("  ct_diagnostics: 1 row\n")
 cat("  ct_eutl_match: ", nrow(ct_eutl_match), "rows\n")
 cat("  ct_fold_assignment:", nrow(ct_fold_assignment), "firms\n")
-cat("══════════════════════════════════════════════\n")
+cat("==============================================\n")
+
+# Clean up parallel backend
+if (USE_PARALLEL) {
+  doParallel::stopImplicitCluster()
+  cat("Parallel backend stopped.\n")
+}

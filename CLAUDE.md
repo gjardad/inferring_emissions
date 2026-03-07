@@ -111,7 +111,7 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 | 12 | R² decomposition (revenue, EN residual, proxy) | pred. perf. 4.5 | needs writing | local 1 | depends on EN predictions from #10 |
 | 13 | Within-sector rho by sector size | pred. perf. 4.6 | `rho_star_test.R` + `table_rho_star.R` (basic); pooling test needs writing | local 1 (basic) / RMD (pooling) | pooling test needs re-running EN |
 | 14 | Sectoral gains Row 1: sector-year calibration | pred. perf. 4.7 | `models_with_fold_specific_proxy.R` (already exists) | local 1 | — |
-| 15 | Sectoral gains Row 2: LOFOCV | pred. perf. 4.7 | needs LOFOCV fold-specific proxy | RMD | LOFOCV proxy not built |
+| 15 | Sectoral gains Row 2: firm-fold CV | pred. perf. 4.7 | needs firm-fold CV proxy | RMD | firm-fold CV proxy not built |
 | 16 | Classifier battery (GAM, XGBoost, RF) | appendix | `fit_extensive_margin.R` (re-run with fold-specific proxy) | local 1 | stale results, needs re-run |
 | 17 | EN hyperparameter sensitivity (alpha grid) | appendix | `alpha_sensitivity.R` | RMD | not yet run |
 
@@ -120,10 +120,10 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 | Step | Task | Script | Where | Status |
 |------|------|--------|-------|--------|
 | A | **Full-sample proxy R² upper bound** — report in paper (proxy 3.3 or 3.4). Shows R²=0.41 vs CV R²=0.17; gap due to supplier non-overlap across sectors. | `figures_tables/r2_full_sample_enet.R` | local 1 | **done** (results ready, needs formatting for paper) |
-| B1 | **LOSO proxy** — run EN leaving one sector out at a time (29 folds). | `analysis/active/build_loso_proxy.R` | RMD | needs running |
-| B2 | **LOFOCV proxy** — run EN with K=10 firm-level folds, stratified by sector. | `analysis/active/build_lofocv_proxy.R` | RMD | needs running |
-| B3 | Copy `loso_proxy.RData` and `lofocv_proxy.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | blocked on B1/B2 |
-| B4 | Evaluate LOSO and LOFOCV proxies locally (OOS prediction metrics). | needs writing (adapt `models_with_fold_specific_proxy.R`) | local 1 | blocked on B3 |
+| B1 | **LOSO proxy** — run EN leaving one sector out at a time (29 folds). | `analysis/active/build_loso_proxy.R` | RMD | needs running (or run all via `run_all_cv_exercises.R`) |
+| B2 | **Firm-fold CV proxy** — run EN with K=10 firm-level folds, stratified by sector. | `analysis/active/build_firmfoldcv_proxy.R` | RMD | needs running |
+| B3 | Copy `loso_proxy.RData` and `firmfoldcv_proxy.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | blocked on B1/B2 |
+| B4 | Evaluate LOSO and firm-fold CV proxies locally (OOS prediction metrics). | needs writing (adapt `models_with_fold_specific_proxy.R`) | local 1 | blocked on B3 |
 | C1 | **Climate TRACE EN** — train EN with CT emissions as LHS; build proxy for non-CT EUTL firms. | `analysis/active/enet_climate_trace.R` | RMD | needs running |
 | C2 | Copy `enet_climate_trace_results.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | blocked on C1 |
 | C3 | Evaluate CT-trained proxy locally against EUTL verified emissions on test set. | needs writing | local 1 | blocked on C2 |
@@ -131,12 +131,12 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 **Paper reporting plan:**
 - Full-sample R² upper bound goes in proxy diagnostics (Section 3.3/3.4) to motivate the supplier-overlap discussion.
 - LOSO vs LOSOCV(K=5) comparison goes in predictive performance to show gains from finer sector-level CV.
-- LOFOCV results go in predictive performance to show gains from within-sector firm overlap.
+- Firm-fold CV results go in predictive performance to show gains from within-sector firm overlap.
 - Climate TRACE EN results go in discussion/extension section (satellite-derived training signal feasibility).
 
 ## Model Selection Table
 
-Scripts in `analysis/model_selection/losocv/` (01–07) and `analysis/model_selection/lofocv/`. Section structure and table design documented in `paper/winter26_version/section/model_selection.tex`.
+Scripts in `analysis/model_selection/losocv/` (01–07) and `analysis/model_selection/firmfoldcv/`. Section structure and table design documented in `paper/winter26_version/section/model_selection.tex`.
 
 ## Referee 2 Correspondence
 

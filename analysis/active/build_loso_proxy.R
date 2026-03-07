@@ -8,17 +8,14 @@
 #     2. Re-run the elastic net on the remaining sectors
 #     3. Build the proxy for held-out firms using those coefficients
 #
-#   This is the finest sector-level CV: each sector gets a proxy from
-#   an EN trained on all other sectors. Compared to the K=5 LOSOCV,
-#   each training set retains more sector diversity.
-#
 # INPUT
 #   {PROC_DATA}/b2b_selected_sample.RData
 #   {PROC_DATA}/loocv_training_sample.RData
 #
 # OUTPUT
 #   {PROC_DATA}/loso_proxy.RData
-#     Contains: loso_proxy_panel, loso_sector_map, loso_fold_diagnostics, syt
+#     Contains: loso_proxy_panel, loso_sector_map, loso_fold_diagnostics,
+#               loso_supplier_overlap, syt
 #
 # RUNS ON: RMD (requires full B2B data)
 ###############################################################################
@@ -39,12 +36,34 @@ library(dplyr)
 library(Matrix)
 library(glmnet)
 
+# Try to set up parallel backend for cv.glmnet
+USE_PARALLEL <- FALSE
+n_cores <- max(1L, parallel::detectCores(logical = FALSE) - 2L)
+if (n_cores > 1L && requireNamespace("doParallel", quietly = TRUE)) {
+  doParallel::registerDoParallel(cores = n_cores)
+  USE_PARALLEL <- TRUE
+  cat("Parallel backend registered with", n_cores, "cores\n")
+} else {
+  cat("Running sequentially (doParallel not available or single core)\n")
+}
+
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 K_INNER        <- 10L      # firm-grouped folds for cv.glmnet lambda tuning
 MIN_LHS_BUYERS <- 5L
 ALPHA          <- 0.5
 SEED           <- 42L
+
+
+# ── Helper: rank-based AUC ──────────────────────────────────────────────────
+compute_auc <- function(y_bin, score) {
+  y_bin <- as.integer(y_bin)
+  n1 <- sum(y_bin == 1L)
+  n0 <- sum(y_bin == 0L)
+  if (n1 == 0L || n0 == 0L) return(NA_real_)
+  r <- rank(score, ties.method = "average")
+  (sum(r[y_bin == 1L]) - n1 * (n1 + 1) / 2) / (n1 * n0)
+}
 
 
 # =============================================================================
@@ -103,7 +122,7 @@ sector_fy <- lhs %>%
 loso_sector_map <- loso_sector_map %>%
   left_join(sector_fy, by = c("nace2d" = "primary_nace2d"))
 
-cat("\n── Sector summary ──\n")
+cat("\n-- Sector summary --\n")
 print(loso_sector_map, n = S)
 
 lhs <- lhs %>%
@@ -158,17 +177,17 @@ extract_suppliers <- function(fit, n_ctrl, eligible_sellers_k, s = "lambda.min")
 # =============================================================================
 # STEP 7: Main LOSO loop
 # =============================================================================
-cat("═══════════════════════════════════════════════════════════════\n")
-cat("  LEAVE-ONE-SECTOR-OUT CV: ", S, " sectors x elastic net\n", sep = "")
-cat("═══════════════════════════════════════════════════════════════\n\n")
+cat("=== LEAVE-ONE-SECTOR-OUT CV:", S, "sectors x elastic net ===\n\n")
 
 proxy_pieces     <- list()
 proxy_pieces_all <- list()
 diag_rows        <- list()
+supplier_lists   <- list()     # positive-coef suppliers per fold
+supplier_coefs   <- list()     # positive-coef supplier data.frames per fold
 
 for (k in seq_len(S)) {
   held_out_sector <- all_sectors[k]
-  cat(sprintf("\n══ SECTOR %d / %d: NACE %s ══\n", k, S, held_out_sector))
+  cat(sprintf("\n== SECTOR %d / %d: NACE %s ==\n", k, S, held_out_sector))
   t0_fold <- Sys.time()
 
   # ── Subset ──────────────────────────────────────────────────────────────
@@ -265,7 +284,8 @@ for (k in seq_len(S)) {
     x = X_full_k, y = train_lhs$y,
     family = "gaussian", alpha = ALPHA,
     penalty.factor = pf_k, foldid = inner_foldid_k,
-    standardize = TRUE
+    standardize = TRUE,
+    parallel = USE_PARALLEL
   )
   enet_time <- round(difftime(Sys.time(), t0_enet, units = "mins"), 1)
 
@@ -283,16 +303,23 @@ for (k in seq_len(S)) {
                                       eligible_sellers_k_enet, "lambda.min")
   coef_pos_k <- coef_lookup_k %>% filter(coef > 0)
 
-  cat("  Selected suppliers: pos=", nrow(coef_pos_k),
-      ", neg=", sum(coef_lookup_k$coef < 0), "\n")
+  n_selected_pos_k <- nrow(coef_pos_k)
+  n_selected_neg_k <- sum(coef_lookup_k$coef < 0)
+
+  cat("  Selected suppliers: pos=", n_selected_pos_k,
+      ", neg=", n_selected_neg_k, "\n")
 
   rm(fit_k)
+
+  # Store supplier lists for overlap analysis
+  supplier_lists[[k]] <- coef_pos_k$vat_i_ano
+  supplier_coefs[[k]] <- coef_pos_k
 
   # ── Build proxy for held-out firms ──────────────────────────────────────
   heldout_vats_k <- unique(test_lhs$vat)
 
   # Positive-only proxy
-  if (nrow(coef_pos_k) > 0) {
+  if (n_selected_pos_k > 0) {
     b2b_heldout_k <- b2b_lhs[b2b_lhs$vat_j_ano %in% heldout_vats_k, ]
     proxy_k <- b2b_heldout_k %>%
       inner_join(coef_pos_k, by = "vat_i_ano") %>%
@@ -323,7 +350,7 @@ for (k in seq_len(S)) {
 
   # Merge
   test_proxy_k <- test_lhs %>%
-    select(vat, year) %>%
+    select(vat, year, y, emit) %>%
     left_join(proxy_k, by = c("vat", "year")) %>%
     left_join(proxy_all_k, by = c("vat", "year")) %>%
     mutate(
@@ -334,27 +361,63 @@ for (k in seq_len(S)) {
   proxy_pieces[[k]]     <- test_proxy_k %>% select(vat, year, loso_proxy)
   proxy_pieces_all[[k]] <- test_proxy_k %>% select(vat, year, loso_proxy_all)
 
-  cat("  Proxy > 0:", sum(test_proxy_k$loso_proxy > 0), "/", nrow(test_proxy_k), "\n")
-
   # ── Diagnostics ─────────────────────────────────────────────────────────
   fold_time <- round(difftime(Sys.time(), t0_fold, units = "mins"), 1)
 
+  # Coefficient distribution (positive only)
+  if (n_selected_pos_k > 0) {
+    coef_pos_mean_k   <- mean(coef_pos_k$coef)
+    coef_pos_median_k <- median(coef_pos_k$coef)
+    coef_pos_sd_k     <- if (n_selected_pos_k > 1) sd(coef_pos_k$coef) else NA_real_
+  } else {
+    coef_pos_mean_k <- coef_pos_median_k <- coef_pos_sd_k <- NA_real_
+  }
+
+  # Proxy coverage
+  n_test_fy <- nrow(test_proxy_k)
+  n_test_emitter_fy <- sum(test_proxy_k$emit)
+  share_test_proxy_gt0 <- if (n_test_fy > 0) mean(test_proxy_k$loso_proxy > 0) else NA_real_
+  share_test_emitter_proxy_gt0 <- if (n_test_emitter_fy > 0) {
+    mean(test_proxy_k$loso_proxy[test_proxy_k$emit == 1L] > 0)
+  } else {
+    NA_real_
+  }
+
+  # Proxy quality on held-out fold
+  cor_proxy_y_k <- if (sum(test_proxy_k$y > 0 & test_proxy_k$loso_proxy > 0) > 5) {
+    cor(test_proxy_k$y, test_proxy_k$loso_proxy, use = "complete.obs")
+  } else {
+    NA_real_
+  }
+
+  auc_emit_k <- compute_auc(test_proxy_k$emit, test_proxy_k$loso_proxy)
+
+  cat("  Proxy > 0:", sum(test_proxy_k$loso_proxy > 0), "/", n_test_fy, "\n")
+  cat("  AUC:", round(auc_emit_k, 3), "\n")
+
   diag_rows[[k]] <- data.frame(
-    fold_k              = k,
-    held_out_sector     = held_out_sector,
-    n_train_firms       = n_distinct(train_lhs$vat),
-    n_test_firms        = n_distinct(test_lhs$vat),
-    n_train_firmyears   = nrow(train_lhs),
-    n_test_firmyears    = nrow(test_lhs),
-    n_train_emitter_fy  = sum(train_lhs$emit),
-    n_test_emitter_fy   = sum(test_lhs$emit),
-    n_eligible_sellers  = length(eligible_sellers_k),
-    n_selected_pos      = nrow(coef_pos_k),
-    n_selected_neg      = sum(coef_lookup_k$coef < 0),
-    lambda_min          = lambda_min_k,
-    cv_rmse             = cv_rmse_k,
-    runtime_min         = as.numeric(fold_time),
-    stringsAsFactors    = FALSE
+    fold_k                        = k,
+    held_out_sector               = held_out_sector,
+    n_train_firms                 = n_distinct(train_lhs$vat),
+    n_test_firms                  = n_distinct(test_lhs$vat),
+    n_train_firmyears             = nrow(train_lhs),
+    n_test_firmyears              = n_test_fy,
+    n_train_emitter_fy            = sum(train_lhs$emit),
+    n_test_emitter_fy             = n_test_emitter_fy,
+    n_eligible_sellers            = length(eligible_sellers_k),
+    n_selected_pos                = n_selected_pos_k,
+    n_selected_neg                = n_selected_neg_k,
+    lambda_min                    = lambda_min_k,
+    cv_rmse                       = cv_rmse_k,
+    coef_pos_mean                 = coef_pos_mean_k,
+    coef_pos_median               = coef_pos_median_k,
+    coef_pos_sd                   = coef_pos_sd_k,
+    share_test_firms_proxy_gt0    = share_test_proxy_gt0,
+    share_test_emitters_proxy_gt0 = share_test_emitter_proxy_gt0,
+    cor_proxy_y                   = cor_proxy_y_k,
+    auc_emit                      = auc_emit_k,
+    runtime_min                   = as.numeric(fold_time),
+    stringsAsFactors              = FALSE
   )
 
   cat(sprintf("  Done (%.1f min)\n", fold_time))
@@ -362,7 +425,7 @@ for (k in seq_len(S)) {
   rm(train_lhs, test_lhs, coef_lookup_k, coef_pos_k, proxy_k, proxy_all_k,
      test_proxy_k, eligible_sellers_k, eligible_sellers_k_enet,
      seller_map_k, seller_counts_k, pf_k, inner_foldid_k, heldout_vats_k,
-     lambda_min_k, cv_rmse_k)
+     lambda_min_k, cv_rmse_k, n_selected_pos_k, n_selected_neg_k)
   gc()
 }
 
@@ -370,7 +433,7 @@ for (k in seq_len(S)) {
 # =============================================================================
 # STEP 8: Assemble output
 # =============================================================================
-cat("\n═══ Assembling output ═══\n")
+cat("\n=== Assembling output ===\n")
 
 all_proxies     <- bind_rows(proxy_pieces)
 all_proxies_all <- bind_rows(proxy_pieces_all)
@@ -391,17 +454,99 @@ cat("LOSO proxy panel:", nrow(loso_proxy_panel), "rows\n")
 cat("  loso_proxy > 0:", sum(loso_proxy_panel$loso_proxy > 0),
     sprintf("(%.1f%%)\n", 100 * mean(loso_proxy_panel$loso_proxy > 0)))
 
+
 # =============================================================================
-# STEP 9: Save
+# STEP 9: Supplier overlap analysis
+# =============================================================================
+cat("\n-- Supplier overlap analysis --\n")
+
+# Suppliers in all vs any fold
+all_supplier_sets <- supplier_lists[sapply(supplier_lists, length) > 0]
+n_folds_with_suppliers <- length(all_supplier_sets)
+
+if (n_folds_with_suppliers > 1) {
+  supplier_union <- Reduce(union, all_supplier_sets)
+  supplier_intersection <- Reduce(intersect, all_supplier_sets)
+} else if (n_folds_with_suppliers == 1) {
+  supplier_union <- all_supplier_sets[[1]]
+  supplier_intersection <- all_supplier_sets[[1]]
+} else {
+  supplier_union <- character(0)
+  supplier_intersection <- character(0)
+}
+
+cat("Suppliers in all folds (intersection):", length(supplier_intersection), "\n")
+cat("Suppliers in any fold (union):", length(supplier_union), "\n")
+
+# Pairwise Jaccard matrix
+jaccard_matrix <- matrix(NA_real_, nrow = S, ncol = S,
+                          dimnames = list(all_sectors, all_sectors))
+for (i in seq_len(S)) {
+  for (j in seq_len(S)) {
+    si <- supplier_lists[[i]]
+    sj <- supplier_lists[[j]]
+    union_ij <- length(union(si, sj))
+    if (union_ij > 0) {
+      jaccard_matrix[i, j] <- length(intersect(si, sj)) / union_ij
+    } else {
+      jaccard_matrix[i, j] <- NA_real_
+    }
+  }
+}
+
+# Top-10 overlap (by |coef|, averaged across all fold pairs)
+top10_overlaps <- c()
+for (i in seq_len(S - 1)) {
+  for (j in (i + 1):S) {
+    top_i <- head(supplier_coefs[[i]]$vat_i_ano, 10)
+    top_j <- head(supplier_coefs[[j]]$vat_i_ano, 10)
+    if (length(top_i) > 0 && length(top_j) > 0) {
+      top10_overlaps <- c(top10_overlaps,
+                          length(intersect(top_i, top_j)) / length(union(top_i, top_j)))
+    }
+  }
+}
+top10_jaccard_avg <- if (length(top10_overlaps) > 0) mean(top10_overlaps) else NA_real_
+
+cat("Average top-10 Jaccard across fold pairs:", round(top10_jaccard_avg, 3), "\n")
+
+loso_supplier_overlap <- list(
+  n_in_all_folds    = length(supplier_intersection),
+  n_in_any_fold     = length(supplier_union),
+  jaccard_matrix    = jaccard_matrix,
+  top10_jaccard_avg = top10_jaccard_avg
+)
+
+
+# =============================================================================
+# STEP 10: Print diagnostics
+# =============================================================================
+cat("\n-- Fold diagnostics --\n")
+print(loso_fold_diagnostics[, c("fold_k", "held_out_sector", "n_test_firms",
+                                 "n_selected_pos", "cv_rmse",
+                                 "share_test_firms_proxy_gt0",
+                                 "cor_proxy_y", "auc_emit")])
+
+
+# =============================================================================
+# STEP 11: Save
 # =============================================================================
 OUT_PATH <- file.path(PROC_DATA, "loso_proxy.RData")
-save(loso_proxy_panel, loso_sector_map, loso_fold_diagnostics, syt,
+save(loso_proxy_panel, loso_sector_map, loso_fold_diagnostics,
+     loso_supplier_overlap, syt,
      file = OUT_PATH)
 
-cat("\n══════════════════════════════════════════════\n")
+cat("\n==============================================\n")
 cat("Saved to:", OUT_PATH, "\n")
-cat("  loso_proxy_panel:      ", nrow(loso_proxy_panel), "rows\n")
-cat("  loso_sector_map:       ", nrow(loso_sector_map), "rows\n")
-cat("  loso_fold_diagnostics: ", nrow(loso_fold_diagnostics), "rows\n")
-cat("  syt:                   ", nrow(syt), "rows\n")
-cat("══════════════════════════════════════════════\n")
+cat("  loso_proxy_panel:       ", nrow(loso_proxy_panel), "rows\n")
+cat("  loso_sector_map:        ", nrow(loso_sector_map), "rows\n")
+cat("  loso_fold_diagnostics:  ", nrow(loso_fold_diagnostics), "rows\n")
+cat("  loso_supplier_overlap:   list with", length(loso_supplier_overlap), "elements\n")
+cat("  syt:                    ", nrow(syt), "rows\n")
+cat("==============================================\n")
+
+# Clean up parallel backend
+if (USE_PARALLEL) {
+  doParallel::stopImplicitCluster()
+  cat("Parallel backend stopped.\n")
+}
