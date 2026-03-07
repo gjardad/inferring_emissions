@@ -123,7 +123,7 @@ loso_sector_map <- loso_sector_map %>%
   left_join(sector_fy, by = c("nace2d" = "primary_nace2d"))
 
 cat("\n-- Sector summary --\n")
-print(loso_sector_map, n = S)
+print(loso_sector_map)
 
 lhs <- lhs %>%
   left_join(loso_sector_map %>% select(nace2d, fold_k),

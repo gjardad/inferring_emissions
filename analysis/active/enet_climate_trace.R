@@ -98,8 +98,23 @@ ct_dir <- file.path(RAW_DATA, "Climate TRACE", "BEL", "DATA")
 ct_files <- list.files(ct_dir, pattern = "\\.csv$", recursive = TRUE, full.names = TRUE)
 cat("Found", length(ct_files), "CT CSV files\n")
 
+# Source-level files have start_time instead of year
+needed_cols <- c("source_id", "source_name", "lat", "lon", "start_time", "gas",
+                  "emissions_quantity")
 ct_raw <- lapply(ct_files, function(f) {
-  tryCatch(read.csv(f, stringsAsFactors = FALSE), error = function(e) NULL)
+  tryCatch({
+    df <- read.csv(f, stringsAsFactors = FALSE)
+    # Keep only source-level files with all needed columns
+    if (!all(needed_cols %in% names(df))) return(NULL)
+    df <- df[, needed_cols, drop = FALSE]
+    df$emissions_quantity <- as.numeric(df$emissions_quantity)
+    df$lat  <- as.numeric(df$lat)
+    df$lon  <- as.numeric(df$lon)
+    # Extract year from start_time (format: "YYYY-MM-DD ...")
+    df$year <- as.integer(substr(df$start_time, 1, 4))
+    df$start_time <- NULL
+    df
+  }, error = function(e) NULL)
 })
 ct_raw <- bind_rows(ct_raw[!sapply(ct_raw, is.null)])
 cat("CT raw rows:", nrow(ct_raw), "\n")
@@ -160,7 +175,8 @@ bigram_jaccard <- function(a, b) {
 
 # Match each CT source to nearest EUTL installation
 ct_sources <- ct %>%
-  distinct(source_id, source_name, lat, lon)
+  distinct(source_id, source_name, lat, lon) %>%
+  filter(!is.na(lat), !is.na(lon))
 
 matches <- list()
 for (i in seq_len(nrow(ct_sources))) {
