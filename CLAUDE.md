@@ -114,6 +114,7 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 | 15 | Sectoral gains Row 2: firm-fold CV | pred. perf. 4.7 | needs firm-fold CV proxy | RMD | firm-fold CV proxy not built |
 | 16 | Classifier battery (GAM, XGBoost, RF) | appendix | `fit_extensive_margin.R` (re-run with fold-specific proxy) | local 1 | stale results, needs re-run |
 | 17 | EN hyperparameter sensitivity (alpha grid) | appendix | `alpha_sensitivity.R` | RMD | not yet run |
+| 18 | **Tabachova 2×2 comparison** (NACE-based vs EN supplier ID × proportional vs hybrid allocation) | pred. perf. 4.5 | `figures_tables/table_hungarian_comparison.R` | local 1 | `proxy_tabachova` exists in training_sample; script not yet run |
 
 ### Pending pipeline: proxy R² and alternative CV schemes
 

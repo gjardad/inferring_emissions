@@ -454,6 +454,576 @@ surveys do not exist.
 
 ---
 
+## Climate TRACE Methodology
+
+Climate TRACE is a global coalition that provides independent, facility-level
+greenhouse gas emissions estimates using satellite data and other remote sensing
+inputs. All data is freely available (CC-BY 4.0) at climatetrace.org. This section
+documents their methodology by sector, based on their published methodology papers.
+
+The emissions described here are bottom-up engineering estimates — they do not use
+econometric models, financial data, or transaction data. The general approach is:
+identify facilities from asset databases, estimate production activity (often via
+satellite signals), and apply route- or technology-specific emissions factors to
+convert production into CO2 estimates.
+
+**Relevance to our project:** We use Climate TRACE facility-level emissions as an
+alternative training signal in an exploratory exercise (step C in the pipeline):
+train an elastic net on CT emissions for facilities where CT provides estimates,
+then predict emissions for non-CT firms. The methodology documentation helps us
+understand the measurement error in these labels — CT estimates are noisy, and the
+noise structure varies by sector and production technology.
+
+### Iron & Steel Manufacturing
+
+**Source:** Crane, V. and Ebri, G. (2025). *Manufacturing and Industrial Processes
+sector - Iron & Steel Manufacturing Emissions*. TransitionZero, UK, Climate TRACE
+Emissions Inventory. Version November 2025.
+
+**Scope:** Monthly CO2 emissions for 890 operating steel plants in 81 countries,
+from January 2021 onward. Covers direct emissions only (CO2); CH4 and N2O are not
+modeled.
+
+**Method — two-track production estimation:**
+
+1. *Satellite-monitored (BF/BOF plants).* Blast furnace / basic oxygen furnace
+   plants operate at >1,200°C. Satellites (Sentinel-2 at 10-60m resolution,
+   Landsat-8/9 at 30m) capture thermal infrared imagery of known plant locations.
+   A Thermal Anomaly Index (TAI) — the ratio of the difference between two SWIR
+   bands to a NIR band — identifies "hotspots" (pixels dramatically hotter than
+   surroundings) corresponding to active blast furnaces, coke ovens, sinter plants,
+   and BOFs. Hotspot intensity is calibrated against monthly country-level production
+   data (from the World Steel Association) to derive capacity factors, which are
+   multiplied by plant capacity to estimate monthly production. The TAI formulas:
+   - Sentinel-2A/B: TAI = (B12 − B11) / B8a
+   - Landsat-8/9: TAI = (B7 − B6) / B5
+
+   The two satellite collections are harmonized via NASA band-pass adjustments.
+   Partial images (<80% coverage) and cloudy images (>20% clouds) are excluded.
+   All processing is done in Google Earth Engine.
+
+2. *Capacity-based (DRI-EAF and EAF plants).* Electric arc furnaces do not
+   produce thermal signatures detectable from space. For these plants, production
+   is estimated by applying a regional average utilization rate (from historical
+   national production and aggregated capacity) to each plant's known capacity.
+
+**Emissions factors (Table 1 from the paper):**
+
+| Route   | Direct EF (tCO2/t-steel) | Electricity Use (MWh/t-steel) | Process EF (tCO2/t-steel) |
+|---------|--------------------------|-------------------------------|---------------------------|
+| BF/BOF  | 1.9                      | 0.83                          | 1.71                      |
+| DRI-EAF | 1.0                      | 0.87                          | 0.62                      |
+| EAF     | 0.08                     | 0.87                          | 0.08                      |
+
+For EAF plants, the effective emission factor is a weighted average over feedstock
+composition (scrap, DRI, pig iron), using GEM data on each facility's feedstock
+mix. Indirect emissions use regional grid intensity from Ember. Multi-route plants
+use capacity-weighted emission factors.
+
+**Coverage:** Asset-level estimates account for 83% (3.0 Gt-CO2) of total sector
+emissions (2024 data). Satellite-monitored facilities represent ~41% of sources but
+~87% of total asset-level emissions.
+
+**Data inputs:**
+- Steel facility inventory: Global Iron and Steel Tracker (GIST) from Global
+  Energy Monitor — 1,205 facilities, 3.5 billion tonnes capacity, 89 countries.
+  334 BF/BOF plants have hand-drawn polygons for sub-asset identification.
+- Satellite imagery: Sentinel-2A/B (since 2015/2017), Landsat-8/9 (since
+  2013/2021), processed via Google Earth Engine.
+- National production: World Steel Association (monthly).
+- Emissions factors: IPCC (2006), WSA (2024b), IEA (2020), MPP (2024).
+- Grid emissions intensity: Ember (2025).
+
+**Reported uncertainty:**
+- Production estimates: ±8–15%
+- CO2 emissions factor: ±10–12% (based on IPCC)
+- CO2 emissions: ±13–20%
+- Total CO2e (100yr GWP): ±20%
+
+**Limitations relevant to our project:**
+1. Satellite monitoring only works for BF/BOF plants; EAF estimates are much
+   cruder (national-average utilization rates applied uniformly).
+2. Temporal coverage starts January 2021 — only 2021-2022 overlap with our
+   training sample.
+3. Uncertainty of ±13-20% means CT emissions are noisy labels for our EN
+   exercise.
+4. The methodology requires knowing plant locations from a pre-existing inventory
+   — it does not discover emitters.
+5. Belgium is not among the top steel-producing countries, but ArcelorMittal Gent
+   (BF/BOF) is the major Belgian installation and should be covered.
+
+### Cement Manufacturing
+
+**Source:** Crane, V. and Ebri, G. (2025). *Manufacturing and Industrial Processes
+sector – Cement Manufacturing Emissions*. TransitionZero, UK, Climate TRACE
+Emissions Inventory. Version November 2025.
+
+**Scope:** Monthly CO2 emissions for clinker-producing cement plants globally, from
+January 2021 onward. Covers direct emissions only (CO2); CH4 and N2O not modeled.
+2,241 integrated cement plants covering 138 countries. Grinding-only facilities
+(~25% of global cement capacity) are excluded — their emissions are attributed to
+the clinker-producing plant.
+
+**Key difference from steel:** The majority of cement emissions are *process-related*
+(limestone calcination: CaCO3 → CaO + CO2), not from fuel combustion. Calcination
+accounts for ~0.42 tCO2/t-cement, while fuel combustion adds ~0.25 tCO2/t-cement.
+This means our B2B fuel-supply proxy would only capture the fuel combustion
+component (~40% of total cement emissions), missing the dominant process component.
+
+**Method — same two-track structure as steel:**
+
+1. *Satellite-monitored.* Clinkerization occurs at ~1,400°C, producing detectable
+   thermal signatures. Same TAI methodology as steel (Sentinel-2 + Landsat-8/9),
+   with hand-drawn polygons around rotary kilns. Hotspot intensity calibrated
+   against annual country-level production data (from USGS). As of December 2024,
+   85% of total direct emissions derived from satellite data. Satellite-monitored
+   assets represent 93% of integrated plants and 93% of asset-level emissions.
+
+2. *Capacity-based.* Plants without usable satellite signal (small kilns, indoor
+   kilns, low signal-to-noise) use regional/global average utilization rates.
+
+**Emissions factors — asset-specific, based on multiple characteristics:**
+- Process emissions: global clinker EF of 0.507 tCO2/t-clinker (IPCC), adjusted
+  by clinker-to-cement ratio which varies by cement type (95% for Portland, 71%
+  for blended, 50% for blast-furnace slag cement) and by region (China reduced
+  by up to 15%).
+- Fuel emissions: vary by production route — dry (0.32 tCO2/t-clinker), semi-dry
+  (0.39), wet (0.59). White cement requires 70% more energy than grey.
+- Adjustments for: alternative fuels (35% fuel emissions reduction), CCS (70%
+  capture rate on process emissions), clinker substitution with GGBS or LC3.
+
+**Coverage:** Asset-level estimates account for 68% (1.51 Gt) of the sector's direct
+emissions (2023 data).
+
+**Reported uncertainty:**
+- Production estimates: ±8–15%
+- CO2 emissions factor: ±10% (based on IPCC)
+- CO2 emissions: ±13–20%
+
+**Limitations relevant to our project:**
+1. Cement emissions are dominated by process emissions from calcination (~60%),
+   which our fuel-supply proxy cannot capture. Only the fuel combustion component
+   (~40%) relates to fossil fuel purchases.
+2. Same temporal limitation: January 2021 onward.
+3. Belgium has several cement plants (Holcim, CBR/Heidelberg Materials) in the
+   EUTL — these should be covered by CT.
+
+### Chemicals and Pulp & Paper
+
+**Source:** Crane, V., Ebri, G., Galib, K.M., and Underwood, C. (2025).
+*Manufacturing and Industrial Processes sector – Chemicals and Pulp (Paper)
+Emissions*. TransitionZero, UK, Climate TRACE Emissions Inventory. Version
+November 2025.
+
+**Scope:** Annual CO2 emissions for four sub-sectors: ammonia (258 sources in 41
+countries), methanol (140 sources in 31 countries), soda ash (61 sources in 34
+countries), and pulp & paper (354 assets in 49 countries). Combined, these
+produce ~2.5% of global CO2: ammonia ~350 Mt, methanol ~138 Mt, pulp & paper
+~130 Mt, soda ash ~26 Mt.
+
+**Key difference from steel and cement: NO satellite monitoring.** There is no
+thermal anomaly detection for these sectors. Production is estimated entirely
+through capacity-based disaggregation of national production totals.
+
+**Method — capacity-based only:**
+
+1. *Asset inventory.* No comprehensive global database existed, so CT developed a
+   large language model to collect asset metadata from online sources, supplemented
+   by SFI's Global Pulp and Paper Mill Database and Industrial Info Resources for
+   residual capacities.
+2. *Production estimation.* For each facility, compute its share of national
+   capacity, then multiply by national production (from FAO for pulp/paper, USGS
+   for ammonia/soda ash; methanol estimated from literature). Where asset
+   capacities are missing, various fallback methods are used (equal distribution,
+   global average utilization rates).
+3. *Emissions = production × emissions factor.* Factors sourced per sub-sector:
+   ammonia from Climatiq (country-specific, Tier 2), methanol from Methanol
+   Institute, soda ash from US EPA, pulp & paper from Tomberlin et al. (2020).
+
+**Uncertainty — substantially higher than steel/cement:**
+- Activity uncertainty: 0.12–0.30 depending on capacity data source (LLM-derived
+  capacities have uncertainty of 0.20–0.30, i.e., "very low confidence").
+- Emissions factor uncertainty: 0.15 (Tier 1 global factor) to 0.10–0.12 (Tier 2
+  country-specific, ammonia only).
+- Combined CO2 uncertainty: propagated as σ = √(σ_activity² + σ_EF²).
+- Confidence levels: >0.25 = very low, 0.15–0.25 = low, <0.15 = medium.
+
+**Limitations relevant to our project:**
+1. No satellite signal — all estimates are proportional allocation of national
+   totals based on capacity shares. This means CT cannot capture within-country
+   variation in utilization rates across plants.
+2. Asset inventory built partly by LLM web scraping — coverage and accuracy
+   of plant capacities is uncertain, especially for chemicals.
+3. Belgium hosts a major chemical cluster in Antwerp (BASF, INEOS, Solvay)
+   with substantial EUTL-regulated emissions. CT's capacity-based approach
+   for chemicals is much cruder than the satellite-based methods for steel
+   and cement — these Belgian chemical plants' CT estimates should be treated
+   with caution.
+4. Soda ash is particularly relevant: Solvay (headquartered in Belgium) is a
+   major global producer and has developed the "e.Solvay" low-emission process.
+
+### Aluminum Production
+
+**Source:** Crane, V., Ebri, G., Underwood, C., and Heal, J. (2025).
+*Manufacturing and Industrial Processes sector – Aluminum Production Emissions*.
+TransitionZero, UK, Climate TRACE Emissions Inventory. Version November 2025.
+
+**Scope:** Monthly CO2 emissions for primary aluminum production (smelting and
+alumina refining), from January 2021 onward. 242 assets across 46 countries.
+Secondary production (recycling) excluded — accounts for <2% of sector emissions.
+Also produces PFC emissions (CF4, C2F6) but these are not the focus.
+
+**Key difference from steel and cement: NO satellite monitoring.** Like chemicals,
+production is estimated purely through capacity-based disaggregation of regional
+production data (from the International Aluminium Institute). Smelter asset
+database from Light Metal Age; alumina refinery data partly from LLM web scraping
+with residual capacities from Industrial Info Resources.
+
+**Method — capacity-based only:**
+- Regional (not national) production data from IAI, disaggregated to facilities
+  by their share of regional capacity: P_A = (C_A / (C_A + C_B)) × P_regional.
+
+**Emissions components:**
+- *Electrolysis process emissions:* 2.025 tCO2/t-Al (global factor from Ecofys).
+- *Anode production:* 0.447 tCO2/t-Al (pre-bake process; same factor applied to
+  Søderberg plants, which are ~4% of global production).
+- *Alumina refining (Bayer process):* Fossil fuel combustion for heat. Regional
+  energy intensity and fuel mix from IAI, fuel-specific EFs from EIA.
+- *Indirect emissions (electricity for smelting):* By far the largest component.
+  Regional electricity use from IAI × local grid intensity from Ember. Share of
+  indirect emissions: ~80% in India, ~76% in China, ~53% in Canada (depends on
+  grid carbon intensity — hydropower-heavy regions like Canada/Norway much lower).
+
+**Coverage:** Asset-level estimates account for ~63.8% of the sector's direct
+emissions (~400 MtCO2, 2024). Shortfall mainly from low refinery coverage (~50%).
+
+**Limitations relevant to our project:**
+1. No satellite signal — purely capacity-based. Assumes all assets in a region
+   operate at the same utilization rate.
+2. Aluminum is dominated by indirect (electricity) emissions, not fuel combustion.
+   Our B2B fuel-supply proxy would miss the dominant emission source.
+3. Belgium is not a significant primary aluminum producer (no smelters in the
+   top-10 countries), though some alumina processing may exist.
+
+### Petrochemical (Ethylene Steam Cracker)
+
+**Citation:** RMI (2026). *Manufacturing and Industrial Processes sector — Petrochemical
+Ethylene Steam Cracker Emissions*. Climate TRACE Emissions Inventory. Version February 2026.
+
+**Note:** This methodology is by RMI, not TransitionZero (which covers steel, cement,
+chemicals, pulp & paper, and aluminum). Different authoring team and approach.
+
+**Scope:** Annual CO2 and CH4 emissions from ethylene steam cracker facilities worldwide,
+from January 2021 onward. Covers 351 assets across 53 countries. Steam cracking is the
+dominant process for producing ethylene, propylene, and other olefins — key building blocks
+for plastics, packaging, and synthetic fibers.
+
+**No satellite monitoring.** Production is estimated from capacity × utilization rate ×
+regional emissions factors. No thermal or atmospheric satellite signal is used.
+
+**Method — capacity × utilization × emissions factor:**
+- Plant-level capacity from ICIS and GEM databases.
+- National utilization rates from national statistics or, where unavailable, regional
+  averages. Utilization rates vary 60–90% depending on market conditions.
+- Emissions = capacity × utilization × regional emissions factor × flaring factor (1.075).
+- The flaring factor accounts for routine flaring during cracker operation.
+
+**Feedstock matters enormously for emissions intensity:**
+- Heavier feeds (naphtha, gas oil) require more energy to crack → higher emissions.
+- Lighter feeds (ethane, LPG) crack more easily → lower emissions.
+- Regional feed mixes vary dramatically: US = ethane-dominant; EU = ~70% naphtha;
+  China = ~87% naphtha; Middle East = mostly ethane/LPG.
+- Emissions factors are computed regionally based on the weighted-average feedstock mix.
+
+**Emissions components:**
+- *Fuel combustion CO2:* Fossil fuel burned in cracker furnaces. Regional EFs from
+  IEA/IPCC, adjusted for feedstock mix.
+- *Process CO2:* From cracking reactions themselves.
+- *CH4 emissions:* Included (unlike most other CT manufacturing methodologies).
+- *Indirect emissions:* Electricity consumption × grid intensity from Ember.
+
+**Data confidence scoring:** Uses national Corruption Perception Index (CPI) as a proxy
+for statistical data quality. Countries with low CPI get lower confidence ratings,
+reflecting uncertainty about reported utilization rates and capacity data.
+
+**Coverage:** Asset-level estimates account for ~92% of total sector emissions. High
+coverage because steam crackers are large, well-documented industrial assets.
+
+**Limitations relevant to our project:**
+1. No satellite signal — purely capacity-based with regional utilization rates applied
+   uniformly to all plants in a country.
+2. Belgium is highly relevant: the Antwerp petrochemical cluster is one of the largest
+   in Europe (BASF, INEOS, TotalEnergies, ExxonMobil crackers). These facilities are
+   major emitters in the EU ETS. CT estimates for Belgian crackers use the EU naphtha-
+   heavy feedstock mix.
+3. CH4 is modeled here (unlike steel and cement), which expands coverage beyond CO2-only.
+4. The feedstock-dependence of emissions means that even knowing production volume is
+   insufficient — the input mix matters. Our B2B proxy could potentially capture
+   feedstock purchases (naphtha vs ethane suppliers), though we currently don't
+   distinguish by product type in B2B data.
+
+### Electricity Generation
+
+**Citation:** Freeman, J., Kargar, A.R., Couture, H.D., Alvara, M., Christian, P., Doctor, Z.,
+Jeyaratnam, J., Lewis, J., Koenig, H., Nakano, T., Davitt, A., Lewis, C., and McCormick, G.
+(2026). *Power sector — Emissions from Electricity Generation*. WattTime / Pixel Scientia Labs /
+GEM / Climate TRACE. Version March 2026. Companion paper: Couture et al. (2024),
+*Estimating Carbon Dioxide Emissions from Power Plant Water Vapor Plumes Using Satellite
+Imagery and Machine Learning*.
+
+**Note:** This methodology is by WattTime (not TransitionZero). It is the most sophisticated
+satellite-based methodology in the CT portfolio, using ML on visible-spectrum water vapor
+plumes rather than thermal anomaly indices.
+
+**Scope:** Monthly CO2, SO2, NOx, and PM2.5 emissions from combustible (thermal) power
+plants globally — fossil fuel, waste, and biomass. Over 9,000 individual assets representing
+96% of total power plant GHG emissions. Coverage from January 2015 to present with a
+60-day lag. Biomass CO2 is tracked separately to avoid double-counting with forestry sector.
+
+**Three methods for estimating electricity generation:**
+
+1. **Reported electricity generation data** (new in 2025): Where available and validated,
+   actual reported generation from grid operators is used directly. Sources: ENTSO-E
+   (Europe), CAMPD (US), ONS (Brazil), NPP (India), NEM (Australia). Data validated
+   at plant-month level for completeness, realistic values, and consistency. Higher
+   confidence assigned to these estimates.
+
+2. **Baseline method:** For plants without reported data or satellite signal. Synthesizes
+   unit-level capacity, fuel, and prime mover information with EIA and Ember country-
+   level generation data to compute annual fuel-specific capacity factors per country.
+   Same capacity factor applied to all plants of a given fuel type in a country. Higher
+   uncertainty but universally applicable.
+
+3. **Remote Sensing + Machine Learning (RS+ML):** The distinctive CT contribution.
+   Satellite imagery from Landsat 8 C2, Sentinel-2H, and PlanetScope PSScene is used
+   to detect **water vapor plumes** — visible proxy signals from:
+   - Exhaust stacks (smoke plumes)
+   - Flue gas desulfurization (FGD) stacks (common at coal plants)
+   - Natural draft cooling towers (large hyperbolic structures, mainly coal)
+   - Mechanical draft cooling towers (fan-like rooftop structures, coal and gas; added 2024)
+
+   CNN models are trained separately for each structure type, predicting both an "on/off"
+   score and a capacity factor. Only ~4% of plants worldwide have detectable proxy
+   structures, but these account for ~43% of non-biomass combustion CO2 (2015–2024).
+   Mechanical draft towers extend coverage to gas plants but produce fainter plumes,
+   requiring temperature/humidity filtering for usable images.
+
+**Final generation estimate:** Ensemble of RS+ML proxy signal estimates (where available)
+and country-/fuel-/prime-mover-specific baseline averages.
+
+**Emissions estimation:** Plant-specific emissions factors based on fuel type, boiler type,
+and pollution control technology. EFs from EMEP/EEA guidebook and EIA Electric Power
+Annual. Pollution control efficiency from EPA AP-42. For non-GHG pollutants (SO2, NOx,
+PM2.5), absence of pollution control information → conservative assumption (no controls).
+
+**Monthly resolution:** Generation scaled using estimated monthly electricity demand
+(synthetic demand from Mattsson et al. + TransitionZero load profiles), not simply
+dividing annual by 12. Monthly data published with 60-day lag since March 2025.
+
+**Limitations relevant to our project:**
+1. The RS+ML approach detects water vapor plumes in visible-spectrum imagery — a
+   fundamentally different signal from the thermal anomaly index used for steel/cement.
+   It works for large coal plants with cooling towers but misses most gas plants and all
+   smaller facilities.
+2. For Europe (including Belgium), ENTSO-E reported generation data is now used
+   directly where validated, making CT estimates quite accurate for large Belgian thermal
+   plants. Belgium's electricity mix is dominated by nuclear and gas; coal has been phased
+   out (last coal plant closed in 2016).
+3. Power generation is NACE 35.11 — a sector well-covered by the EU ETS. Belgian gas
+   plants (Engie, Luminus) are EU ETS regulated, so CT estimates overlap with our
+   training data rather than filling gaps.
+
+### Heat Plants
+
+**Citation:** Freeman, J., Sridhar, L., and Alvara, M. (2026). *Power sector — Emissions from
+Heat Plants*. WattTime / Climate TRACE. Version March 2026.
+
+**The simplest CT methodology.** Country-level only — no asset-level estimates, no satellite
+monitoring, no facility database. Purely a top-down accounting exercise.
+
+**Scope:** CO2 emissions from district heating plants (not CHP, which is under electricity).
+Heat plants combust fossil fuels to generate heat distributed via pipe networks. ~0.12% of
+global emissions; significant in Central Asia and Eastern Europe. Global total: 91.4 MtCO2
+(2024) from 37 countries. UNFCCC sector 1.A.1.a.iii. Coverage: January 2015 to present.
+
+**Method — IPCC Tier 1:**
+- Emissions = Emission Factor (by fuel type, t gas/TJ) × Fuel Consumption (TJ).
+- Fuel consumption data from IEA World Energy Balances (2024), by fuel type and country.
+- Default emission factors from IPCC Emission Factors Database (Fuel Combustion 1.A).
+- Carbon oxidation factor assumed = 1 for CO2.
+- Calculated at country level annually, then spatially disaggregated to county/district level
+  and temporally disaggregated to monthly using separate CT post-processing methods.
+
+**Validation:** Compared against UNFCCC-reported heat plant emissions for 14 Annex 1
+countries. CT estimates ~30–34 MtCO2 vs UNFCCC ~35 MtCO2 — reasonable agreement.
+Notable gap for Switzerland (CT < half of reported). Russia is conspicuously absent from
+both IEA and UNFCCC heat-only data despite having significant district heating.
+
+**Limitations relevant to our project:**
+1. No asset-level data — country-level only, spatially disaggregated. Cannot be linked to
+   individual firms or installations.
+2. Belgium has limited district heating infrastructure compared to Nordic/Eastern European
+   countries. Likely negligible for our exercise.
+3. CHP plants (which are common in Belgian industry) are classified under electricity
+   generation, not heat plants.
+
+### Oil and Gas Refining
+
+**Citation:** Wang, J., Fallurin, J., Peltier, M., Conway, T.J., and Gordon, D. (2025).
+*Fossil Fuel Operations Sector — Refining Emissions*. RMI / Climate TRACE. Version
+November 2025.
+
+**Note:** By RMI (same team as petrochemical). Uses the PRELIM process model — a detailed
+engineering simulation of refinery operations, not satellite-based.
+
+**Scope:** Scope 1 (on-site) CO2, CH4, N2O, and CO2e emissions from oil refineries globally.
+Covers the refining process within plant gate boundaries. Excludes transportation of crude
+to the refinery and products to end-use. Oil refining alone represents >3% of global
+anthropogenic emissions. Global refining capacity coverage: ~99%. Quarterly emissions
+estimates at the asset level.
+
+**Method — PRELIM process model (v1.6):**
+The Petroleum Refinery Life Cycle Emissions Model (PRELIM), developed at the University
+of Calgary (Bergerson, 2022), simulates emissions per barrel of crude refined. Four key
+inputs determine asset-level emissions:
+
+1. **Crude assays:** Library of 600+ crude oils with chemical properties (API gravity,
+   sulfur content, etc.). Representative assays selected per refinery based on location
+   and configuration. Heavier/sourer crudes → more energy-intensive processing → higher
+   emissions.
+
+2. **Refinery configuration:** Each refinery classified as hydroskimming (light crude,
+   simple), medium conversion, or deep conversion (heavy crude, complex). More complex
+   refineries have more process units and higher emissions per barrel. US refineries have
+   8 finer configuration categories.
+
+3. **Country-level crude slate:** Estimated from country's oil production, imports (by
+   origin, from JODI/OEC), and exports. Weighted-average emissions intensity computed
+   from the crude origins' assay-specific PRELIM outputs.
+
+4. **Capacity and utilization:** Asset-level capacity from EIA (US), GEO, company/
+   government websites. Utilization rates from JODI (monthly where available), Energy
+   Institute (annual fallback). Chinese independent refineries ("teapots") tracked
+   separately due to different utilization patterns.
+
+**Emissions formula (Eq. 1):**
+Emissions = Capacity × Capacity factor × Emissions Intensity from PRELIM
+
+Emissions aggregated quarterly, then averaged to monthly estimates.
+
+**Emission sources within a refinery:** Heat, steam, hydrogen production (SMR/CNR),
+FCC catalyst regeneration, flaring of refinery fuel gas, subprocess emissions, support
+services, managed waste releases.
+
+**Limitations relevant to our project:**
+1. No satellite monitoring — purely engineering model + capacity/utilization data.
+   All variation across refineries comes from configuration, crude slate, and utilization.
+2. Belgium is highly relevant: NACE 19.20 (petroleum refining) is one of our two
+   zero-emission reference sectors. Belgium has major refineries — TotalEnergies Antwerp,
+   ExxonMobil Antwerp — which are EU ETS regulated. CT's PRELIM-based estimates for
+   these facilities can be compared against EUTL verified emissions.
+3. The crude-slate methodology is interesting: Belgian refineries process a mix of
+   imported crudes (Belgium produces no oil), so CT infers the crude mix from Belgium's
+   import patterns via JODI/OEC data. This is analogous to our B2B approach — inferring
+   emissions from input procurement patterns.
+
+### Oil and Gas Production and Transport
+
+**Citation:** Schmeisser, L., Chaney, C., Tecza, A., Stanger, J., Bylsma, S., DeLang, M.,
+Gauthier, K., and Gordon, D. (2025). *Fossil Fuel Operations Sector — Oil and Gas Production
+and Transport Emissions*. RMI / Climate TRACE. Version November 2025.
+
+**Note:** By RMI. Uses the OPGEE model (Oil Production Greenhouse Gas Emissions Estimator),
+developed by California Air Resources Board and Stanford University (Brandt et al., 2021).
+This is the upstream counterpart to PRELIM (refining). Together with PRELIM and OPEM, they
+form the OCI+ (Oil Climate Index plus Gas) tool.
+
+**Scope:** CO2 and CH4 emissions from upstream oil and gas operations — drilling, extraction,
+pre-processing, and transport of crude oil and natural gas to the refinery gate or point of
+end-use consumption. Nearly 3,500 individual oil and gas fields globally (>99% of global
+production), aggregated to ~640 grouped assets across 97 countries. Methane is a major focus:
+super-emitter events (<5% of sources) can account for >50% of total emissions.
+
+**Method — OPGEE lifecycle engineering model:**
+OPGEE models emissions at the individual field level using 100+ emission source modules
+across all production stages. Key emission sources:
+- **Flaring:** Combustion of unwanted gas at extraction/processing sites (CO2 + CH4).
+- **Venting:** Leaking of gas to depressurize sites (predominantly CH4).
+- **Fugitive losses:** Equipment leaks during production, compression, transmission.
+- **Super-emitter events:** Large methane leaks (≥25 kg/hr), stochastic and hard to predict.
+- **On-site fuel usage:** Combustion for powering drilling rigs, vehicles, equipment.
+- **Biogenic and embodied emissions:** Site preparation, materials used.
+
+**Key model inputs:** Field age, field depth, gas-to-oil ratio, production volumes, API gravity,
+gas composition, injection characteristics, production methods, transport distances.
+
+**Satellite data integration — two types:**
+1. **VIIRS nightfire flaring data** (NOAA, 750m resolution, daily): Detects gas flares at
+   oil fields via shortwave/infrared bands (M10, M11 at 1.6 and 2.2 μm). Flares
+   distinguished from wildfires by temperature (>1,000K) and persistence. Flaring-oil
+   ratio (FOR) computed per field and fed into OPGEE. 90% of flaring occurs at upstream
+   production sites.
+
+2. **Methane satellite detections** (TROPOMI on Sentinel-5P, aircraft surveys): Used to
+   adjust OPGEE's default fugitive methane loss rates for specific high-emitting regions
+   (Permian Basin TX/NM, Algeria's Hassi R'Mel, Turkmenistan's Amudarya Basin, Russia).
+   Calibrated against Cusworth et al. (2021) and Lauvaux et al. (2022) findings.
+
+**Limitations relevant to our project:**
+1. Belgium has no significant oil or gas production — this sector is irrelevant for
+   Belgian firm-level emissions.
+2. However, the methodology is interesting for its satellite-based methane detection,
+   which represents a different use of remote sensing than the thermal/visible signals
+   used for steel, cement, and power plants.
+3. The OPGEE model is open-source and peer-reviewed, unlike some proprietary CT inputs.
+
+### Coal Mining
+
+**Citation:** Lewis, C., Tate, R.D., Mei, D.L., and Piscopo, A. (2025). *Fossil Fuel Operations
+Sector — Coal Mining Emissions*. WattTime / Global Energy Monitor / Climate TRACE. Version
+November 2025.
+
+**Scope:** Fugitive methane (CH4) emissions from active coal mines globally. 4,363 mines,
+2015–2023. UNFCCC sector 1.B.1.a (Coal Mining and Handling). Total 2023 emissions:
+~1,873 MtCO2e. **Only CH4 is estimated in the 2025 release** — CO2 from on-site combustion
+and emissions from abandoned mines are not yet included.
+
+**No satellite monitoring.** Purely production × emissions factor approach using GEM's
+Global Coal Mine Tracker database.
+
+**Method:**
+CH4 Emissions = CH4 Emissions Factor × Production (Eq. 4)
+
+Where the emissions factor has two components:
+1. **Methane gas content** (m³ CH4 per tonne of coal): Depends on mining depth and coal
+   rank (anthracite, bituminous, subbituminous). Estimated by GEM using the approach from
+   *Global methane emissions from coal mining to continue growing even with declining
+   coal production*. Converted from m³ to tonnes using EPA factor (÷ 1.4703e3).
+
+2. **Emissions factor coefficient** (multiplier = 1.65, average of 1.3–2.0 range from
+   Ju et al., 2016): Accounts for fugitive CH4 released from adjacent coal seams and
+   pillars beyond the mined coal itself.
+
+**Production data:** From GEM's GCMT. Where only capacity is available, production =
+capacity × capacity factor. Capacity factors from literature: China (regional, stochastic
+model from Ju et al., 2019), US (state-level, EIA), rest of world (global average of
+China + US).
+
+**Coal Mine Methane (CMM) release mechanisms:**
+- *Underground mines:* Dominated by vented emissions — ventilation systems (60%) and
+  drainage systems (25%). Also incomplete combustion (2%), fugitive equipment leaks (5%),
+  post-mining (3%), and outcrops/workings (5%).
+- *Surface mines:* Dominated by fugitive emissions from outcrops/workings (75%) and
+  drainage (15%).
+
+**Limitations relevant to our project:**
+1. Belgium has no active coal mines (last mine closed in 1992). Completely irrelevant
+   for Belgian firm-level emissions.
+2. Only CH4, not CO2. Our project focuses on CO2 from fuel combustion.
+3. No satellite monitoring — the simplest CT methodology alongside heat plants.
+
+---
+
 ## How Our Paper Fits
 
 We bridge strands 1 and 2 using the data infrastructure of strand 3:

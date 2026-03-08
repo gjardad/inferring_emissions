@@ -221,6 +221,90 @@ Items 1, 2, 3, 4 are freely available. The hard part is the atmospheric modeling
 
 ---
 
+## Scope 1 vs network-adjusted emissions: what the comparison reveals
+
+### Core idea
+
+Within a NACE 2-digit sector, firms can differ in how much of the production chain they perform in-house vs. purchase from suppliers. Scope 1 emissions only capture on-site combustion, so a firm that outsources energy-intensive steps appears "clean" even though the same emissions occur at its suppliers' facilities. Network-adjusted emissions — which incorporate upstream emissions flowing through B2B links — can partially correct for this by attributing supplier-side combustion back to the purchasing firm.
+
+Comparing within-sector rankings under scope 1 vs. network-adjusted emissions reveals the extent to which the **organizational boundary** (vertical integration vs. outsourcing) distorts emission rankings. If rank correlation is well below 1 in a sector, it means that make-or-buy decisions — not underlying production technology — are driving scope 1 heterogeneity.
+
+### When it matters and when it doesn't
+
+The comparison is **uninformative** in sectors where the dirty node is internal to the sector regardless of firm structure. Example: cement vs. ready-mix concrete (both NACE 23). Cement producers operate kilns (high scope 1); concrete producers buy cement (low scope 1). But the concrete producers' network-adjusted emissions trace back to the same cement kilns — so both scope 1 and network-adjusted measures identify the cement producers as the high emitters. Network adjustment doesn't change the ranking of who matters.
+
+The comparison is **informative** in sectors where the dirty node is **outside** the sector — i.e., firms purchase carbon-intensive inputs from suppliers in other NACE sectors. In these sectors, scope 1 is uniformly low but firms vary in how much they buy from high-emission upstream suppliers. Network-adjusted emissions reveal within-sector heterogeneity that scope 1 cannot.
+
+### Practical examples
+
+- **Plastics manufacturing (NACE 22):** Own processes (molding, extrusion) are low-temperature and low-emission. The key input is polymer resin from petrochemical producers (NACE 20), where steam cracking of naphtha is extremely energy-intensive. Within NACE 22, firms vary in how much virgin polymer they purchase from Antwerp crackers vs. using recycled plastics. Scope 1 looks similar; network-adjusted emissions diverge.
+
+- **Fabricated metals (NACE 25):** Firms buy steel and aluminum from primary metals producers (NACE 24) and perform cutting, welding, coating — modest energy use. Variation in how much primary metal a firm purchases from blast-furnace steelmakers shows up only in network-adjusted emissions.
+
+- **Paper products (NACE 17):** Non-integrated firms buy pulp from energy-intensive pulp mills. Their scope 1 is low but their upstream exposure is high. Integrated firms (with on-site pulping) have high scope 1 but similar network-adjusted emissions.
+
+### Policy relevance
+
+Scope 1 accounting creates a perverse incentive: firms can reduce reported emissions by outsourcing dirty production steps without reducing actual emissions in the economy. If within-sector rank correlation between scope 1 and network-adjusted emissions is substantially below 1, that is direct evidence of this distortion. The B2B data is uniquely suited to detect it, since it traces purchases to specific suppliers whose emission intensity can be estimated.
+
+---
+
+## Other empirical analyses enabled by inferred emissions + B2B data
+
+### 1. Within-sector heterogeneity in upstream emission exposure
+
+Traditional IO analysis assigns every firm in a sector the same emission intensity. With firm-level B2B data + inferred emissions, we can measure how much firms *within the same sector and size class* vary in their upstream emission exposure. If the dispersion is large, it means sector-level emission factors — which is what most carbon accounting relies on — are a poor approximation of actual firm-level exposure. This is a direct empirical test of whether firm-level data matters over sector-level averages.
+
+### 2. Concentration of emission exposure across suppliers
+
+For each firm, compute a Herfindahl-type index over its suppliers weighted by supplier emission intensity. Do firms spread their sourcing across many low-emission suppliers, or concentrate purchases with a few high-emission ones? This has direct implications for transition risk — firms with concentrated dirty-supplier exposure are more vulnerable to carbon pricing pass-through. The B2B data provides the transaction-level resolution needed to compute this; aggregate IO tables cannot.
+
+### 3. Emission propagation depth
+
+With multi-hop B2B links (supplier's suppliers), ask: how many steps upstream does most of the embodied emission come from? If 90% is captured at depth 1 (direct suppliers), then scope 2/3 approximations based on direct suppliers are adequate. If significant emission mass appears at depth 2 or 3, it means simple upstream accounting misses a lot. This is an empirical question that hasn't been answered at the firm level with actual transaction data — existing estimates rely on sector-level IO tables, which smooth over firm heterogeneity.
+
+---
+
 ## Related paper
 
 Fava (2025), "Training and Testing with Multiple Splits: A Central Limit Theorem for Split-Sample Estimators" (arXiv:2511.04957). Provides a CLT for split-sample estimators under weak conditions. Most relevant for formally testing whether the B2B proxy significantly improves predictions (model comparison). Reading notes in `articles/split_fava_2025_multiple_splits/notes.md`.
+
+---
+
+## Positioning relative to satellite-based emissions monitoring (2026-03-07)
+
+### The state of the art for independent installation-level emissions
+
+Based on reading all 10 Climate TRACE sector methodology documents:
+
+**For methane:** Satellite-based direct detection is approaching true installation-level capability. GHGSat (~25m resolution) can detect and quantify CH4 plumes from individual facilities. MethaneSAT (~100–400m, launched March 2024) covers entire basins. TROPOMI/Sentinel-5P (~5.5 km) catches only super-emitters. The combination of these three at different scales is close to a comprehensive CH4 monitoring system for large point sources.
+
+**For CO2:** There is no reliable independent installation-level satellite measurement yet. The atmospheric CO2 background is ~420 ppm, making it much harder to attribute marginal enhancements to individual facilities (unlike CH4, which has a lower background and stronger spectral signature). What exists:
+- OCO-2/OCO-3 (NASA): detects CO2 enhancements over very large sources (>10 MtCO2/yr) but with narrow swath and infrequent revisit.
+- CO2M/Copernicus (ESA, expected ~2026–2027): first planned operational satellite for installation-level CO2 plume attribution (~4 Mt/yr threshold). Not launched yet.
+- Climate TRACE's proxy approach: satellite-derived *activity* signals (thermal anomaly for steel/cement, water vapor plumes for power plants, VIIRS for flaring) combined with emission factors. Estimates production, not emissions directly — but is the best operational system at scale.
+
+For sectors without satellite signal (chemicals, pulp & paper, aluminum, petrochemicals, heat plants, coal mining), CT uses capacity × utilization × emission factor — the same approach national inventories have used for decades, applied more systematically to global asset databases.
+
+### Where our B2B approach fits: the long tail below satellite detection thresholds
+
+The quantitative question is whether emissions from installations below satellite detection thresholds are "small enough to ignore." The answer depends on the policy question:
+
+**If the goal is accounting for the bulk of national/global emissions:** Yes, satellites + administrative registries (EUTL, EPA GHGRP) cover most of the total tonnage. Emissions are extremely concentrated — the EU ETS covers ~40% of EU emissions from ~10,000 installations. The "long tail" of smaller emitters is modest in aggregate.
+
+**But for three policy-relevant applications, the long tail matters:**
+
+1. **Carbon taxation extending below ETS thresholds.** EU policy is moving in this direction: CBAM and ETS2 (covering buildings and transport, starting 2027) signal an expansion of carbon pricing to previously uncovered sectors. Firm-level emission estimates become necessary for any extension to smaller industrial emitters.
+
+2. **Supply chain due diligence (Scope 3).** Under CSRD (Corporate Sustainability Reporting Directive), firms must estimate upstream/downstream emissions from *all* suppliers — not just the large ones that satellites or registries cover. A bank or manufacturer needs firm-level carbon exposure for its entire supplier base. Sector-level averages are the current default, but firm-level estimates from B2B data are strictly more informative.
+
+3. **Within-sector ranking, even when sector totals are small.** A firm in NACE 23 (non-metallic minerals) emitting 500 tCO2/yr is invisible to any satellite but may be in the top decile of its sector among non-ETS firms. Knowing that ranking has allocative value for targeted policy (audits, subsidies, efficiency programs).
+
+### Framing for the paper
+
+Satellites and registries solve the *large point source* problem well — and will solve it even better once CO2M launches. Our contribution operates at a fundamentally different margin:
+- The **extensive margin**: which non-ETS firms emit at all (classification).
+- **Within-sector ranking** among the long tail of smaller emitters that no current or planned remote sensing technology can individually resolve.
+- **Universal firm coverage**: B2B data covers all private firms in Belgium, not just the ~10,000 with EUTL installations or the ~128 that CT tracks.
+
+The aggregate tonnage we predict for the non-ETS sector may be modest relative to national totals. But the *firm-level information content* — who emits, how they rank, how their emission exposure propagates through the supply chain — is new and cannot be obtained from satellite data at any resolution.
