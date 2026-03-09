@@ -5,13 +5,13 @@
 #   OLS regressions showing the fuel-supply proxy has bite in explaining
 #   firm-level emissions, conditional on revenue, year, sector, and firm FE.
 #
-#   Four columns:
-#     (1) log(y) ~ log(revenue) + log(proxy) + year FE
-#     (2) log(y) ~ log(revenue) + log(proxy) + year FE + sector FE
-#     (3) log(y) ~ log(revenue) + log(proxy) + year FE + firm FE
-#     (4) log(y) ~ log(proxy)  [no FE, no controls]
+#   Four columns (all in levels):
+#     (1) y ~ revenue + proxy + year FE
+#     (2) y ~ revenue + proxy + year FE + sector FE
+#     (3) y ~ revenue + proxy + year FE + firm FE
+#     (4) y ~ proxy  [no FE, no controls]
 #
-#   Sample: EU ETS emitters with y > 0 and fold_specific_proxy > 0.
+#   Sample: all training-sample firms (no restriction on y > 0 or proxy > 0).
 #   Standard errors clustered at the firm level.
 #
 # INPUTS
@@ -63,11 +63,8 @@ if ("turnover_VAT" %in% names(panel)) {
 
 # ── Regression sample ────────────────────────────────────────────────────────
 reg <- panel %>%
-  filter(y > 0, fold_specific_proxy > 0, revenue > 0) %>%
+  filter(!is.na(y), !is.na(revenue)) %>%
   mutate(
-    log_y      = log(y),
-    log_rev    = log(revenue),
-    log_proxy  = log(fold_specific_proxy),
     year_f     = factor(year),
     sector_f   = factor(nace2d),
     firm_f     = factor(vat)
@@ -75,11 +72,11 @@ reg <- panel %>%
 
 cat("Regression sample:", nrow(reg), "obs,", n_distinct(reg$vat), "firms\n")
 
-# ── Estimate models ──────────────────────────────────────────────────────────
-m1 <- lm(log_y ~ log_rev + log_proxy + year_f, data = reg)
-m2 <- lm(log_y ~ log_rev + log_proxy + year_f + sector_f, data = reg)
-m3 <- lm(log_y ~ log_rev + log_proxy + year_f + firm_f, data = reg)
-m4 <- lm(log_y ~ log_proxy, data = reg)
+# ── Estimate models (all in levels) ──────────────────────────────────────────
+m1 <- lm(y ~ revenue + fold_specific_proxy + year_f, data = reg)
+m2 <- lm(y ~ revenue + fold_specific_proxy + year_f + sector_f, data = reg)
+m3 <- lm(y ~ revenue + fold_specific_proxy + year_f + firm_f, data = reg)
+m4 <- lm(y ~ fold_specific_proxy, data = reg)
 
 # ── Firm-clustered standard errors ───────────────────────────────────────────
 cluster_vcov <- function(model, cluster_var) {
@@ -127,8 +124,8 @@ fmt_coef_row <- function(ct_list, varname) {
 # ── Build LaTeX table ────────────────────────────────────────────────────────
 cts <- list(ct1, ct2, ct3, ct4)
 
-rev_rows   <- fmt_coef_row(cts, "log_rev")
-proxy_rows <- fmt_coef_row(cts, "log_proxy")
+rev_rows   <- fmt_coef_row(cts, "revenue")
+proxy_rows <- fmt_coef_row(cts, "fold_specific_proxy")
 
 models  <- list(m1, m2, m3, m4)
 n_obs   <- sapply(models, nobs)
@@ -141,10 +138,10 @@ tex <- c(
   "\\toprule",
   " & (1) & (2) & (3) & (4) \\\\",
   "\\midrule",
-  sprintf("log(revenue) & %s \\\\", rev_rows$est),
+  sprintf("Revenue & %s \\\\", rev_rows$est),
   sprintf(" & %s \\\\", rev_rows$se),
   "\\addlinespace",
-  sprintf("log(proxy) & %s \\\\", proxy_rows$est),
+  sprintf("Proxy & %s \\\\", proxy_rows$est),
   sprintf(" & %s \\\\", proxy_rows$se),
   "\\midrule",
   sprintf("Year FE & Yes & Yes & Yes & No \\\\"),
@@ -160,7 +157,7 @@ tex <- c(
           format(n_obs[3], big.mark = ","),
           format(n_obs[4], big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{5}{p{0.75\\textwidth}}{\\footnotesize \\textit{Notes:} Sample restricted to EU ETS firms with positive emissions and positive proxy. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
+  "\\multicolumn{5}{p{0.75\\textwidth}}{\\footnotesize \\textit{Notes:} All training-sample firms. Emissions and proxy in levels. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
   "\\end{tabular}"
 )
 
@@ -173,11 +170,11 @@ cat("Saved proxy OLS table to:", out_path, "\n")
 
 # ── Print summary to console ─────────────────────────────────────────────────
 cat("\n--- Column (1): Year FE ---\n")
-print(ct1[c("log_rev", "log_proxy"), ])
+print(ct1[c("revenue", "fold_specific_proxy"), ])
 cat("\n--- Column (2): Year + Sector FE ---\n")
-print(ct2[c("log_rev", "log_proxy"), ])
+print(ct2[c("revenue", "fold_specific_proxy"), ])
 cat("\n--- Column (3): Year + Firm FE ---\n")
-print(ct3[c("log_rev", "log_proxy"), ])
+print(ct3[c("revenue", "fold_specific_proxy"), ])
 cat("\n--- Column (4): Proxy only ---\n")
-print(ct4["log_proxy", ])
+print(ct4["fold_specific_proxy", ])
 cat("R2:", summary(m4)$r.squared, "\n")

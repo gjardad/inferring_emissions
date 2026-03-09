@@ -45,6 +45,10 @@ if ("proxy_tabachova" %in% names(training_sample)) {
   cat("proxy_tabachova already exists in training_sample. Overwriting.\n")
   training_sample <- training_sample %>% select(-proxy_tabachova)
 }
+if ("proxy_tabachova_asinh" %in% names(training_sample)) {
+  cat("proxy_tabachova_asinh already exists in training_sample. Overwriting.\n")
+  training_sample <- training_sample %>% select(-proxy_tabachova_asinh)
+}
 
 cat("Training sample:", nrow(training_sample), "rows x",
     ncol(training_sample), "cols\n")
@@ -107,7 +111,8 @@ proxy_tabachova <- b2b %>%
   filter(vat_j_ano %in% lhs_vats, year >= 2005,
          vat_i_ano %in% suppliers_tabachova) %>%
   group_by(vat_j_ano, year) %>%
-  summarise(proxy_tabachova = sum(corr_sales_ij, na.rm = TRUE),
+  summarise(proxy_tabachova       = sum(corr_sales_ij, na.rm = TRUE),
+            proxy_tabachova_asinh = sum(asinh(corr_sales_ij), na.rm = TRUE),
             .groups = "drop") %>%
   rename(vat = vat_j_ano)
 
@@ -119,13 +124,16 @@ cat("Proxy rows (firm-years with positive purchases):", nrow(proxy_tabachova), "
 # ── Merge into training sample ───────────────────────────────────────────────
 training_sample <- training_sample %>%
   left_join(proxy_tabachova, by = c("vat", "year")) %>%
-  mutate(proxy_tabachova = coalesce(proxy_tabachova, 0))
+  mutate(proxy_tabachova       = coalesce(proxy_tabachova, 0),
+         proxy_tabachova_asinh = coalesce(proxy_tabachova_asinh, 0))
 
 cat("\n── Coverage ──\n")
 cat("Firms with proxy_tabachova > 0:", sum(training_sample$proxy_tabachova > 0),
     sprintf("(%.1f%%)\n", 100 * mean(training_sample$proxy_tabachova > 0)))
 cat("Firms with proxy_tabachova = 0:", sum(training_sample$proxy_tabachova == 0),
     sprintf("(%.1f%%)\n", 100 * mean(training_sample$proxy_tabachova == 0)))
+cat("Firms with proxy_tabachova_asinh > 0:", sum(training_sample$proxy_tabachova_asinh > 0),
+    sprintf("(%.1f%%)\n", 100 * mean(training_sample$proxy_tabachova_asinh > 0)))
 
 
 # ── Save (preserve whatever objects were originally in the file) ──────────────
