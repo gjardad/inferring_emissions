@@ -44,7 +44,7 @@ Satellites and registries (EUTL, EPA GHGRP) solve the *large point source* probl
 
 The firm-level information content — who emits, how they rank, how their emission exposure propagates through the supply chain — is new and cannot be obtained from satellite data at any resolution.
 
-### Empirical comparison: B2B proxy vs Climate TRACE
+### Empirical comparison: B2B proxy vs Climate TRACE (script: `analysis/scratch/compare_proxy_ct_matched.R`)
 
 On an apples-to-apples comparison (same 102 firm-years matched between EUTL and Climate TRACE, all emitters), the B2B proxy outperforms CT's own satellite-derived facility-level estimates:
 
@@ -177,7 +177,7 @@ The three rows form a clean gradient of how much supplier information is availab
 **4.2 Prediction Pipeline**
 - Three-stage architecture: (a) classify emitter/non-emitter, (b) rank by proxy, (c) calibrate to aggregate
 - National-aggregate calibration as the conservative benchmark. Sector-year calibration targets from NIR are unreliable for many CRF categories: inventory compilers allocate aggregate emissions across categories using revenue-based or similar models, so sector-level figures are themselves model outputs, not observed data. Only categories heavily covered by EU ETS have reliable sector totals (anchored by verified installation data). National-aggregate calibration avoids leaning on these uncertain sector splits.
-- **The gap between national and sector-year calibration is large.** Under national calibration, firm-fold EN achieves nRMSE ~0.78. Under sector-year calibration, it drops to ~0.51. The proxy alone can rank firms within sectors but cannot allocate emissions across sectors. If one is willing to trust CRF-level emission estimates as calibration targets, prediction accuracy improves substantially — but the improvement comes from the calibration targets, not from the proxy.
+- **The gap between national and sector-year calibration is large** (script: `analysis/scratch/compare_proxy_variants.R`). Under national calibration, firm-fold EN achieves nRMSE ~0.78. Under sector-year calibration, it drops to ~0.51. The proxy alone can rank firms within sectors but cannot allocate emissions across sectors. If one is willing to trust CRF-level emission estimates as calibration targets, prediction accuracy improves substantially — but the improvement comes from the calibration targets, not from the proxy.
 - Justification: zero-inflated emissions → hurdle model; proxy is ranking signal → calibration needed
 
 **4.3 The Proxy in a Regression Framework**
@@ -205,7 +205,7 @@ The three rows form a clean gradient of how much supplier information is availab
 - **Tabachova (NACE-based supplier ID) has catastrophic FPR (82%)** — predicts positive emissions for most non-emitters because the 6 NACE codes are too coarse. Competitive on ranking (Spearman ρ 0.69) but unusable for classification.
 
 **4.6 Within-Sector Ranking**
-- **The distribution of within-sector rho is wide and similar across all proxy approaches.** IQR from near-zero to ~0.6–0.7 across 23 sectors. Five sectors (13-Textiles, 22-Rubber/plastics, 25-Fabricated metals, 49-Land transport, 71-Architecture/engineering) have rho < 0.3 under all three methods (Tabachova, firm-fold EN, sector-fold EN). The poor-performing sectors are a feature of the underlying emission processes — emissions in these sectors aren't well traced through B2B fuel purchases — not an artifact of the proxy construction method.
+- **The distribution of within-sector rho is wide and similar across all proxy approaches** (script: `analysis/scratch/compare_proxy_variants.R`). IQR from near-zero to ~0.6–0.7 across 23 sectors. Five sectors (13-Textiles, 22-Rubber/plastics, 25-Fabricated metals, 49-Land transport, 71-Architecture/engineering) have rho < 0.3 under all three methods (Tabachova, firm-fold EN, sector-fold EN). The poor-performing sectors are a feature of the underlying emission processes — emissions in these sectors aren't well traced through B2B fuel purchases — not an artifact of the proxy construction method.
 - TABLE: rho by sector size [to-do #13]
 - Pooling test for negative-rho sectors
 
