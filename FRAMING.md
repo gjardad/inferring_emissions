@@ -46,6 +46,8 @@ Even the best satellite systems produce noisy facility-level CO2 estimates, and 
 
 **Bottom line:** At annual frequency — the resolution relevant for comparison with our B2B proxy — the best current satellite CO2 estimates achieve facility-level R² of roughly **0.4–0.6** for the world's largest power plants (>3,000 MW coal). Future constellations may approach R² ~ 0.87, but the detection threshold (~3–5 Mt CO2/yr) means smaller industrial facilities — the population our B2B proxy targets — remain below satellite detection thresholds entirely.
 
+**Satellite detectability among Belgian EU ETS firms:** In our training sample (257 unique EU ETS firms, 3,180 firm-years), the median emitter produces ~31 kt CO2/yr — two orders of magnitude below the satellite detection threshold. Only **5 firms** (1.9%) ever exceed 3 Mt/yr, and only **2 firms** (0.8%) ever exceed 5 Mt/yr. These 2–5 firms account for 28–45% of total EU ETS emissions in Belgium, but the remaining 98% of EU ETS firms — and the entire non-ETS population — are invisible to any current or planned satellite system.
+
 ### Where our B2B approach fits: the long tail below satellite detection thresholds
 
 Satellites and registries (EUTL, EPA GHGRP) solve the *large point source* problem well. The EU ETS covers ~40% of EU emissions from ~10,000 installations. Climate TRACE tracks ~128 sources in Belgium. The aggregate tonnage from smaller emitters below these thresholds is modest relative to national totals.
