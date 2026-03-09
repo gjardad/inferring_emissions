@@ -25,6 +25,27 @@ We estimate firm-level CO2 emissions from fossil fuel combustion for the univers
 - CO2M/Copernicus (ESA, expected ~2026–2027): first planned operational satellite for installation-level CO2 plume attribution (~4 Mt/yr threshold). Not launched yet.
 - Climate TRACE: satellite-derived *activity* signals (thermal anomaly for steel/cement, water vapor plumes for power plants, VIIRS for flaring) combined with emission factors. Estimates production, not emissions directly — but is the best operational system at scale. For sectors without satellite signal (chemicals, aluminum, petrochemicals, heat plants, coal mining), CT uses capacity × utilization × emission factor — the same approach national inventories have used for decades.
 
+### Quantitative accuracy of satellite-derived facility-level CO2 estimates
+
+Even the best satellite systems produce noisy facility-level CO2 estimates, and only for the largest point sources:
+
+**Single-overpass (instantaneous) estimates:**
+- Individual overpass uncertainty ranges from 8–53% per plume (Nassar et al. 2017, *Geophysical Research Letters*; Nassar et al. 2021, *Remote Sensing of Environment*), with wind speed as the dominant error source.
+- Across 50 individual overpasses of power plants worldwide, R² against reported CEMS emissions is just **0.12** (Brunner et al. 2023, *Atmospheric Chemistry and Physics*).
+- PRISMA imaging spectrometer achieves average agreement within **27%** of CEMS-reported emissions per overpass; OCO-3 within **30%**, with R² = 0.32 against CEMS — but based on only 14 cases (Dumont Le Brazidec et al. 2023, *Atmospheric Chemistry and Physics*).
+
+**Temporal averaging (multiple overpasses per plant):**
+- Averaging over ~5 overpasses per plant (22 plants) improves R² from 0.12 to **0.40**; averaging over many overpasses pushes R² to **0.87** (Lin et al. 2023, *Atmospheric Chemistry and Physics*).
+- Aggregate accuracy can be high — the sum of satellite estimates for 8 US power plants is within **0.8%** of reported totals (Nassar et al. 2021) — but this is aggregate, not facility-level accuracy.
+- Current satellites collect few usable overpasses per plant per year: OCO-2's narrow swath (~10 km) yields roughly 2–5 cloud-free passes annually; OCO-3's Snapshot Area Mapping mode produced ~4–5 usable observations per plant over a 2-year window (Dumont Le Brazidec et al. 2023); PRISMA detects CO2 plumes in only ~50% of acquired scenes. A realistic annual facility-level R² for current-generation satellites is therefore **~0.4–0.6**, well below the asymptotic 0.87 achievable with many more repeat visits.
+
+**Prospective (CO2M / Sentinel-7, ~2025–2026 launch):**
+- The CO2M constellation (3 satellites, 250 km swath, 5-day revisit) will dramatically increase overpasses per plant, potentially pushing annual R² toward the 0.87 asymptote for large sources.
+- Simulations suggest it could quantify annual emissions for 80–95% of large power plants with uncertainty ≤30%.
+- Detection threshold remains high: ~5 Mt CO2/yr at 4 m/s wind; ~2.7 Mt at 2 m/s.
+
+**Bottom line:** At annual frequency — the resolution relevant for comparison with our B2B proxy — the best current satellite CO2 estimates achieve facility-level R² of roughly **0.4–0.6** for the world's largest power plants (>3,000 MW coal). Future constellations may approach R² ~ 0.87, but the detection threshold (~3–5 Mt CO2/yr) means smaller industrial facilities — the population our B2B proxy targets — remain below satellite detection thresholds entirely.
+
 ### Where our B2B approach fits: the long tail below satellite detection thresholds
 
 Satellites and registries (EUTL, EPA GHGRP) solve the *large point source* problem well. The EU ETS covers ~40% of EU emissions from ~10,000 installations. Climate TRACE tracks ~128 sources in Belgium. The aggregate tonnage from smaller emitters below these thresholds is modest relative to national totals.
