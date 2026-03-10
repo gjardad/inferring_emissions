@@ -57,16 +57,18 @@ panel <- training_sample %>%
   mutate(fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0))
 rm(training_sample, fs_proxy_panel_asinh)
 
-# Revenue
-if ("turnover_VAT" %in% names(panel)) {
-  panel$revenue <- coalesce(panel$turnover_VAT, exp(panel$log_revenue))
-} else {
-  panel$revenue <- exp(panel$log_revenue)
+# Log revenue (matches the EN specification)
+if (!"log_revenue" %in% names(panel)) {
+  if ("turnover_VAT" %in% names(panel)) {
+    panel$log_revenue <- log(coalesce(panel$turnover_VAT, 1))
+  } else {
+    stop("log_revenue not found in training_sample")
+  }
 }
 
 # ── Regression sample ────────────────────────────────────────────────────────
 reg <- panel %>%
-  filter(!is.na(y), !is.na(revenue)) %>%
+  filter(!is.na(y), !is.na(log_revenue)) %>%
   mutate(
     asinh_y    = asinh(y),
     year_f     = factor(year),
@@ -77,9 +79,9 @@ reg <- panel %>%
 cat("Regression sample:", nrow(reg), "obs,", n_distinct(reg$vat), "firms\n")
 
 # ── Estimate models: asinh(y) ~ proxy (+ controls) ─────────────────────────
-m1 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f, data = reg)
-m2 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f + sector_f, data = reg)
-m3 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f + firm_f, data = reg)
+m1 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f, data = reg)
+m2 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + sector_f, data = reg)
+m3 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + firm_f, data = reg)
 m4 <- lm(asinh_y ~ fold_specific_proxy_asinh, data = reg)
 
 # ── Firm-clustered standard errors ───────────────────────────────────────────
@@ -128,7 +130,7 @@ fmt_coef_row <- function(ct_list, varname) {
 # ── Build LaTeX table ────────────────────────────────────────────────────────
 cts <- list(ct1, ct2, ct3, ct4)
 
-rev_rows   <- fmt_coef_row(cts, "revenue")
+rev_rows   <- fmt_coef_row(cts, "log_revenue")
 proxy_rows <- fmt_coef_row(cts, "fold_specific_proxy_asinh")
 
 models  <- list(m1, m2, m3, m4)
@@ -142,7 +144,7 @@ tex <- c(
   "\\toprule",
   " & (1) & (2) & (3) & (4) \\\\",
   "\\midrule",
-  sprintf("Revenue & %s \\\\", rev_rows$est),
+  sprintf("log(revenue) & %s \\\\", rev_rows$est),
   sprintf(" & %s \\\\", rev_rows$se),
   "\\addlinespace",
   sprintf("Proxy & %s \\\\", proxy_rows$est),
@@ -174,11 +176,11 @@ cat("Saved proxy OLS table to:", out_path, "\n")
 
 # ── Print summary to console ─────────────────────────────────────────────────
 cat("\n--- Column (1): Year FE ---\n")
-print(ct1[c("revenue", "fold_specific_proxy_asinh"), ])
+print(ct1[c("log_revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (2): Year + Sector FE ---\n")
-print(ct2[c("revenue", "fold_specific_proxy_asinh"), ])
+print(ct2[c("log_revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (3): Year + Firm FE ---\n")
-print(ct3[c("revenue", "fold_specific_proxy_asinh"), ])
+print(ct3[c("log_revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (4): Proxy only ---\n")
 print(ct4["fold_specific_proxy_asinh", ])
 cat("R2:", summary(m4)$r.squared, "\n")
