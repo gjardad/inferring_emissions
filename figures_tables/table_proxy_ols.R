@@ -181,7 +181,6 @@ tex <- c(
           format(n_obs[3], big.mark = ","), format(n_obs[4], big.mark = ","),
           format(n_obs[5], big.mark = ","), format(n_obs[6], big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{7}{p{0.8\\linewidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). ``Suppliers selected by EN'' uses the coefficient-weighted fuel-supply proxy from the elastic net exercise, as defined in (\\ref{eq:en-proxy}). ``Suppliers selected by NACE'' uses the unweighted sum of (asinh-transformed) purchases from suppliers in fuel-related NACE codes, as in (\\ref{eq:nace-proxy}). Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
   "\\end{tabular}"
 )
 

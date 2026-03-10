@@ -94,7 +94,13 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready numbers (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
 2. **Compare levels-LHS vs asinh-LHS proxies** once asinh outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
 3. **Fair EN-vs-Tabachova R² comparison** once `proxy_tabachova_asinh` is rebuilt from full B2B. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
-4. **Run `figures_tables/table_sectors_17_18_summary.R` on RMD** to get ETS vs non-ETS summary stats for NACE 17 (Paper) and 18 (Printing). Needs full annual accounts. EU ETS covers ~97% of combustion emissions in these sectors (CRF 1.A.2.d), so they are candidates for adding as training zeros like 19/24. Copy output to local 1.
+4. **Rebuild training sample on RMD.** `build_loocv_training_sample.R` has been updated to: (a) drop non-ferrous metals from C24 zeros (24.4x, 24.53, 24.54 — only ~70% ETS coverage), (b) add C17/C18 as zeros (~97% coverage). Pipeline on RMD:
+   - Run `preprocess/build_loocv_training_sample.R` → new `loocv_training_sample.RData`
+   - Run `preprocess/build_training_sample.R` → new `training_sample.RData`
+   - Run `analysis/active/build_fold_specific_proxy_asinh.R` → new `fold_specific_proxy_asinh.RData`
+   - Copy `training_sample.RData` and `fold_specific_proxy_asinh.RData` to local 1
+   - Re-run all local table/figure scripts
+   - Scripts with hardcoded `c("19", "24")` that may need updating: `utils/calc_metrics.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`
 
 ## Current Status
 
