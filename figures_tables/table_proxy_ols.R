@@ -8,11 +8,11 @@
 #   Specification: asinh(y) ~ proxy (+ controls).
 #
 #   Six columns:
-#     EN-selected Suppliers:
-#       (1) asinh(y) ~ log(revenue) + EN proxy + year FE
-#       (2) asinh(y) ~ log(revenue) + EN proxy + year FE + sector FE
-#       (3) asinh(y) ~ log(revenue) + EN proxy + year FE + firm FE
-#     Fuel-related Suppliers:
+#     Suppliers selected by EN:
+#       (1) asinh(y) ~ log(revenue) + EN proxy (all coefs) + year FE
+#       (2) asinh(y) ~ log(revenue) + EN proxy (all coefs) + year FE + sector FE
+#       (3) asinh(y) ~ log(revenue) + EN proxy (all coefs) + year FE + firm FE
+#     Suppliers selected by NACE:
 #       (4) asinh(y) ~ log(revenue) + Tabachova proxy + year FE
 #       (5) asinh(y) ~ log(revenue) + Tabachova proxy + year FE + sector FE
 #       (6) asinh(y) ~ log(revenue) + Tabachova proxy + year FE + firm FE
@@ -54,10 +54,10 @@ load(file.path(PROC_DATA, "fold_specific_proxy_asinh.RData"))
 
 # Merge
 panel <- training_sample %>%
-  left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_asinh),
+  left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_all_asinh),
             by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0),
-         proxy_tabachova_asinh     = coalesce(proxy_tabachova_asinh, 0))
+  mutate(fold_specific_proxy_all_asinh = coalesce(fold_specific_proxy_all_asinh, 0),
+         proxy_tabachova_asinh         = coalesce(proxy_tabachova_asinh, 0))
 rm(training_sample, fs_proxy_panel_asinh)
 
 # Log revenue (matches the EN specification)
@@ -82,10 +82,10 @@ reg <- panel %>%
 cat("Regression sample:", nrow(reg), "obs,", n_distinct(reg$vat), "firms\n")
 
 # ── Estimate models ──────────────────────────────────────────────────────────
-# EN-selected proxy: columns (1)-(3)
-m1 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f, data = reg)
-m2 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + sector_f, data = reg)
-m3 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + firm_f, data = reg)
+# EN-selected proxy (all coefficients): columns (1)-(3)
+m1 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_all_asinh + year_f, data = reg)
+m2 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_all_asinh + year_f + sector_f, data = reg)
+m3 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_all_asinh + year_f + firm_f, data = reg)
 
 # Tabachova proxy: columns (4)-(6)
 m4 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f, data = reg)
@@ -138,10 +138,10 @@ fmt_coef_row <- function(ct_list, varname) {
 }
 
 # ── Build LaTeX table ────────────────────────────────────────────────────────
-# EN columns (1)-(3): extract log_revenue and EN proxy
+# EN columns (1)-(3): extract log_revenue and EN proxy (all coefs)
 cts_en <- list(ct1, ct2, ct3)
 rev_en     <- fmt_coef_row(cts_en, "log_revenue")
-proxy_en   <- fmt_coef_row(cts_en, "fold_specific_proxy_asinh")
+proxy_en   <- fmt_coef_row(cts_en, "fold_specific_proxy_all_asinh")
 
 # Tabachova columns (4)-(6): extract log_revenue and Tabachova proxy
 cts_tab <- list(ct4, ct5, ct6)
@@ -157,7 +157,7 @@ n_firms_str <- format(n_distinct(reg$vat), big.mark = ",")
 tex <- c(
   "\\begin{tabular}{l cccccc}",
   "\\toprule",
-  " & \\multicolumn{3}{c}{EN-selected Suppliers} & \\multicolumn{3}{c}{Fuel-related Suppliers} \\\\",
+  " & \\multicolumn{3}{c}{Suppliers selected by EN} & \\multicolumn{3}{c}{Suppliers selected by NACE} \\\\",
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-7}",
   " & (1) & (2) & (3) & (4) & (5) & (6) \\\\",
   "\\midrule",
@@ -181,7 +181,7 @@ tex <- c(
           format(n_obs[3], big.mark = ","), format(n_obs[4], big.mark = ","),
           format(n_obs[5], big.mark = ","), format(n_obs[6], big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{7}{p{\\linewidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). ``EN-selected Suppliers'' uses the coefficient-weighted fuel-supply proxy from the asinh-LHS elastic net. ``Fuel-related Suppliers'' uses the Tabachova proxy (sum of asinh purchases from suppliers in fuel-related NACE codes). All training-sample firms. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
+  "\\multicolumn{7}{p{\\linewidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). ``Suppliers selected by EN'' uses the coefficient-weighted fuel-supply proxy from the asinh-LHS elastic net (all non-zero coefficients). ``Suppliers selected by NACE'' uses the Tabachova proxy (sum of asinh purchases from suppliers in fuel-related NACE codes). All training-sample firms. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
   "\\end{tabular}"
 )
 
@@ -193,15 +193,15 @@ writeLines(tex, out_path)
 cat("Saved proxy OLS table to:", out_path, "\n")
 
 # ── Print summary to console ─────────────────────────────────────────────────
-cat("\n=== EN-selected Suppliers ===\n")
+cat("\n=== Suppliers selected by EN (all coefs) ===\n")
 cat("\n--- Column (1): Year FE ---\n")
-print(ct1[c("log_revenue", "fold_specific_proxy_asinh"), ])
+print(ct1[c("log_revenue", "fold_specific_proxy_all_asinh"), ])
 cat("\n--- Column (2): Year + Sector FE ---\n")
-print(ct2[c("log_revenue", "fold_specific_proxy_asinh"), ])
+print(ct2[c("log_revenue", "fold_specific_proxy_all_asinh"), ])
 cat("\n--- Column (3): Year + Firm FE ---\n")
-print(ct3[c("log_revenue", "fold_specific_proxy_asinh"), ])
+print(ct3[c("log_revenue", "fold_specific_proxy_all_asinh"), ])
 
-cat("\n=== Fuel-related Suppliers (Tabachova) ===\n")
+cat("\n=== Suppliers selected by NACE (Tabachova) ===\n")
 cat("\n--- Column (4): Year FE ---\n")
 print(ct4[c("log_revenue", "proxy_tabachova_asinh"), ])
 cat("\n--- Column (5): Year + Sector FE ---\n")

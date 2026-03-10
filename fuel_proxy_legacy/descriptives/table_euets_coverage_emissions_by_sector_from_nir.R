@@ -1,129 +1,179 @@
 ###############################################################################
-# 05_analysis/07_table_euets_coverage_emissions_by_sector_from_nir.R
+# table_euets_coverage_emissions_by_sector_from_nir.R
 #
 # PURPOSE
-#   Create table comparing EU ETS coverage to NIR emissions by sector.
+#   Create table comparing EU ETS coverage to NIR emissions by sector,
+#   showing both raw kt CO2eq and ETS coverage share for 2022 and 2023.
 #
 # DATA SOURCE
 #   Annex XII xlsx files downloaded from EIONET:
-#   2024: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envzaasda/
-#   2025: https://cdr.eionet.europa.eu/be/eu/govreg/annex/envz4jzgg/
-#
-# WHERE THIS FILE BELONGS
-#   loocv_pipeline/05_analysis/07_table_euets_coverage_emissions_by_sector_from_nir.R
+#   2024 (year 2022): https://cdr.eionet.europa.eu/be/eu/govreg/annex/envzaasda/
+#   2025 (year 2023): https://cdr.eionet.europa.eu/be/eu/govreg/annex/envz4jzgg/
 ###############################################################################
 
-#### HEADER -------
-
-## This code generates table that reports EUETS coverage of emissions by sector
-
-#####################
-
 # ====================
-# Define paths ------------------
+# Define paths
 # ====================
 
 if (tolower(Sys.info()[["user"]]) == "jardang") {
   REPO_DIR <- "C:/Users/jardang/Documents/inferring_emissions"
 } else if (tolower(Sys.info()[["user"]]) == "jota_"){
-  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")), error = function(e) normalizePath(getwd(), winslash = "/"))
+  REPO_DIR <- tryCatch(dirname(normalizePath(sys.frame(1)$ofile, winslash = "/")),
+                        error = function(e) normalizePath(getwd(), winslash = "/"))
   while (!file.exists(file.path(REPO_DIR, "paths.R"))) REPO_DIR <- dirname(REPO_DIR)
 } else {
   stop("Define REPO_DIR for this user.")
 }
 source(file.path(REPO_DIR, "paths.R"))
 
-
-# Setup ------
-
 library(dplyr)
-library(tidyr)
 
-# Import data ----
+# ====================
+# Import data from pre-extracted TSVs
+# (Original xlsx files segfault in readxl on local 1; TSVs were extracted via
+#  PowerShell COM — see comments at top for xlsx source URLs.)
+# Columns: crf (CRF label), kt_co2eq (inventory kt CO2eq), share (ETS %)
+# ====================
 
-library(readxl)
-annexx_xii_2024 <- read_excel(paste0(RAW_DATA, "/NIR/BE_2024_Art14_AnnexXII_Consistency_with_ETS_280224.xlsx")) %>% 
-  select(1,4) %>% 
-  rename(crf = 1, share = 2) %>% 
-  filter(!is.na(crf) & !is.na(share)) %>% 
-  filter(share != "NO") %>% 
-  separate(crf, into = c("crf_code", "crf_text"), sep = " ",
-           extra = "merge", remove = TRUE) %>% 
-  filter(!crf_code %in% c("Greenhouse", "CO2", "Iron")) %>% 
-  mutate(share_2024 = as.numeric(share)*100) %>% 
-  select(crf_code, crf_text, share_2024)
-
-annexx_xii_2025 <- read_excel(paste0(RAW_DATA, "/NIR/BE_2025_Art14_Annex_XII-Consistency_with_ETS_2025_1281_Final_130325.xlsx")) %>% 
-  select(1,4) %>% 
-  rename(crf = 1, share = 2) %>% 
-  filter(!is.na(crf) & !is.na(share)) %>% 
-  separate(crf, into = c("crf_code", "crf_text"), sep = " ",
-           extra = "merge", remove = TRUE) %>% 
-  filter(!crf_code %in% c("Greenhouse", "CO2", "Iron")) %>%
-  mutate(share = if_else(share == "NA", "", share)) %>% 
-  mutate(share_2025 = as.numeric(share))
-
-df_table <- annexx_xii_2024 %>% 
-  left_join(annexx_xii_2025 %>% select(crf_code, crf_text, share_2025),
-            by = c("crf_code", "crf_text")) %>% 
-  mutate(
-    share_2024 = sprintf("%.2f", share_2024),
-    share_2025 = sprintf("%.2f", share_2025)
-  )
-
-# =====================================================================
-# Generate LaTeX table with hierarchical indentation
-# =====================================================================
-
-# Row definitions: CRF code, text pattern (to disambiguate duplicates),
-#                  display label, indent level (0/1/2)
-row_defs <- list(
-  list(code = "1.A",   pattern = "total",      label = "Fuel combustion activities, total",                indent = 0),
-  list(code = "1.A",   pattern = "stationary",  label = "Fuel combustion activities, stationary combustion", indent = 1),
-  list(code = "1.A.1", pattern = NULL,          label = "Energy industries",                                indent = 2),
-  list(code = "1.A.2", pattern = NULL,          label = "Manufacturing industries and construction",        indent = 2),
-  list(code = "1.A.3", pattern = NULL,          label = "Transport",                                        indent = 2),
-  list(code = "1.A.4", pattern = NULL,          label = "Other sectors",                                    indent = 2),
-  list(code = "1.B",   pattern = NULL,          label = "Fugitive emissions from fuels",                    indent = 0),
-  list(code = NA,      pattern = NULL,          label = "Industrial processes",                              indent = 0),
-  list(code = "2.A",   pattern = NULL,          label = "Mineral products",                                  indent = 2),
-  list(code = "2.B",   pattern = NULL,          label = "Chemical industry",                                 indent = 2),
-  list(code = "2.C",   pattern = NULL,          label = "Metal production",                                  indent = 2),
-  list(code = "2D3",   pattern = NULL,          label = "Non-energy products from fuels and solvent use",    indent = 2),
-  list(code = "2.H",   pattern = NULL,          label = "Other",                                             indent = 2)
-)
-
-# Lookup helper: find value from df_table by code (+ optional text pattern)
-lookup_val <- function(code, pattern, col) {
-  if (is.na(code)) return(NA_character_)
-  rows <- df_table %>% filter(crf_code == code)
-  if (!is.null(pattern)) rows <- rows %>% filter(grepl(pattern, crf_text, ignore.case = TRUE))
-  if (nrow(rows) == 1) rows[[col]] else NA_character_
+read_annex_tsv <- function(path) {
+  df <- read.delim(path, sep = "\t", stringsAsFactors = FALSE,
+                   fileEncoding = "UTF-8-BOM")
+  df %>%
+    filter(crf != "") %>%
+    mutate(
+      crf_trimmed = trimws(crf),
+      kt_co2eq = suppressWarnings(as.numeric(gsub(",", "", kt_co2eq))),
+      share = suppressWarnings(as.numeric(gsub("%", "", share)))
+    )
 }
 
+annex_2024 <- read_annex_tsv(file.path(PROC_DATA, "annex_xii_2024.tsv"))
+annex_2025 <- read_annex_tsv(file.path(PROC_DATA, "annex_xii_2025.tsv"))
+
+# ====================
+# Lookup helper: search by text pattern in the CRF label column
+# ====================
+
+lookup <- function(df, pattern) {
+  row <- df %>% filter(grepl(pattern, crf_trimmed, ignore.case = TRUE, perl = TRUE))
+  if (nrow(row) == 0) return(list(kt = NA_real_, share = NA_real_))
+  if (nrow(row) > 1) row <- row[1, ]
+  list(kt = row$kt_co2eq, share = row$share)
+}
+
+# ====================
+# Row definitions: pattern (regex on crf_trimmed), display label, indent level
+# Excludes: Transport (1.A.3), 1.A.2.g Other, 2.H Other
+# ====================
+
+# Each entry: pat (regex), label, indent, and optional "before" spacing
+# before = "addlinespace" inserts \addlinespace, "midrule" inserts \midrule
+row_defs <- list(
+  list(pat = "^1\\.A\\s+Fuel combustion.*stationary",
+       label = "Fuel combustion, stationary",          indent = 0),
+  # -- Energy industries --
+  list(pat = "^1\\.A\\.1\\s+Energy industries",
+       label = "Energy industries",                    indent = 1),
+  list(pat = "1\\.A\\.1\\.a\\s+Public electricity",
+       label = "Public electricity and heat production", indent = 2),
+  list(pat = "1\\.A\\.1\\.b\\s+Petroleum refining",
+       label = "Petroleum refining",                   indent = 2),
+  list(pat = "1\\.A\\.1\\.c\\s+Manufacture of solid fuels",
+       label = "Manufacture of solid fuels \\& other",  indent = 2),
+  # -- Manufacturing --
+  list(pat = "^1\\.A\\.2\\.?\\s+Manufacturing",
+       label = "Manufacturing industries and construction", indent = 1,
+       before = "addlinespace"),
+  list(pat = "1\\.A\\.2\\.a\\s+Iron",
+       label = "Iron and steel",                       indent = 2),
+  list(pat = "1\\.A\\.2\\.b\\s+Non-ferrous",
+       label = "Non-ferrous metals",                   indent = 2),
+  list(pat = "1\\.A\\.2\\.c\\s+Chemicals",
+       label = "Chemicals",                            indent = 2),
+  list(pat = "1\\.A\\.2\\.d\\s+Pulp",
+       label = "Pulp, paper and print",                indent = 2),
+  list(pat = "1\\.A\\.2\\.e\\s+Food",
+       label = "Food processing, beverages and tobacco", indent = 2),
+  list(pat = "1\\.A\\.2\\.f\\s+Non-metallic",
+       label = "Non-metallic minerals",                indent = 2),
+  # -- Other sectors --
+  list(pat = "^1\\.A\\.4\\s+Other sectors",
+       label = "Other sectors",                        indent = 1,
+       before = "addlinespace"),
+  list(pat = "1\\.A\\.4\\.a\\s+Commercial",
+       label = "Commercial / Institutional",           indent = 2),
+  list(pat = "1\\.A\\.4\\.c\\s+Agriculture",
+       label = "Agriculture / Forestry / Fisheries",   indent = 2),
+  # -- Industrial processes --
+  list(pat = NA,
+       label = "Industrial processes",                 indent = 0,
+       before = "midrule"),
+  list(pat = "^2\\.A\\s+Mineral",
+       label = "Mineral products",                     indent = 1),
+  list(pat = "^2\\.B\\s+Chemical",
+       label = "Chemical industry",                    indent = 1),
+  list(pat = "^2\\.C\\s+Metal",
+       label = "Metal production",                     indent = 1),
+  list(pat = "^2D3\\s+Non-energy",
+       label = "Non-energy products from fuels and solvent use", indent = 1)
+)
+
+# ====================
 # Formatting helpers
-fmt_val <- function(x) if (is.na(x) || x %in% c("NaN", "NA")) "-" else x
+# ====================
+
+fmt_kt <- function(x) {
+  if (is.na(x)) return("--")
+  formatC(x, format = "f", digits = 1, big.mark = ",")
+}
+
+fmt_pct <- function(x) {
+  if (is.na(x)) return("--")
+  sprintf("%.1f", x)
+}
 
 indent_tex <- function(level) {
   switch(as.character(level),
-         "1" = "\\hspace{3mm}",
-         "2" = "\\hspace{6mm}",
+         "1" = "\\hspace{5mm}",
+         "2" = "\\hspace{10mm}",
          "")
 }
 
-# Build LaTeX lines
+# ====================
+# Build LaTeX table
+# ====================
+
 tex_lines <- c(
-  "\\begin{tabular}{lcc}",
+  "\\begin{tabular}{lcccc}",
   "\\toprule",
-  "Category & 2024 (\\%) & 2025 (\\%)\\\\",
+  " & \\multicolumn{2}{c}{2022} & \\multicolumn{2}{c}{2023} \\\\",
+  "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5}",
+  "Category & kt CO\\textsubscript{2}eq & ETS (\\%) & kt CO\\textsubscript{2}eq & ETS (\\%) \\\\",
   "\\midrule"
 )
 
 for (rd in row_defs) {
+  # Insert spacing before this row if requested
+  bef <- rd$before %||% "none"
+  if (bef == "addlinespace") tex_lines <- c(tex_lines, "\\addlinespace")
+  if (bef == "midrule")      tex_lines <- c(tex_lines, "\\midrule")
+
   lbl <- paste0(indent_tex(rd$indent), rd$label)
-  v24 <- fmt_val(lookup_val(rd$code, rd$pattern, "share_2024"))
-  v25 <- fmt_val(lookup_val(rd$code, rd$pattern, "share_2025"))
-  tex_lines <- c(tex_lines, sprintf("%s & %s & %s \\\\", lbl, v24, v25))
+
+  if (is.na(rd$pat)) {
+    # Section header with no data (Industrial processes)
+    tex_lines <- c(tex_lines,
+      sprintf("%s & & & & \\\\", lbl))
+    next
+  }
+
+  v24 <- lookup(annex_2024, rd$pat)
+  v25 <- lookup(annex_2025, rd$pat)
+
+  tex_lines <- c(tex_lines,
+    sprintf("%s & %s & %s & %s & %s \\\\",
+            lbl, fmt_kt(v24$kt), fmt_pct(v24$share),
+            fmt_kt(v25$kt), fmt_pct(v25$share)))
 }
 
 tex_lines <- c(tex_lines, "\\bottomrule", "\\end{tabular}")
