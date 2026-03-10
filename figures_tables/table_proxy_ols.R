@@ -2,18 +2,20 @@
 # figures_tables/table_proxy_ols.R
 #
 # PURPOSE
-#   OLS regressions showing the fuel-supply proxy has bite in explaining
-#   firm-level emissions, conditional on revenue, year, sector, and firm FE.
+#   OLS regressions comparing the EN-selected fuel-supply proxy and the
+#   Tabachova (fuel-related NACE) proxy in explaining firm-level emissions.
 #
 #   Specification: asinh(y) ~ proxy (+ controls).
-#   The proxy is already defined in asinh terms (sum of beta_j * asinh(x_ijt)),
-#   so asinh(y) ~ proxy is the natural specification.
 #
-#   Four columns:
-#     (1) asinh(y) ~ revenue + proxy + year FE
-#     (2) asinh(y) ~ revenue + proxy + year FE + sector FE
-#     (3) asinh(y) ~ revenue + proxy + year FE + firm FE
-#     (4) asinh(y) ~ proxy  [no FE, no controls]
+#   Six columns:
+#     EN-selected Suppliers:
+#       (1) asinh(y) ~ log(revenue) + EN proxy + year FE
+#       (2) asinh(y) ~ log(revenue) + EN proxy + year FE + sector FE
+#       (3) asinh(y) ~ log(revenue) + EN proxy + year FE + firm FE
+#     Fuel-related Suppliers:
+#       (4) asinh(y) ~ log(revenue) + Tabachova proxy + year FE
+#       (5) asinh(y) ~ log(revenue) + Tabachova proxy + year FE + sector FE
+#       (6) asinh(y) ~ log(revenue) + Tabachova proxy + year FE + firm FE
 #
 #   Sample: all training-sample firms (no restriction on y > 0 or proxy > 0).
 #   Standard errors clustered at the firm level.
@@ -54,7 +56,8 @@ load(file.path(PROC_DATA, "fold_specific_proxy_asinh.RData"))
 panel <- training_sample %>%
   left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_asinh),
             by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0))
+  mutate(fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0),
+         proxy_tabachova_asinh     = coalesce(proxy_tabachova_asinh, 0))
 rm(training_sample, fs_proxy_panel_asinh)
 
 # Log revenue (matches the EN specification)
@@ -78,11 +81,16 @@ reg <- panel %>%
 
 cat("Regression sample:", nrow(reg), "obs,", n_distinct(reg$vat), "firms\n")
 
-# ── Estimate models: asinh(y) ~ proxy (+ controls) ─────────────────────────
+# ── Estimate models ──────────────────────────────────────────────────────────
+# EN-selected proxy: columns (1)-(3)
 m1 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f, data = reg)
 m2 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + sector_f, data = reg)
 m3 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_asinh + year_f + firm_f, data = reg)
-m4 <- lm(asinh_y ~ fold_specific_proxy_asinh, data = reg)
+
+# Tabachova proxy: columns (4)-(6)
+m4 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f, data = reg)
+m5 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f + sector_f, data = reg)
+m6 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f + firm_f, data = reg)
 
 # ── Firm-clustered standard errors ───────────────────────────────────────────
 cluster_vcov <- function(model, cluster_var) {
@@ -93,6 +101,8 @@ ct1 <- coeftest(m1, vcov. = cluster_vcov(m1, reg$vat))
 ct2 <- coeftest(m2, vcov. = cluster_vcov(m2, reg$vat))
 ct3 <- coeftest(m3, vcov. = cluster_vcov(m3, reg$vat))
 ct4 <- coeftest(m4, vcov. = cluster_vcov(m4, reg$vat))
+ct5 <- coeftest(m5, vcov. = cluster_vcov(m5, reg$vat))
+ct6 <- coeftest(m6, vcov. = cluster_vcov(m6, reg$vat))
 
 # ── Formatting helpers ───────────────────────────────────────────────────────
 stars <- function(p) {
@@ -128,42 +138,50 @@ fmt_coef_row <- function(ct_list, varname) {
 }
 
 # ── Build LaTeX table ────────────────────────────────────────────────────────
-cts <- list(ct1, ct2, ct3, ct4)
+# EN columns (1)-(3): extract log_revenue and EN proxy
+cts_en <- list(ct1, ct2, ct3)
+rev_en     <- fmt_coef_row(cts_en, "log_revenue")
+proxy_en   <- fmt_coef_row(cts_en, "fold_specific_proxy_asinh")
 
-rev_rows   <- fmt_coef_row(cts, "log_revenue")
-proxy_rows <- fmt_coef_row(cts, "fold_specific_proxy_asinh")
+# Tabachova columns (4)-(6): extract log_revenue and Tabachova proxy
+cts_tab <- list(ct4, ct5, ct6)
+rev_tab    <- fmt_coef_row(cts_tab, "log_revenue")
+proxy_tab  <- fmt_coef_row(cts_tab, "proxy_tabachova_asinh")
 
-models  <- list(m1, m2, m3, m4)
+models  <- list(m1, m2, m3, m4, m5, m6)
 n_obs   <- sapply(models, nobs)
 r2_vals <- sapply(models, function(m) summary(m)$r.squared)
 
 n_firms_str <- format(n_distinct(reg$vat), big.mark = ",")
 
 tex <- c(
-  "\\begin{tabular}{l *{4}{>{\\centering\\arraybackslash}p{1.5cm}}}",
+  "\\begin{tabular}{l cccccc}",
   "\\toprule",
-  " & (1) & (2) & (3) & (4) \\\\",
+  " & \\multicolumn{3}{c}{EN-selected Suppliers} & \\multicolumn{3}{c}{Fuel-related Suppliers} \\\\",
+  "\\cmidrule(lr){2-4} \\cmidrule(lr){5-7}",
+  " & (1) & (2) & (3) & (4) & (5) & (6) \\\\",
   "\\midrule",
-  sprintf("log(revenue) & %s \\\\", rev_rows$est),
-  sprintf(" & %s \\\\", rev_rows$se),
+  sprintf("log(revenue) & %s & %s \\\\", rev_en$est, rev_tab$est),
+  sprintf(" & %s & %s \\\\", rev_en$se, rev_tab$se),
   "\\addlinespace",
-  sprintf("Proxy & %s \\\\", proxy_rows$est),
-  sprintf(" & %s \\\\", proxy_rows$se),
+  sprintf("Proxy & %s & %s \\\\", proxy_en$est, proxy_tab$est),
+  sprintf(" & %s & %s \\\\", proxy_en$se, proxy_tab$se),
   "\\midrule",
-  sprintf("Year FE & Yes & Yes & Yes & No \\\\"),
-  sprintf("Sector FE & No & Yes & No & No \\\\"),
-  sprintf("Firm FE & No & No & Yes & No \\\\"),
+  "Year FE & Yes & Yes & Yes & Yes & Yes & Yes \\\\",
+  "Sector FE & No & Yes & No & No & Yes & No \\\\",
+  "Firm FE & No & No & Yes & No & No & Yes \\\\",
   "\\midrule",
-  sprintf("$R^2$ & %.3f & %.3f & %.3f & %.3f \\\\", r2_vals[1], r2_vals[2], r2_vals[3], r2_vals[4]),
-  sprintf("Firms & %s & %s & %s & %s \\\\",
-          n_firms_str, n_firms_str, n_firms_str, n_firms_str),
-  sprintf("$N$ & %s & %s & %s & %s \\\\",
-          format(n_obs[1], big.mark = ","),
-          format(n_obs[2], big.mark = ","),
-          format(n_obs[3], big.mark = ","),
-          format(n_obs[4], big.mark = ",")),
+  sprintf("$R^2$ & %.3f & %.3f & %.3f & %.3f & %.3f & %.3f \\\\",
+          r2_vals[1], r2_vals[2], r2_vals[3], r2_vals[4], r2_vals[5], r2_vals[6]),
+  sprintf("Firms & %s & %s & %s & %s & %s & %s \\\\",
+          n_firms_str, n_firms_str, n_firms_str,
+          n_firms_str, n_firms_str, n_firms_str),
+  sprintf("$N$ & %s & %s & %s & %s & %s & %s \\\\",
+          format(n_obs[1], big.mark = ","), format(n_obs[2], big.mark = ","),
+          format(n_obs[3], big.mark = ","), format(n_obs[4], big.mark = ","),
+          format(n_obs[5], big.mark = ","), format(n_obs[6], big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{5}{p{0.75\\textwidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). Proxy is the coefficient-weighted fuel-supply proxy from the asinh-LHS elastic net. All training-sample firms. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
+  "\\multicolumn{7}{p{\\linewidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). ``EN-selected Suppliers'' uses the coefficient-weighted fuel-supply proxy from the asinh-LHS elastic net. ``Fuel-related Suppliers'' uses the Tabachova proxy (sum of asinh purchases from suppliers in fuel-related NACE codes). All training-sample firms. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
   "\\end{tabular}"
 )
 
@@ -175,12 +193,18 @@ writeLines(tex, out_path)
 cat("Saved proxy OLS table to:", out_path, "\n")
 
 # ── Print summary to console ─────────────────────────────────────────────────
+cat("\n=== EN-selected Suppliers ===\n")
 cat("\n--- Column (1): Year FE ---\n")
 print(ct1[c("log_revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (2): Year + Sector FE ---\n")
 print(ct2[c("log_revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (3): Year + Firm FE ---\n")
 print(ct3[c("log_revenue", "fold_specific_proxy_asinh"), ])
-cat("\n--- Column (4): Proxy only ---\n")
-print(ct4["fold_specific_proxy_asinh", ])
-cat("R2:", summary(m4)$r.squared, "\n")
+
+cat("\n=== Fuel-related Suppliers (Tabachova) ===\n")
+cat("\n--- Column (4): Year FE ---\n")
+print(ct4[c("log_revenue", "proxy_tabachova_asinh"), ])
+cat("\n--- Column (5): Year + Sector FE ---\n")
+print(ct5[c("log_revenue", "proxy_tabachova_asinh"), ])
+cat("\n--- Column (6): Year + Firm FE ---\n")
+print(ct6[c("log_revenue", "proxy_tabachova_asinh"), ])

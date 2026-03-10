@@ -91,11 +91,9 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## For Tomorrow
 
-1. **Copy asinh CV outputs from RMD → local 1.** `run_all_asinh_cv.R` already finished on RMD. Copy `fold_specific_proxy_asinh.RData`, `loso_proxy_asinh.RData`, `firmfoldcv_proxy_asinh.RData` to local 1 (via local 2 → cloud).
-2. **Rerun `add_tabachova_proxy.R` on RMD** to get `proxy_tabachova_asinh` (sum of asinh purchases) in `training_sample.RData`. Copy updated `training_sample.RData` to local 1.
-3. **Run `table_supplier_*.R` scripts on RMD** for paper-ready numbers (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
-4. **Compare levels-LHS vs asinh-LHS proxies** once asinh outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
-5. **Fair EN-vs-Tabachova R² comparison** once `proxy_tabachova_asinh` is rebuilt from full B2B. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready numbers (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
+2. **Compare levels-LHS vs asinh-LHS proxies** once asinh outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
+3. **Fair EN-vs-Tabachova R² comparison** once `proxy_tabachova_asinh` is rebuilt from full B2B. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
 
 ## Current Status
 
