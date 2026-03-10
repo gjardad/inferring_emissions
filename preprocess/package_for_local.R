@@ -14,7 +14,7 @@
 #   {PROC_DATA}/annual_accounts_selected_sample.RData (full annual accounts)
 #
 # OUTPUT
-#   {PROC_DATA}/training_sample_ammended.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #     Contains: training_sample (full panel with proxies + all annual accounts),
 #               syt (sector-year emission totals)
 #
@@ -98,7 +98,7 @@ syt <- training_sample %>%
   summarise(E_total = sum(y, na.rm = TRUE), n_full = n(), .groups = "drop")
 
 # ── Save ─────────────────────────────────────────────────────────────────────
-OUT_PATH <- file.path(PROC_DATA, "training_sample_ammended.RData")
+OUT_PATH <- file.path(PROC_DATA, "firm_year_panel_with_proxies.RData")
 save(training_sample, syt, file = OUT_PATH)
 
 cat("\n══════════════════════════════════════════════\n")
