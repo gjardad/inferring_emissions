@@ -2,14 +2,14 @@
 # analysis/active/build_fold_specific_proxy_asinh.R
 #
 # PURPOSE
-#   Identical to build_fold_specific_proxy.R but with asinh(y) on LHS.
-#   The elastic net is trained on asinh(emissions) instead of raw emissions.
-#   All diagnostics (AUC, correlations) are computed against original y
-#   so results are comparable with the levels-LHS variant.
+#   Fold-specific (leakage-free) fuel-supply proxy via elastic net.
+#   The elastic net is trained on asinh(emissions) ~ asinh(purchases).
+#   K=5 outer folds defined by sector groups; held-out sectors get proxy
+#   built from coefficients estimated on the remaining sectors.
 #
 # INPUT
 #   {PROC_DATA}/b2b_selected_sample.RData
-#   {PROC_DATA}/loocv_training_sample.RData
+#   {PROC_DATA}/training_sample.RData
 #
 # OUTPUT
 #   {PROC_DATA}/fold_specific_proxy_asinh.RData
@@ -54,10 +54,10 @@ load(file.path(PROC_DATA, "b2b_selected_sample.RData"))
 b2b <- df_b2b_selected_sample
 rm(df_b2b_selected_sample)
 
-cat("Loading LOOCV training sample...\n")
-load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+cat("Loading training sample...\n")
+load(file.path(PROC_DATA, "training_sample.RData"))
 
-lhs <- loocv_training_sample %>%
+lhs <- training_sample %>%
   filter(year >= 2005) %>%
   mutate(
     y = emissions,
@@ -65,7 +65,7 @@ lhs <- loocv_training_sample %>%
   ) %>%
   select(vat, year, y, log_revenue, nace2d, euets) %>%
   arrange(vat, year)
-rm(loocv_training_sample)
+rm(training_sample)
 
 lhs$emit <- as.integer(lhs$y > 0)
 
@@ -106,7 +106,7 @@ sector_emitter_fy <- lhs %>%
   count(primary_nace2d, name = "n_emitter_fy") %>%
   arrange(desc(n_emitter_fy))
 
-# Include sectors with 0 emitters (NACE 19, 24 — confirmed zeros)
+# Include sectors with 0 emitters (non-ETS zeros: C17, C18, C19, C24 iron & steel)
 all_sectors <- sort(unique(lhs$primary_nace2d))
 sector_emitter_fy <- data.frame(
   nace2d = all_sectors,
@@ -135,7 +135,9 @@ sector_fold_map_asinh <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# HARD CONSTRAINT: NACE 19 and 24 must be in different folds
+# HARD CONSTRAINT: zero-only sectors (19, 24) should be in different folds
+# to spread the non-emitter signal across folds. C17/C18 are also zero-only
+# but smaller; the snake-order assignment usually handles them.
 fold_19 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "19"]
 fold_24 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "24"]
 

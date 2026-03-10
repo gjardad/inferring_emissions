@@ -91,16 +91,16 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## For Tomorrow
 
-1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready numbers (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
-2. **Compare levels-LHS vs asinh-LHS proxies** once asinh outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
-3. **Fair EN-vs-Tabachova R² comparison** once `proxy_tabachova_asinh` is rebuilt from full B2B. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
-4. **Rebuild training sample on RMD.** `build_loocv_training_sample.R` has been updated to: (a) drop non-ferrous metals from C24 zeros (24.4x, 24.53, 24.54 — only ~70% ETS coverage), (b) add C17/C18 as zeros (~97% coverage). Pipeline on RMD:
-   - Run `preprocess/build_loocv_training_sample.R` → new `loocv_training_sample.RData`
-   - Run `preprocess/build_training_sample.R` → new `training_sample.RData`
-   - Run `analysis/active/build_fold_specific_proxy_asinh.R` → new `fold_specific_proxy_asinh.RData`
-   - Copy `training_sample.RData` and `fold_specific_proxy_asinh.RData` to local 1
-   - Re-run all local table/figure scripts
-   - Scripts with hardcoded `c("19", "24")` that may need updating: `utils/calc_metrics.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`
+1. **Run full pipeline on RMD** (in order):
+   1. `preprocess/build_training_sample.R` → `training_sample.RData` (new sample: drops C24 non-ferrous, adds C17/C18)
+   2. `analysis/active/build_fold_specific_proxy_asinh.R` → `fold_specific_proxy_asinh.RData`
+   3. `preprocess/build_tabachova_proxy.R` → `tabachova_proxy.RData`
+   4. `preprocess/package_for_local.R` → `training_sample_ammended.RData` (merges all components + full annual accounts)
+   5. Copy `training_sample_ammended.RData` to local 1
+2. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
+3. **Update local scripts to load `training_sample_ammended.RData`** instead of `training_sample.RData`. Scripts that need updating include: `figures_tables/table_proxy_ols.R`, `figures_tables/table_sectors_19_24_summary.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, and any others loading `training_sample.RData` or `fold_specific_proxy_asinh.RData`. Also update scripts with hardcoded `c("19", "24")`: `utils/calc_metrics.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`.
+4. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
+5. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
 
 ## Current Status
 
