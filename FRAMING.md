@@ -124,6 +124,85 @@ The three rows form a clean gradient of how much supplier information is availab
 
 **This is a strength, not a weakness.** A policymaker with non-anonymized B2B data could start with the NACE lookup and obtain a strong baseline. The EN adds value by learning weights and catching secondary fuel suppliers — gains that would likely be even larger with non-anonymized data, where supplier identities could be verified and the EN's selections interpreted directly. The paper demonstrates that B2B transaction data contains a robust signal for emissions, and that the EN extracts more of it than NACE codes alone when the data allows.
 
+### Levels vs asinh LHS: which specification for supplier selection?
+
+Both the EN proxy and the Tabachova proxy use asinh(purchases) on the RHS. The question is what to put on the LHS when training the EN: raw emissions (y) or asinh(y)? The Tabachova proxy has no LHS — it uses pre-specified suppliers — but both versions of the proxy (levels and asinh purchases) can be evaluated against either LHS.
+
+All proxies are evaluated in their natural regression: the levels-LHS EN proxy predicts y, the asinh-LHS EN proxy predicts asinh(y). Tabachova asinh is evaluated against both. Full training sample (N = 5,876), sector-fold CV K=5 for the EN proxies. Tabachova proxy built from full B2B data on RMD.
+
+**Predicting emissions in levels (y ~ proxy):**
+
+| Proxy | R² | Spearman ρ |
+|-------|-----|------------|
+| EN (levels LHS, sector-fold K=5) | 0.313 | 0.614 |
+| Tabachova (asinh purchases) | 0.223 | 0.674 |
+
+**Predicting asinh(emissions) (asinh(y) ~ proxy):**
+
+| Proxy | R² | Spearman ρ |
+|-------|-----|------------|
+| EN (asinh LHS, sector-fold K=5) | 0.374 | 0.786 |
+| Tabachova (asinh purchases) | 0.356 | 0.674 |
+
+Two findings:
+
+1. **The EN's advantage over Tabachova depends on the LHS.** Under levels, the EN wins by 40% in R² (0.313 vs 0.223). Under asinh, the gap narrows to 5% (0.374 vs 0.356). The asinh transformation compresses big emitters — exactly where the EN's coefficient weighting matters most. When big emitters are downweighted, Tabachova's equal-weight approach nearly catches up.
+
+2. **The asinh-LHS EN proxy dominates the levels-LHS EN proxy** in Spearman ρ (0.786 vs 0.614) and coverage (78.1% vs 71.3% of firm-years with proxy > 0). Training the EN on asinh(y) produces a better ranking even though we ultimately care about levels. This is because asinh(y) gives proportional weight to small emitters during training, which improves supplier selection for the bulk of the distribution.
+
+**Implication:** The asinh-LHS EN specification is the preferred proxy. It produces the best ranking (ρ = 0.786), highest coverage, and beats Tabachova under both evaluation criteria. The EN's main advantage over Tabachova is coefficient weighting — knowing *how much* each supplier matters, not just *who* the suppliers are — and this advantage is largest when predicting levels.
+
+*(Script: `figures_tables/scratch_proxy_comparison.R`. EN proxies from `fold_specific_proxy.RData` (levels LHS) and `fold_specific_proxy_asinh.RData` (asinh LHS). Tabachova proxy from `training_sample.RData` (`proxy_tabachova_asinh`, built by `add_tabachova_proxy.R` on RMD with full B2B).)*
+
+### Distribution shift: what transfers to deployment and what doesn't
+
+The EN estimates y_it = Σⱼ βⱼ · asinh(x_ijt) + β_rev · log(revenue_it) + sector FE + year FE + ε_it on EU ETS firms. When deploying the proxy to non-ETS firms, we use only the supplier component Σⱼ β̂ⱼ · asinh(x_ijt) and discard β̂_rev, sector FE, and year FE. The reason is distribution shift: the relationship between revenue and emissions learned on large energy-intensive EU ETS firms is unlikely to hold for small non-ETS firms (a €10M steel plant vs a €10M restaurant). The same applies to sector FE, which capture average emission levels in ETS-present sectors.
+
+**The supplier coefficients β̂ⱼ face the same concern in principle.** They are estimated on EU ETS firms — mostly large plants that convert fuel into emissions at industrial scale. A small bakery buying €5K of gas from the same supplier may have a very different emissions-per-euro-purchased relationship. The β̂ⱼ magnitudes are not directly transferable.
+
+**What does transfer is the ranking.** If firm A buys more fuel than firm B from the same suppliers, firm A almost certainly emits more. This is a physical relationship (more fuel → more combustion → more emissions) that does not depend on firm size or EU ETS status. The proxy correctly identifies *who buys fuel* and *how much relative to others* — that ranking is robust to distribution shift even if the exact coefficient magnitudes are not.
+
+**This means the proxy's standalone value is in ranking and classification, not in producing emission levels.** The levels become credible only when combined with external calibration targets — either sector-year totals from the NIR (if trusted) or national aggregates. If one trusts sector-level NIR figures, the proxy ranks firms within sectors and the NIR provides the scale. If one only trusts national aggregates, the proxy still ranks firms economy-wide and the national total provides the scale. The value of B2B data is the ranking; the value of calibration is the scale.
+
+### The calibration problem: no bullet-proof option
+
+The proxy produces a ranking, not levels. To convert that ranking into emission estimates, we need calibration targets — external aggregates that pin down the scale. There is no bullet-proof option for this.
+
+**The proxy cannot provide levels on its own.** The EN coefficients are estimated on EU ETS firms (large, energy-intensive installations). Applying those coefficients to non-ETS firms (smaller, different fuel mixes, different emission intensities per euro purchased) produces a ranking that is informative but whose magnitudes are not directly interpretable. A €1,000 gas purchase from the same supplier means something very different for a steel plant operating a blast furnace and a restaurant running a kitchen stove.
+
+**Sector-year NIR totals are the natural calibration targets, but they are imperfect.** The Belgian NIR reports CO2 emissions from fuel combustion by CRF subcategory (1.A.2.a through 1.A.2.g). These are constructed from regional energy balances compiled by VEKA (Flanders), ICEDD/AWAC (Wallonia), and Brussels Environment. The reliability of these estimates varies sharply by fuel type:
+
+- **Natural gas**: metered by grid operators (Fluvius, CWaPE, SIBELGA) at the connection-point level, classified by NACE code. Uncertainty ~2%. This is hard data.
+- **Solid fossil fuels**: captured through firm-level reporting — IMJV in Flanders (mandatory for firms >0.1 PJ), the REGINE survey in Wallonia (~1,080 firms), and ETS annual emission reports. Also reliable.
+- **Petroleum products**: neither Flanders nor Wallonia has complete regional statistics. Both extrapolate from known (large) firms using an electricity-ratio scaling: P_sector = P_known × (E_sector / E_known). This assumes that the petroleum-to-electricity ratio of large reporters is representative of the entire sector, including non-reporting smaller firms — a strong and untestable assumption.
+
+The petroleum problem is not uniform across sectors. Using CRT data (BEL-CRT-2025, Table 1.A(a) Sheet 2), we compute the share of fossil CO2 from liquid fuels for each CRF 1.A.2 subcategory, averaged over 2013–2022:
+
+| CRF category | Sector | Avg CO2 (kt) | Liquid% | Gas% | Solid% |
+|---|---|---:|---:|---:|---:|
+| 1.A.2.a | Iron and steel | 1,164 | 2% | 96% | 2% |
+| 1.A.2.c | Chemicals | 3,797 | 6% | 93% | <1% |
+| 1.A.2.e | Food, beverages, tobacco | 2,330 | 5% | 91% | 4% |
+| 1.A.2.d | Pulp, paper, print | 563 | 7% | 57% | 17% |
+| 1.A.2.b | Non-ferrous metals | 423 | 10% | 68% | 21% |
+| 1.A.2.f | Non-metallic minerals | 3,388 | 10% | 36% | 41% |
+| 1.A.2.g | Other manufacturing | 1,975 | **44%** | 55% | 1% |
+| **1.A.2** | **Total manufacturing** | **13,640** | **12%** | **71%** | **12%** |
+
+Most named manufacturing sectors (1.A.2.a through 1.A.2.f) derive <10% of their fossil CO2 from petroleum products. Their NIR totals rest overwhelmingly on metered gas and firm-level survey data — these are credible calibration targets. The exception is "other manufacturing" (1.A.2.g), a residual catch-all where 44% of fossil CO2 comes from extrapolated petroleum data. This is also the most heterogeneous category, making the proportionality assumption least defensible.
+
+*(Script: `figures_tables/table_petroleum_dependency.R`. Full discussion in LITERATURE.md, "How the NIR Sector-Year Emission Totals Are Constructed.")*
+
+**The proxy doesn't resolve this either.** Our B2B-based proxy captures total purchases from EN-identified fuel suppliers, but does not distinguish fuel type. We cannot say "the proxy captures the petroleum component better than the NIR" — we don't know what fuel type the purchases correspond to.
+
+**Implication for the paper.** We have two calibration options, neither bullet-proof:
+
+1. **National-aggregate calibration.** Trust only the national total of non-ETS combustion emissions. Avoids leaning on potentially unreliable sector-level splits. But this forces the proxy to allocate emissions across sectors — a task it may not do well, since the proxy ranking is strongest *within* sectors (firms buying from similar suppliers) and weaker *across* sectors (different emission processes, different supplier structures).
+
+2. **Sector-year calibration.** Trust NIR sector-year totals as calibration targets. This dramatically improves prediction accuracy (nRMSE drops from ~0.78 to ~0.51) because it provides the correct scale per sector. But the improvement comes partly from the calibration targets, not the proxy — and for petroleum-heavy sectors, the targets themselves are extrapolated.
+
+The honest framing is: for gas- and solid-fuel-dominated sectors (~88% of total manufacturing CO2), sector-year calibration is well-grounded. For the "other manufacturing" residual (~14% of total), it is calibrating to a model. We should be transparent about this distinction.
+
 ---
 
 ## Paper Skeleton

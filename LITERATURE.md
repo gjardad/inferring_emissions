@@ -1091,35 +1091,83 @@ balance**. Belgium's inventory is compiled by three regional agencies:
 Each region constructs an energy balance describing the quantities of energy
 imported, produced, transformed, and consumed within the region in a given year.
 
-### How energy balances are constructed
+### How energy balances are constructed: fuel-by-fuel data sources
 
-Energy balances are built from multiple data sources:
+The reliability of the regional energy balances varies sharply by fuel type.
+This matters because the NIR converts fuel consumption to emissions using
+emission factors, so the quality of the emission estimate inherits the quality
+of the underlying activity data.
 
-1. **Mandatory company declarations**: In Belgium and most EU countries, energy
-   companies are required by law to report production, transformation, and sales
-   data. This covers electricity generators, refineries, gas distributors, and
-   large fuel distributors.
+*Source: Belgian NIR 2024, Section 3.2.5 (pp. 74–93).*
 
-2. **Administrative data**: Tax and customs records on fuel imports, exports, and
-   domestic sales. Excise duty records provide particularly granular fuel quantity
-   data.
+**Electricity and natural gas — metered, reliable.**
+Grid operators (Fluvius/Elia in Flanders, CWaPE in Wallonia, SIBELGA/Elia in
+Brussels) report consumption per connection point, classified by NACE code.
+Electricity data available since 2003, natural gas since 2005 in Flanders.
+Uncertainty: ~2% (NIR Section 3.2.7.3, p. 110).
 
-3. **Surveys**: Targeted surveys of energy suppliers, industry federations, and
-   individual companies. These are used to allocate fuel consumption to end-use
-   sectors. From time to time, detailed surveys targeting specific sub-items
-   (e.g., wood consumption in households) are conducted to improve estimates.
+**Solid fossil fuels — firm-level surveys, reliable.**
+In Flanders, solid fuel consumption is captured through individual company
+reporting: IMJV (mandatory for firms >0.1 PJ primary energy), ETS annual
+emission reports (from 2013), and energy audits (from 2017). The petroleum
+extrapolation method described below is explicitly *not* applied to solid fuels
+(NIR p. 82 mentions only petroleum products). In Wallonia (NIR p. 89):
+"The solid fuels and the natural gas are listed with the annual survey" — i.e.,
+the REGINE survey (~280 large firms plus ~800 additional). Uncertainty: ~5%
+(NIR p. 110).
 
-4. **EU ETS data**: From 2013 onward, verified EU ETS data became an increasingly
-   important source for the Flemish energy balance and emission inventory. ETS
-   facility-level fuel consumption is used directly where available.
+**Petroleum products — extrapolated, uncertain.**
+Neither Flanders nor Wallonia has complete regional statistics for petroleum
+product consumption. Both regions use an extrapolation method (NIR pp. 82, 89).
+The Flemish method is described as follows (p. 82, verbatim):
 
-5. **Statistical models**: Interpolation, extrapolation, and modeling are used to
-   fill gaps, particularly for sectors where direct measurement is incomplete.
+> "Since we only have complete energy statistics on the Flemish level for
+> electricity and natural gas and no complete regional statistics for petroleum
+> products, some petroleum products of which we know they are widely used in
+> Flanders like LPG (butane/propane), gas- and diesel oil, heavy fuel oil in
+> certain sectors) are extrapolated on a sectoral level. This extrapolation
+> method is based on the ratio of the known individual companies' electricity
+> consumption versus the known total electricity consumption of the sector
+> they belong to. Via this ratio, the known individual companies' consumption
+> of petroleum products is scaled up to the sector level."
 
-The energy balance is organized as a commodity-by-sector matrix. The "final
-consumption" rows are disaggregated by economic sector following NACE Rev. 2
-classifications, though the sectoral granularity varies (typically 10–20 industry
-groupings, not full 2-digit NACE).
+In formula: for a given NACE sector, let E_known be total electricity of
+individually reporting firms (IMJV, ETS, energy audits), E_sector the total
+sector electricity from grid operators, and P_known the petroleum consumption
+of those same reporters. Then:
+
+    P_sector = P_known × (E_sector / E_known)
+
+The key assumption is that the petroleum-to-electricity ratio of large
+reporters is representative of the entire sector, including non-reporting
+(smaller) firms. This is a strong assumption: smaller firms may have very
+different fuel mixes. In Wallonia, the method is described in a single
+sentence (p. 89): "The petroleum products are extrapolated on the basis of
+electricity consumption." Uncertainty: 2–8% depending on sector (NIR p. 110),
+though this likely understates the true uncertainty given the extrapolation.
+
+The NIR does not clarify: (a) whether the extrapolation is done fuel-by-fuel
+(diesel, heavy fuel oil, LPG separately) or pooled; (b) whether the scaling
+ratio is computed at the firm level or directly at the sector level; (c) the
+exact set of "known individual companies" (IMJV only, ETS only, or their
+union).
+
+**EU ETS data — verified, plant-specific.**
+From 2013 onward, ETS installation-level data (activity data and CO2 emissions)
+are fully integrated into all three regional energy balances (NIR pp. 80, 103).
+ETS firms use Tier 2–3 plant-specific emission factors with measured net
+calorific values and oxidation factors. Non-ETS firms use mainly IPCC 2006
+default emission factors (Tier 1), except natural gas which uses a
+Belgium-specific factor from 2021.
+
+**Non-ETS emissions are a residual.** Non-ETS fuel consumption = total sectoral
+consumption (from energy balance) minus ETS installations' consumption (from
+verified reports). All errors in the total energy balance therefore propagate
+entirely to the non-ETS residual.
+
+**Brussels.** Industry is a negligible share of Brussels emissions. For fuels
+other than electricity and natural gas, "the final consumption in 2013 is
+extrapolated taking degree days into account" (NIR p. 91).
 
 ### From energy balances to emissions
 
@@ -1149,41 +1197,63 @@ The CRF-to-NACE crosswalk (in our data: `DATA_DIR/raw/Correspondences_and_dictio
 maps these CRF categories to NACE Rev. 2 sectors, enabling us to construct
 sector-year calibration targets at the NACE 2-digit level.
 
-### Reliability assessment
+### Reliability assessment: which sectors can we trust?
 
-**Strengths:**
-- Energy balances are cross-checked for internal consistency: total supply must
-  equal total consumption plus losses plus statistical difference. High
-  statistical differences flag data quality issues.
-- CO2 from fuel combustion has relatively low uncertainty (~2–5% at the national
-  level) because it depends primarily on well-measured carbon content.
-- The Reference Approach (top-down, based on national fuel supply) serves as an
-  independent cross-check on the Sectoral Approach (bottom-up). Belgium reports
-  both, and differences are documented in the NIR.
-- Belgium's inventory undergoes annual expert review by the UNFCCC.
+The reliability of NIR sectoral emission totals depends on the fuel mix of
+each sector. Using CRT data (BEL-CRT-2025, Table 1.A(a) Sheet 2), we compute
+the share of fossil CO2 from petroleum products for each CRF 1.A.2 subcategory,
+averaged over 2013–2022:
 
-**Limitations:**
-- Sectoral allocation is the main source of uncertainty. While total national
-  fuel consumption is well constrained by supply-side data, allocating it to
-  specific sectors relies on surveys, models, and assumptions that introduce
-  error.
-- The energy balance's sectoral granularity (10–20 groupings) is coarser than
-  NACE 2-digit. The CRF-to-NACE crosswalk introduces additional mapping
-  uncertainty.
-- Small sectors with few facilities may have poorly estimated totals if direct
-  survey coverage is thin.
-- Energy balances are not constructed from firm-level microdata in the way that,
-  say, the MECS survey in the US would allow. They represent a top-down
-  allocation of nationally constrained fuel totals, not a bottom-up aggregation
-  of firm-level consumption.
+| CRF category | Sector | Avg CO2 (kt) | Liquid% | Solid% | Gas% | Other% |
+|---|---|---:|---:|---:|---:|---:|
+| 1.A.2.a | Iron and steel | 1,164 | 1.9% | 2.0% | 95.8% | 0.4% |
+| 1.A.2.b | Non-ferrous metals | 423 | 10.3% | 21.2% | 68.4% | 0.1% |
+| 1.A.2.c | Chemicals | 3,797 | 6.4% | 0.1% | 93.2% | 0.3% |
+| 1.A.2.d | Pulp, paper, print | 563 | 6.8% | 17.4% | 56.5% | 19.3% |
+| 1.A.2.e | Food, beverages, tobacco | 2,330 | 5.0% | 3.9% | 91.1% | 0.0% |
+| 1.A.2.f | Non-metallic minerals | 3,388 | 10.2% | 40.5% | 36.0% | 13.4% |
+| 1.A.2.g | Other manufacturing | 1,975 | 43.6% | 0.8% | 54.6% | 1.0% |
+| **1.A.2** | **Total manufacturing** | **13,640** | **12.2%** | **12.4%** | **71.0%** | **4.4%** |
 
-**Bottom line for our calibration exercise:** The NIR sector-year totals are the
-best available estimates of sectoral combustion emissions, compiled under
-international standards and subject to external review. The main risk is not in
-the total (which is well constrained by fuel supply data) but in the sectoral
-allocation. For our purposes, this means the calibration correctly anchors the
-overall level of emissions within each sector-year, even if the NIR's own
-sectoral split carries some uncertainty.
+*"Liquid%" = share from petroleum products, whose sectoral allocation relies on
+electricity-ratio extrapolation. "Gas%" and "Solid%" are based on metered or
+surveyed data. Script: `figures_tables/table_petroleum_dependency.R`.*
+
+**High reliability (<10% petroleum-dependent):**
+Iron and steel (1.A.2.a), chemicals (1.A.2.c), food/beverages/tobacco (1.A.2.e),
+and pulp/paper/print (1.A.2.d) are overwhelmingly gas- or solid-fuel based.
+Their NIR totals rest almost entirely on metered natural gas and firm-level
+survey data. These sectors account for ~58% of total manufacturing CO2.
+
+**Moderate reliability (10–25% petroleum-dependent):**
+Non-ferrous metals (1.A.2.b) and non-metallic minerals (1.A.2.f). About 10% of
+their emissions come from petroleum products. Non-metallic minerals also has a
+large "other fossil fuels" share (waste fuels used in cement kilns), whose
+measurement quality is unclear.
+
+**Low reliability (>25% petroleum-dependent):**
+"Other manufacturing" (1.A.2.g) — a residual catch-all category — derives 44%
+of its fossil CO2 from liquid fuels. This is the sector where the NIR's
+petroleum extrapolation assumption bites hardest. It is also where the
+proportionality assumption (petroleum/electricity ratio of large firms =
+that of small firms) is least defensible, given the heterogeneity of the
+"other" category.
+
+**Overall strengths (unchanged):**
+- Energy balances are cross-checked for internal consistency (supply = demand +
+  losses + statistical difference).
+- CO2 emission factors have low uncertainty (~1–5%) because CO2 depends on
+  well-characterized carbon content.
+- The Reference Approach (top-down, national fuel supply) cross-checks the
+  Sectoral Approach (bottom-up). Belgium reports both.
+- Inventories undergo annual UNFCCC expert review.
+
+**Bottom line for our calibration exercise:** For most named manufacturing
+sectors (1.A.2.a through 1.A.2.f), the NIR emission totals are grounded in
+metered gas data and firm-level surveys — they are reliable calibration targets.
+The main exception is "other manufacturing" (1.A.2.g), where nearly half of
+emissions come from extrapolated petroleum data. The CRF-to-NACE crosswalk
+introduces additional mapping uncertainty at the 2-digit level.
 
 ### Key references
 

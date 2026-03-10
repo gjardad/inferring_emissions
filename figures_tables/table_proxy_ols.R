@@ -5,18 +5,22 @@
 #   OLS regressions showing the fuel-supply proxy has bite in explaining
 #   firm-level emissions, conditional on revenue, year, sector, and firm FE.
 #
-#   Four columns (all in levels):
-#     (1) y ~ revenue + proxy + year FE
-#     (2) y ~ revenue + proxy + year FE + sector FE
-#     (3) y ~ revenue + proxy + year FE + firm FE
-#     (4) y ~ proxy  [no FE, no controls]
+#   Specification: asinh(y) ~ proxy (+ controls).
+#   The proxy is already defined in asinh terms (sum of beta_j * asinh(x_ijt)),
+#   so asinh(y) ~ proxy is the natural specification.
+#
+#   Four columns:
+#     (1) asinh(y) ~ revenue + proxy + year FE
+#     (2) asinh(y) ~ revenue + proxy + year FE + sector FE
+#     (3) asinh(y) ~ revenue + proxy + year FE + firm FE
+#     (4) asinh(y) ~ proxy  [no FE, no controls]
 #
 #   Sample: all training-sample firms (no restriction on y > 0 or proxy > 0).
 #   Standard errors clustered at the firm level.
 #
 # INPUTS
 #   {PROC_DATA}/training_sample.RData
-#   {PROC_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/fold_specific_proxy_asinh.RData
 #
 # OUTPUTS
 #   {OUTPUT_DIR}/proxy_ols_regression.tex
@@ -43,16 +47,15 @@ library(lmtest)
 cat("Loading training sample...\n")
 load(file.path(PROC_DATA, "training_sample.RData"))
 
-cat("Loading fold-specific proxy...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
+cat("Loading fold-specific proxy (asinh LHS)...\n")
+load(file.path(PROC_DATA, "fold_specific_proxy_asinh.RData"))
 
 # Merge
 panel <- training_sample %>%
-  left_join(fs_proxy_panel %>% select(vat, year, fold_k, fold_specific_proxy,
-                                       primary_nace2d),
+  left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_asinh),
             by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy = coalesce(fold_specific_proxy, 0))
-rm(training_sample, fs_proxy_panel)
+  mutate(fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0))
+rm(training_sample, fs_proxy_panel_asinh)
 
 # Revenue
 if ("turnover_VAT" %in% names(panel)) {
@@ -65,6 +68,7 @@ if ("turnover_VAT" %in% names(panel)) {
 reg <- panel %>%
   filter(!is.na(y), !is.na(revenue)) %>%
   mutate(
+    asinh_y    = asinh(y),
     year_f     = factor(year),
     sector_f   = factor(nace2d),
     firm_f     = factor(vat)
@@ -72,11 +76,11 @@ reg <- panel %>%
 
 cat("Regression sample:", nrow(reg), "obs,", n_distinct(reg$vat), "firms\n")
 
-# ── Estimate models (all in levels) ──────────────────────────────────────────
-m1 <- lm(y ~ revenue + fold_specific_proxy + year_f, data = reg)
-m2 <- lm(y ~ revenue + fold_specific_proxy + year_f + sector_f, data = reg)
-m3 <- lm(y ~ revenue + fold_specific_proxy + year_f + firm_f, data = reg)
-m4 <- lm(y ~ fold_specific_proxy, data = reg)
+# ── Estimate models: asinh(y) ~ proxy (+ controls) ─────────────────────────
+m1 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f, data = reg)
+m2 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f + sector_f, data = reg)
+m3 <- lm(asinh_y ~ revenue + fold_specific_proxy_asinh + year_f + firm_f, data = reg)
+m4 <- lm(asinh_y ~ fold_specific_proxy_asinh, data = reg)
 
 # ── Firm-clustered standard errors ───────────────────────────────────────────
 cluster_vcov <- function(model, cluster_var) {
@@ -125,7 +129,7 @@ fmt_coef_row <- function(ct_list, varname) {
 cts <- list(ct1, ct2, ct3, ct4)
 
 rev_rows   <- fmt_coef_row(cts, "revenue")
-proxy_rows <- fmt_coef_row(cts, "fold_specific_proxy")
+proxy_rows <- fmt_coef_row(cts, "fold_specific_proxy_asinh")
 
 models  <- list(m1, m2, m3, m4)
 n_obs   <- sapply(models, nobs)
@@ -157,7 +161,7 @@ tex <- c(
           format(n_obs[3], big.mark = ","),
           format(n_obs[4], big.mark = ",")),
   "\\bottomrule",
-  "\\multicolumn{5}{p{0.75\\textwidth}}{\\footnotesize \\textit{Notes:} All training-sample firms. Emissions and proxy in levels. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
+  "\\multicolumn{5}{p{0.75\\textwidth}}{\\footnotesize \\textit{Notes:} Dependent variable: $\\operatorname{asinh}(y)$, where $y$ is verified emissions (tCO\\textsubscript{2}). Proxy is the coefficient-weighted fuel-supply proxy from the asinh-LHS elastic net. All training-sample firms. Standard errors clustered at the firm level in parentheses. $^{***}$\\,$p<0.01$, $^{**}$\\,$p<0.05$, $^{*}$\\,$p<0.10$.}",
   "\\end{tabular}"
 )
 
@@ -170,11 +174,11 @@ cat("Saved proxy OLS table to:", out_path, "\n")
 
 # ── Print summary to console ─────────────────────────────────────────────────
 cat("\n--- Column (1): Year FE ---\n")
-print(ct1[c("revenue", "fold_specific_proxy"), ])
+print(ct1[c("revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (2): Year + Sector FE ---\n")
-print(ct2[c("revenue", "fold_specific_proxy"), ])
+print(ct2[c("revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (3): Year + Firm FE ---\n")
-print(ct3[c("revenue", "fold_specific_proxy"), ])
+print(ct3[c("revenue", "fold_specific_proxy_asinh"), ])
 cat("\n--- Column (4): Proxy only ---\n")
-print(ct4["fold_specific_proxy", ])
+print(ct4["fold_specific_proxy_asinh", ])
 cat("R2:", summary(m4)$r.squared, "\n")
