@@ -94,6 +94,7 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready numbers (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
 2. **Compare levels-LHS vs asinh-LHS proxies** once asinh outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
 3. **Fair EN-vs-Tabachova R² comparison** once `proxy_tabachova_asinh` is rebuilt from full B2B. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+4. **Run `figures_tables/table_sectors_17_18_summary.R` on RMD** to get ETS vs non-ETS summary stats for NACE 17 (Paper) and 18 (Printing). Needs full annual accounts. EU ETS covers ~97% of combustion emissions in these sectors (CRF 1.A.2.d), so they are candidates for adding as training zeros like 19/24. Copy output to local 1.
 
 ## Current Status
 
