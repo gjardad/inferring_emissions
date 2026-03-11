@@ -91,16 +91,24 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## For Tomorrow
 
-1. **Run full pipeline on RMD** (in order):
-   1. `preprocess/build_training_sample.R` → `training_sample.RData` (new sample: drops C24 non-ferrous, adds C17/C18)
-   2. `analysis/active/build_fold_specific_proxy_asinh.R` → `fold_specific_proxy_asinh.RData`
-   3. `preprocess/build_tabachova_proxy.R` → `tabachova_proxy.RData`
-   4. `preprocess/package_for_local.R` → `firm_year_panel_with_proxies.RData` (merges all components + full annual accounts)
-   5. Copy `firm_year_panel_with_proxies.RData` to local 1
-2. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
-3. **Update local scripts to load `firm_year_panel_with_proxies.RData`** instead of `training_sample.RData`. Scripts that need updating include: `figures_tables/table_proxy_ols.R`, `figures_tables/table_sectors_19_24_summary.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, and any others loading `training_sample.RData` or `fold_specific_proxy_asinh.RData`. Also update scripts with hardcoded `c("19", "24")`: `utils/calc_metrics.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`.
-4. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
-5. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
+2. **Update local scripts to load `firm_year_panel_with_proxies.RData`** instead of `training_sample.RData`. Scripts that need updating include: `figures_tables/table_proxy_ols.R`, `figures_tables/table_sectors_19_24_summary.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, and any others loading `training_sample.RData` or `fold_specific_proxy_asinh.RData`. Also update scripts with hardcoded `c("19", "24")`: `utils/calc_metrics.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`.
+3. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
+   - `analysis/active/build_fold_specific_proxy.R`
+   - `analysis/active/build_loso_proxy.R`
+   - `analysis/active/build_loso_proxy_asinh.R`
+   - `analysis/active/build_firmfoldcv_proxy.R`
+   - `analysis/active/build_firmfoldcv_proxy_asinh.R`
+   - `analysis/active/enet_climate_trace.R`
+   - `preprocess/build_design_matrix.R`
+   - `preprocess/build_proxy.R`
+   - `preprocess/run_full_pipeline.R`
+   - `preprocess/data_dimensions.R`
+   - `figures_tables/elastic_net_proxy_diagnostics.R`
+   - `analysis/outstanding/alpha_sensitivity.R`
+4. **Check `nace2d` vs `primary_nace2d` consistency downstream.** In `firm_year_panel_with_proxies.RData`, `nace2d` is the year-specific NACE code from annual accounts, while `primary_nace2d` is the firm's modal NACE code (used for LOSOCV fold assignment). They disagree for some firm-years due to NACE code switching over time (e.g., NACE 17: 3,213 vs 3,245 obs; NACE 33 appears in `nace2d` but not `primary_nace2d`). Need to audit which variable is used where — fold assignment, sector-level evaluation, zero-sector definition — and make sure it's intentional and consistent.
+5. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
+6. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
 
 ## Current Status
 

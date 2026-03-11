@@ -21,8 +21,7 @@
 #   Standard errors clustered at the firm level.
 #
 # INPUTS
-#   {PROC_DATA}/training_sample.RData
-#   {PROC_DATA}/fold_specific_proxy_asinh.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUTS
 #   {OUTPUT_DIR}/proxy_ols_regression.tex
@@ -46,19 +45,13 @@ library(sandwich)
 library(lmtest)
 
 # ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading training sample...\n")
-load(file.path(PROC_DATA, "training_sample.RData"))
+cat("Loading firm-year panel with proxies...\n")
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-cat("Loading fold-specific proxy (asinh LHS)...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy_asinh.RData"))
-
-# Merge
 panel <- training_sample %>%
-  left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_all_asinh),
-            by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy_all_asinh = coalesce(fold_specific_proxy_all_asinh, 0),
+  mutate(fold_specific_proxy_all_asinh = pmax(coalesce(fold_specific_proxy_all_asinh, 0), 0),
          proxy_tabachova_asinh         = coalesce(proxy_tabachova_asinh, 0))
-rm(training_sample, fs_proxy_panel_asinh)
+rm(training_sample)
 
 # Log revenue (matches the EN specification)
 if (!"log_revenue" %in% names(panel)) {

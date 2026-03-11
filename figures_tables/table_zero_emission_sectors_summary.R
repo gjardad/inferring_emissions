@@ -1,18 +1,19 @@
 ###############################################################################
-# figures_tables/table_sectors_19_24_summary.R
+# figures_tables/table_zero_emission_sectors_summary.R
 #
 # PURPOSE
-#   Descriptive statistics for firms in NACE 19 (Oil Refining) and NACE 24
-#   (Basic Metals) split by EU ETS status, showing that non-ETS firms are a
-#   meaningful share of these sectors.
+#   Descriptive statistics for firms in zero-emission sectors (NACE 17, 18, 19,
+#   24) split by EU ETS status, showing that non-ETS firms are a meaningful
+#   share of these sectors.
 #
+#   Long-format table: each sector is a pair of rows (EU ETS / Non-ETS).
 #   Columns: Firms, Firm-years, Mean revenue (M EUR), Share of sector revenue.
 #
 # INPUTS
-#   {PROC_DATA}/training_sample.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUTS
-#   {OUTPUT_DIR}/sectors_19_24_summary.tex
+#   {OUTPUT_DIR}/zero_emission_sectors_summary.tex
 #
 # RUNS ON: local 1
 ###############################################################################
@@ -31,17 +32,25 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 
 # ── Load data ────────────────────────────────────────────────────────────────
-load(file.path(PROC_DATA, "training_sample.RData"))
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
 panel <- training_sample %>%
-  filter(nace2d %in% c(19, 24)) %>%
+  filter(nace2d %in% c(17, 18, 19, 24)) %>%
   select(vat, year, nace2d, euets, turnover_VAT)
-rm(training_sample)
+rm(training_sample, syt)
+
+# ── Assign sector groups (merge NACE 17+18) ──────────────────────────────────
+panel <- panel %>%
+  mutate(sector_group = case_when(
+    nace2d %in% c(17, 18) ~ "ppp",
+    nace2d == "19"         ~ "refining",
+    nace2d == "24"         ~ "steel"
+  ))
 
 # ── Compute summary stats ────────────────────────────────────────────────────
 stats <- panel %>%
-  mutate(group = ifelse(euets == 1, "ETS", "Non-ETS")) %>%
-  group_by(nace2d, group) %>%
+  mutate(group = ifelse(euets == 1, "EU ETS", "Non-ETS")) %>%
+  group_by(sector_group, group) %>%
   summarise(
     firms    = n_distinct(vat),
     obs      = n(),
@@ -49,7 +58,7 @@ stats <- panel %>%
     total_rev = sum(turnover_VAT, na.rm = TRUE),
     .groups  = "drop"
   ) %>%
-  group_by(nace2d) %>%
+  group_by(sector_group) %>%
   mutate(share_rev = total_rev / sum(total_rev) * 100) %>%
   ungroup()
 
@@ -58,35 +67,59 @@ fmt_int <- function(x) format(x, big.mark = ",")
 fmt_rev <- function(x) formatC(x / 1e6, format = "f", digits = 0, big.mark = ",")
 fmt_pct <- function(x) sprintf("%.1f", x)
 
-get_val <- function(nace, grp) {
-  stats %>% filter(nace2d == nace, group == grp)
+get_val <- function(sg, grp) {
+  row <- stats %>% filter(sector_group == sg, group == grp)
+  if (nrow(row) == 0) return(list(firms = 0, obs = 0, mean_rev = NA, share_rev = 0))
+  row
 }
 
-s19_ets    <- get_val(19, "ETS")
-s19_nonets <- get_val(19, "Non-ETS")
-s24_ets    <- get_val(24, "ETS")
-s24_nonets <- get_val(24, "Non-ETS")
+# ── Sector definitions ──────────────────────────────────────────────────────
+sectors <- list(
+  list(key = "ppp",      label = "Paper, pulp \\& printing"),
+  list(key = "refining", label = "Petroleum refining"),
+  list(key = "steel",    label = "Iron \\& steel")
+)
 
 # ── Build LaTeX table ────────────────────────────────────────────────────────
 tex <- c(
-  "\\begin{tabular}{l cccc}",
+  "\\begin{tabular}{ll ccc}",
   "\\toprule",
-  " & \\multicolumn{2}{c}{Oil Refining (NACE 19)} & \\multicolumn{2}{c}{Basic Metals (NACE 24)} \\\\",
-  "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5}",
-  " & ETS & Non-ETS & ETS & Non-ETS \\\\",
-  "\\midrule",
-  sprintf("\\# Firms & %s & %s & %s & %s \\\\",
-          fmt_int(s19_ets$firms), fmt_int(s19_nonets$firms),
-          fmt_int(s24_ets$firms), fmt_int(s24_nonets$firms)),
-  sprintf("\\# Firm-years & %s & %s & %s & %s \\\\",
-          fmt_int(s19_ets$obs), fmt_int(s19_nonets$obs),
-          fmt_int(s24_ets$obs), fmt_int(s24_nonets$obs)),
-  sprintf("Mean revenue (M\\euro) & %s & %s & %s & %s \\\\",
-          fmt_rev(s19_ets$mean_rev), fmt_rev(s19_nonets$mean_rev),
-          fmt_rev(s24_ets$mean_rev), fmt_rev(s24_nonets$mean_rev)),
-  sprintf("Revenue share (\\%%) & %s & %s & %s & %s \\\\",
-          fmt_pct(s19_ets$share_rev), fmt_pct(s19_nonets$share_rev),
-          fmt_pct(s24_ets$share_rev), fmt_pct(s24_nonets$share_rev)),
+  "Sector & & N Firms & N Firm-years & Revenue share (\\%) \\\\",
+  "\\midrule"
+)
+
+for (i in seq_along(sectors)) {
+  s <- sectors[[i]]
+  ets    <- get_val(s$key, "EU ETS")
+  nonets <- get_val(s$key, "Non-ETS")
+
+  has_ets <- ets$firms > 0
+
+  if (has_ets) {
+    tex <- c(tex,
+      sprintf("\\multirow{2}{*}{%s} & EU ETS & %s & %s & %s \\\\",
+              s$label,
+              fmt_int(ets$firms), fmt_int(ets$obs),
+              fmt_pct(ets$share_rev)),
+      sprintf(" & Non-ETS & %s & %s & %s \\\\",
+              fmt_int(nonets$firms), fmt_int(nonets$obs),
+              fmt_pct(nonets$share_rev))
+    )
+  } else {
+    tex <- c(tex,
+      sprintf("%s & Non-ETS & %s & %s & %s \\\\",
+              s$label,
+              fmt_int(nonets$firms), fmt_int(nonets$obs),
+              fmt_pct(nonets$share_rev))
+    )
+  }
+
+  if (i < length(sectors)) {
+    tex <- c(tex, "\\midrule")
+  }
+}
+
+tex <- c(tex,
   "\\bottomrule",
   "\\end{tabular}"
 )
@@ -94,9 +127,9 @@ tex <- c(
 # ── Save ─────────────────────────────────────────────────────────────────────
 if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
 
-out_path <- file.path(OUTPUT_DIR, "sectors_19_24_summary.tex")
+out_path <- file.path(OUTPUT_DIR, "zero_emission_sectors_summary.tex")
 writeLines(tex, out_path)
 cat("Saved to:", out_path, "\n")
 
 # ── Print to console ────────────────────────────────────────────────────────
-cat("\n"); print(stats %>% select(nace2d, group, firms, obs, mean_rev, share_rev))
+cat("\n"); print(stats %>% select(sector_group, group, firms, obs, mean_rev, share_rev))
