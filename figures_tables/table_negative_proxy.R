@@ -70,7 +70,7 @@ fmt_pct <- function(x) sprintf("%.1f", x)
 fmt_med <- function(x) ifelse(is.na(x), "---", fmt_n(x))
 
 tex <- c(
-  "\\begin{tabular}{l rrrr}",
+  "\\begin{tabular}{l cccc}",
   "\\toprule",
   "Proxy sign & $N$ & \\% zero-emission sectors & \\% emitters & Median $y \\mid$ emit \\\\",
   "\\midrule",

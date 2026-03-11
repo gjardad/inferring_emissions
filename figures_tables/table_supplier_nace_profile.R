@@ -43,6 +43,7 @@ suppliers <- supplier_summary_pooled %>%
 
 cat("\nEN-selected suppliers (enet_asinh, lambda.min, coef > 0):",
     nrow(suppliers), "\n")
+cat("Total eligible sellers (candidates):", length(eligible_sellers), "\n")
 
 
 # ── Build NACE lookup (modal NACE 5-digit per firm) ──────────────────────────
@@ -107,6 +108,14 @@ for (i in seq_len(nrow(nace2d_table))) {
               nace2d_table$share_weight[i],
               nace2d_table$tabachova_overlap[i]))
 }
+
+# Summary for paper text
+core_sectors <- c("19", "35", "46")
+n_core <- sum(nace2d_table$n_suppliers[nace2d_table$nace2d %in% core_sectors])
+pct_core <- round(100 * n_core / sum(nace2d_table$n_suppliers), 1)
+n_other_sectors <- sum(!nace2d_table$nace2d %in% core_sectors)
+cat(sprintf("\nPaper text: %.1f%% of selected suppliers in NACE 19/35/46\n", pct_core))
+cat(sprintf("Remaining suppliers scattered across %d other sectors\n", n_other_sectors))
 
 
 # ── EN vs Tabachova comparison ───────────────────────────────────────────────
