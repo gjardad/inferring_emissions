@@ -2,10 +2,14 @@
 # figures_tables/table_supplier_nace_profile.R
 #
 # PURPOSE
-#   What sectors do the EN-selected suppliers belong to?
-#   Reports NACE 2-digit distribution of positive-coefficient suppliers
-#   from the enet_asinh model at lambda.min, and compares coverage with
-#   Tabachova's six NACE 4-digit codes.
+#   Characterize the suppliers selected by the full-sample elastic net
+#   (enet_asinh at lambda.min). Reports:
+#     - Aggregate counts: selected (pos/neg) out of total candidates
+#     - NACE 2-digit breakdown with headcount and coefficient-weighted shares,
+#       split by positive vs negative coefficients
+#     - Tabachova NACE overlap flags
+#     - Reverse Tabachova comparison: of Tabachova-classified eligible sellers,
+#       how many does the EN select?
 #
 # INPUTS
 #   - {INT_DATA}/fuel_suppliers_elastic_net_results.RData
@@ -13,6 +17,9 @@
 #
 # OUTPUTS
 #   - {OUTPUT_DIR}/supplier_nace_profile.csv
+#   - Console output with all numbers needed for the paper text
+#
+# RUNS ON: RMD (full annual accounts needed for NACE matching)
 ###############################################################################
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -37,13 +44,24 @@ cat("Loading annual accounts...\n")
 load(file.path(PROC_DATA, "annual_accounts_selected_sample_key_variables.RData"))
 
 
-# ── Filter to enet_asinh, lambda.min, positive coefficients ──────────────────
+# ── Filter to enet_asinh, lambda.min, all non-zero coefficients ──────────────
 suppliers <- supplier_summary_pooled %>%
-  filter(model == "enet_asinh", lambda == "min", coef > 0)
+  filter(model == "enet_asinh", lambda == "min", coef != 0) %>%
+  mutate(sign = if_else(coef > 0, "pos", "neg"))
 
-cat("\nEN-selected suppliers (enet_asinh, lambda.min, coef > 0):",
-    nrow(suppliers), "\n")
-cat("Total eligible sellers (candidates):", length(eligible_sellers), "\n")
+n_total     <- nrow(suppliers)
+n_pos       <- sum(suppliers$sign == "pos")
+n_neg       <- sum(suppliers$sign == "neg")
+n_candidates <- length(eligible_sellers)
+
+cat("\n")
+cat(strrep("=", 70), "\n")
+cat("  AGGREGATE SUPPLIER COUNTS\n")
+cat(strrep("=", 70), "\n\n")
+cat("Total eligible sellers (candidates):", n_candidates, "\n")
+cat("EN-selected suppliers (coef != 0):  ", n_total, "\n")
+cat("  with positive coefficient:        ", n_pos, "\n")
+cat("  with negative coefficient:        ", n_neg, "\n")
 
 
 # ── Build NACE lookup (modal NACE 5-digit per firm) ──────────────────────────
@@ -65,9 +83,9 @@ suppliers <- suppliers %>%
 
 n_matched   <- sum(!is.na(suppliers$nace4d))
 n_unmatched <- sum(is.na(suppliers$nace4d))
-cat("NACE match rate:", n_matched, "matched,",
+cat("\nNACE match rate:", n_matched, "matched,",
     n_unmatched, "unmatched (",
-    round(100 * n_unmatched / nrow(suppliers), 1), "% missing)\n\n")
+    round(100 * n_unmatched / nrow(suppliers), 1), "% missing)\n")
 
 
 # ── Tabachova NACE 4-digit codes ─────────────────────────────────────────────
@@ -76,84 +94,132 @@ tabachova_nace2d <- unique(substr(tabachova_nace4d, 1, 2))
 
 
 # ── NACE 2-digit table ──────────────────────────────────────────────────────
-total_weight <- sum(suppliers$coef)
+# Totals for weight shares
+total_weight_pos <- sum(suppliers$coef[suppliers$sign == "pos"])
+total_weight_neg <- sum(abs(suppliers$coef[suppliers$sign == "neg"]))
+total_weight_all <- sum(abs(suppliers$coef))
 
-nace2d_table <- suppliers %>%
-  filter(!is.na(nace2d)) %>%
+matched <- suppliers %>% filter(!is.na(nace2d))
+
+nace2d_table <- matched %>%
   group_by(nace2d) %>%
   summarise(
-    n_suppliers  = n(),
-    weight_sum   = sum(coef),
+    # Headcounts
+    n_all  = n(),
+    n_pos  = sum(sign == "pos"),
+    n_neg  = sum(sign == "neg"),
+    # Coefficient sums
+    weight_pos = sum(coef[sign == "pos"]),
+    weight_neg = sum(abs(coef[sign == "neg"])),
     .groups = "drop"
   ) %>%
   mutate(
-    share_suppliers = round(100 * n_suppliers / sum(n_suppliers), 2),
-    share_weight    = round(100 * weight_sum / total_weight, 2),
-    tabachova_overlap = if_else(nace2d %in% tabachova_nace2d, "yes", "")
+    # Share of ALL suppliers in this sector
+    share_all      = round(100 * n_all / sum(n_all), 2),
+    # Share of all positive-coef suppliers that are in this sector
+    share_of_pos   = round(100 * n_pos / sum(n_pos), 2),
+    # Share of all negative-coef suppliers that are in this sector
+    share_of_neg   = round(100 * n_neg / sum(n_neg), 2),
+    # Within this sector: what fraction have positive vs negative coef
+    pct_pos_within = round(100 * n_pos / n_all, 1),
+    pct_neg_within = round(100 * n_neg / n_all, 1),
+    # Same three shares but coefficient-weighted
+    wshare_all     = round(100 * (weight_pos + weight_neg) / total_weight_all, 2),
+    wshare_of_pos  = round(100 * weight_pos / total_weight_pos, 2),
+    wshare_of_neg  = if_else(total_weight_neg > 0,
+                             round(100 * weight_neg / total_weight_neg, 2), 0),
+    wpct_pos_within = round(100 * weight_pos / (weight_pos + weight_neg), 1),
+    wpct_neg_within = round(100 * weight_neg / (weight_pos + weight_neg), 1),
+    # Tabachova flag
+    tabachova = if_else(nace2d %in% tabachova_nace2d, "yes", "")
   ) %>%
-  arrange(desc(share_weight))
+  arrange(desc(wshare_all))
 
-cat(strrep("=", 70), "\n")
-cat("  NACE 2-digit profile of EN-selected suppliers\n")
-cat(strrep("=", 70), "\n\n")
 
-cat(sprintf("%-8s  %12s  %16s  %14s  %10s\n",
-            "NACE2d", "N suppliers", "Share suppliers%", "Share weight%", "Tabachova"))
-cat(strrep("-", 70), "\n")
+# ── Print NACE 2-digit table ─────────────────────────────────────────────────
+cat("\n")
+cat(strrep("=", 90), "\n")
+cat("  NACE 2-DIGIT PROFILE OF EN-SELECTED SUPPLIERS\n")
+cat(strrep("=", 90), "\n\n")
+
+# Part A: Headcount shares
+cat("--- HEADCOUNT ---\n\n")
+cat(sprintf("%-6s  %5s %5s %5s | %7s %7s %7s | %6s %6s | %s\n",
+            "NACE", "All", "Pos", "Neg",
+            "Sh.All", "Sh.Pos", "Sh.Neg",
+            "%PosIn", "%NegIn", "Tab."))
+cat(strrep("-", 90), "\n")
 for (i in seq_len(nrow(nace2d_table))) {
-  cat(sprintf("%-8s  %12d  %15.2f%%  %13.2f%%  %10s\n",
-              nace2d_table$nace2d[i],
-              nace2d_table$n_suppliers[i],
-              nace2d_table$share_suppliers[i],
-              nace2d_table$share_weight[i],
-              nace2d_table$tabachova_overlap[i]))
+  r <- nace2d_table[i, ]
+  cat(sprintf("%-6s  %5d %5d %5d | %6.2f%% %6.2f%% %6.2f%% | %5.1f%% %5.1f%% | %s\n",
+              r$nace2d, r$n_all, r$n_pos, r$n_neg,
+              r$share_all, r$share_of_pos, r$share_of_neg,
+              r$pct_pos_within, r$pct_neg_within,
+              r$tabachova))
 }
 
-# Summary for paper text
+# Part B: Coefficient-weighted shares
+cat("\n--- COEFFICIENT-WEIGHTED ---\n\n")
+cat(sprintf("%-6s  %8s %8s %8s | %7s %7s %7s | %6s %6s | %s\n",
+            "NACE", "W.Pos", "W.Neg", "W.All",
+            "Sh.All", "Sh.Pos", "Sh.Neg",
+            "%PosIn", "%NegIn", "Tab."))
+cat(strrep("-", 90), "\n")
+for (i in seq_len(nrow(nace2d_table))) {
+  r <- nace2d_table[i, ]
+  cat(sprintf("%-6s  %8.4f %8.4f %8.4f | %6.2f%% %6.2f%% %6.2f%% | %5.1f%% %5.1f%% | %s\n",
+              r$nace2d, r$weight_pos, r$weight_neg, r$weight_pos + r$weight_neg,
+              r$wshare_all, r$wshare_of_pos, r$wshare_of_neg,
+              r$wpct_pos_within, r$wpct_neg_within,
+              r$tabachova))
+}
+
+
+# ── Paper text summary ───────────────────────────────────────────────────────
+cat("\n")
+cat(strrep("=", 70), "\n")
+cat("  PAPER TEXT SUMMARY\n")
+cat(strrep("=", 70), "\n\n")
+
+n_sectors_with_suppliers <- n_distinct(matched$nace2d)
 core_sectors <- c("19", "35", "46")
-n_core <- sum(nace2d_table$n_suppliers[nace2d_table$nace2d %in% core_sectors])
-pct_core <- round(100 * n_core / sum(nace2d_table$n_suppliers), 1)
+n_core_all <- sum(nace2d_table$n_all[nace2d_table$nace2d %in% core_sectors])
+pct_core_all <- round(100 * n_core_all / sum(nace2d_table$n_all), 1)
 n_other_sectors <- sum(!nace2d_table$nace2d %in% core_sectors)
-cat(sprintf("\nPaper text: %.1f%% of selected suppliers in NACE 19/35/46\n", pct_core))
+
+cat(sprintf("Selected suppliers span %d distinct NACE 2-digit sectors\n", n_sectors_with_suppliers))
+cat(sprintf("%.1f%% of selected suppliers in NACE 19/35/46 (core fuel sectors)\n", pct_core_all))
 cat(sprintf("Remaining suppliers scattered across %d other sectors\n", n_other_sectors))
 
 
 # ── EN vs Tabachova comparison ───────────────────────────────────────────────
 cat("\n\n")
 cat(strrep("=", 70), "\n")
-cat("  EN vs Tabachova supplier comparison\n")
+cat("  EN vs TABACHOVA SUPPLIER COMPARISON\n")
 cat(strrep("=", 70), "\n\n")
 
-# EN suppliers inside/outside Tabachova codes
-en_in_tabachova  <- sum(suppliers$nace4d %in% tabachova_nace4d, na.rm = TRUE)
-en_out_tabachova <- sum(!suppliers$nace4d %in% tabachova_nace4d | is.na(suppliers$nace4d))
+# EN suppliers inside/outside Tabachova 4-digit codes
+en_in_tab  <- sum(suppliers$nace4d %in% tabachova_nace4d, na.rm = TRUE)
+en_out_tab <- n_total - en_in_tab
 
-# Weight shares
-weight_in_tabachova  <- sum(suppliers$coef[suppliers$nace4d %in% tabachova_nace4d], na.rm = TRUE)
-weight_out_tabachova <- total_weight - weight_in_tabachova
+cat("EN suppliers inside Tabachova NACE 4d codes:", en_in_tab,
+    "(", round(100 * en_in_tab / n_total, 1), "% )\n")
+cat("EN suppliers outside Tabachova NACE 4d codes:", en_out_tab,
+    "(", round(100 * en_out_tab / n_total, 1), "% )\n\n")
 
-cat("EN-selected suppliers inside Tabachova NACE codes:", en_in_tabachova,
-    "(", round(100 * en_in_tabachova / nrow(suppliers), 1), "% of suppliers,",
-    round(100 * weight_in_tabachova / total_weight, 1), "% of proxy weight)\n")
-cat("EN-selected suppliers outside Tabachova NACE codes:", en_out_tabachova,
-    "(", round(100 * en_out_tabachova / nrow(suppliers), 1), "% of suppliers,",
-    round(100 * weight_out_tabachova / total_weight, 1), "% of proxy weight)\n\n")
-
-# Tabachova suppliers in the data NOT selected by EN
-# Identify all firms with modal NACE 4-digit in Tabachova codes
-# that are also eligible sellers
+# Reverse: Tabachova-classified eligible sellers → selected by EN?
 tabachova_firms_in_data <- nace_lookup %>%
   filter(nace4d %in% tabachova_nace4d, vat %in% eligible_sellers)
 
-n_tabachova_in_data  <- nrow(tabachova_firms_in_data)
-n_tabachova_selected <- sum(tabachova_firms_in_data$vat %in% suppliers$vat_i_ano)
-n_tabachova_missed   <- n_tabachova_in_data - n_tabachova_selected
+n_tab_in_data  <- nrow(tabachova_firms_in_data)
+n_tab_selected <- sum(tabachova_firms_in_data$vat %in% suppliers$vat_i_ano)
+n_tab_missed   <- n_tab_in_data - n_tab_selected
 
-cat("Tabachova-classified eligible sellers in data:", n_tabachova_in_data, "\n")
-cat("  of which selected by EN:", n_tabachova_selected,
-    "(", round(100 * n_tabachova_selected / n_tabachova_in_data, 1), "%)\n")
-cat("  of which NOT selected by EN:", n_tabachova_missed,
-    "(", round(100 * n_tabachova_missed / n_tabachova_in_data, 1), "%)\n")
+cat("Tabachova-classified eligible sellers in data:", n_tab_in_data, "\n")
+cat("  selected by EN:", n_tab_selected,
+    "(", round(100 * n_tab_selected / n_tab_in_data, 1), "% )\n")
+cat("  NOT selected by EN:", n_tab_missed,
+    "(", round(100 * n_tab_missed / n_tab_in_data, 1), "% )\n")
 
 
 # ── Save ─────────────────────────────────────────────────────────────────────
