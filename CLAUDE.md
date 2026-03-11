@@ -91,9 +91,8 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## For Tomorrow
 
-1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). Currently only have downsampled results.
-2. **Update local scripts to load `firm_year_panel_with_proxies.RData`** instead of `training_sample.RData`. Scripts that need updating include: `figures_tables/table_proxy_ols.R`, `figures_tables/table_sectors_19_24_summary.R`, `figures_tables/fig_proxy_density_by_emitter.R`, `figures_tables/compare_revenue_proxy_1924.R`, and any others loading `training_sample.RData` or `fold_specific_proxy_asinh.RData`. Also update scripts with hardcoded `c("19", "24")`: `utils/calc_metrics.R`, `analysis/outstanding/diagnostic_proxy_classification_19_24.R`.
-3. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
+1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). `table_supplier_nace_profile.R` is ready to run; others may need updating.
+2. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
    - `analysis/active/build_fold_specific_proxy.R`
    - `analysis/active/build_loso_proxy.R`
    - `analysis/active/build_loso_proxy_asinh.R`
@@ -106,9 +105,13 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
    - `preprocess/data_dimensions.R`
    - `figures_tables/elastic_net_proxy_diagnostics.R`
    - `analysis/outstanding/alpha_sensitivity.R`
-4. **Check `nace2d` vs `primary_nace2d` consistency downstream.** In `firm_year_panel_with_proxies.RData`, `nace2d` is the year-specific NACE code from annual accounts, while `primary_nace2d` is the firm's modal NACE code (used for LOSOCV fold assignment). They disagree for some firm-years due to NACE code switching over time (e.g., NACE 17: 3,213 vs 3,245 obs; NACE 33 appears in `nace2d` but not `primary_nace2d`). Need to audit which variable is used where — fold assignment, sector-level evaluation, zero-sector definition — and make sure it's intentional and consistent.
-5. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
-6. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+3. **Check `nace2d` vs `primary_nace2d` consistency downstream.** In `firm_year_panel_with_proxies.RData`, `nace2d` is the year-specific NACE code from annual accounts, while `primary_nace2d` is the firm's modal NACE code (used for LOSOCV fold assignment). They disagree for some firm-years due to NACE code switching over time (e.g., NACE 17: 3,213 vs 3,245 obs; NACE 33 appears in `nace2d` but not `primary_nace2d`). Need to audit which variable is used where — fold assignment, sector-level evaluation, zero-sector definition — and make sure it's intentional and consistent.
+4. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
+5. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+
+## Writing Notes
+
+- **EN supplier selection introduces noise.** The EN selects suppliers from 53 NACE 2-digit sectors, many of which are clearly not fuel suppliers (e.g., management consultancy, NACE 70). The likely mechanism is that within a sector-year, larger emitters are also larger firms that purchase more services generally — so purchases from consultancies correlate with emissions not because they supply fuel but because they correlate with firm size. The paper should acknowledge this: the EN identifies a mix of genuine fuel supply relationships and spurious size-correlated purchasing patterns. This is a limitation of the data-driven approach relative to NACE-based classification, which at least selects on economic substance — though at the cost of missing intermediaries and multi-activity firms.
 
 ## Current Status
 

@@ -314,13 +314,12 @@ pa_total_pos <- sum(panel_a$n_pos)
 pa_total_neg <- sum(panel_a$n_neg)
 pa_total_ws  <- round(sum(panel_a$weight_share), 2)
 
-# --- Panel B: Top 10 non-Tabachova 2-digit sectors + Other ---
-non_tab_2d <- nace2d_table %>%
-  filter(!nace2d %in% tabachova_nace2d) %>%
+# --- Panel B: Top 10 NACE 2-digit sectors + Other ---
+all_2d <- nace2d_table %>%
   arrange(desc(wshare_all))
 
-top10 <- non_tab_2d %>% head(10)
-other <- non_tab_2d %>% tail(-10)
+top10 <- all_2d %>% head(10)
+other <- all_2d %>% tail(-10)
 
 other_n_pos <- sum(other$n_pos)
 other_n_neg <- sum(other$n_neg)
@@ -329,7 +328,7 @@ n_other_sectors_pb <- nrow(other)
 
 # --- Assemble LaTeX ---
 tex <- c(
-  "\\begin{tabular}{l l cc r}",
+  "\\begin{tabular}{l l cc c}",
   "\\toprule",
   "NACE code & Description & $N$ ($\\hat{\\beta}_j > 0$) & $N$ ($\\hat{\\beta}_j < 0$) & Weight share (\\%) \\\\",
   "\\midrule",
