@@ -8,9 +8,7 @@
 #   Reports R², Spearman ρ, and coverage for each proxy variant.
 #
 # INPUTS
-#   {PROC_DATA}/training_sample.RData
-#   {PROC_DATA}/fold_specific_proxy.RData
-#   {PROC_DATA}/fold_specific_proxy_asinh.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUTS
 #   Console output (results to be formatted for paper Section 3)
@@ -32,27 +30,11 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 
 # ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading training sample...\n")
-load(file.path(PROC_DATA, "training_sample.RData"))
+cat("Loading firm-year panel with proxies...\n")
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-cat("Loading EN proxy (levels LHS, sector-fold K=5)...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
-
-cat("Loading EN proxy (asinh LHS, sector-fold K=5)...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy_asinh.RData"))
-
-# ── Merge ────────────────────────────────────────────────────────────────────
-panel <- training_sample %>%
-  left_join(fs_proxy_panel %>% select(vat, year, fold_specific_proxy),
-            by = c("vat", "year")) %>%
-  left_join(fs_proxy_panel_asinh %>% select(vat, year, fold_specific_proxy_asinh),
-            by = c("vat", "year")) %>%
-  mutate(
-    fold_specific_proxy       = coalesce(fold_specific_proxy, 0),
-    fold_specific_proxy_asinh = coalesce(fold_specific_proxy_asinh, 0)
-  )
-
-rm(training_sample, fs_proxy_panel, fs_proxy_panel_asinh)
+panel <- training_sample
+rm(training_sample)
 
 reg <- panel %>% filter(!is.na(y))
 

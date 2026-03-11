@@ -9,7 +9,7 @@
 #
 # INPUT
 #   {PROC_DATA}/b2b_selected_sample.RData
-#   {PROC_DATA}/loocv_training_sample.RData
+#   {PROC_DATA}/training_sample.RData
 #
 # OUTPUT
 #   {PROC_DATA}/loso_proxy_asinh.RData
@@ -73,10 +73,10 @@ load(file.path(PROC_DATA, "b2b_selected_sample.RData"))
 b2b <- df_b2b_selected_sample
 rm(df_b2b_selected_sample)
 
-cat("Loading LOOCV training sample...\n")
-load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+cat("Loading training sample...\n")
+load(file.path(PROC_DATA, "training_sample.RData"))
 
-lhs <- loocv_training_sample %>%
+lhs <- training_sample %>%
   filter(year >= 2005) %>%
   mutate(
     y = emissions,
@@ -84,7 +84,7 @@ lhs <- loocv_training_sample %>%
   ) %>%
   select(vat, year, y, log_revenue, nace2d, euets) %>%
   arrange(vat, year)
-rm(loocv_training_sample)
+rm(training_sample)
 
 lhs$emit <- as.integer(lhs$y > 0)
 

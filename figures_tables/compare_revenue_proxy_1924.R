@@ -12,7 +12,7 @@
 #   to signal among firms with signal > 0.
 #
 # INPUTS
-#   {PROC_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUTS
 #   Console output (diagnostic)
@@ -35,10 +35,13 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 
 # ── Load data ────────────────────────────────────────────────────────────────
-load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-df <- fs_proxy_panel %>% filter(primary_nace2d %in% c("19", "24"))
+df <- training_sample %>%
+  rename(fold_specific_proxy = fold_specific_proxy_asinh) %>%
+  filter(primary_nace2d %in% c("19", "24"))
 syt_1924 <- syt %>% filter(nace2d %in% c("19", "24"))
+rm(training_sample)
 
 cat("Sectors 19/24:", nrow(df), "firm-years,", n_distinct(df$vat), "firms\n")
 cat("  Emitters:", sum(df$emit), "firm-years\n")

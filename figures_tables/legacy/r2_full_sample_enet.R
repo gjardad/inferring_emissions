@@ -20,8 +20,7 @@
 #   Sample: EU ETS emitters with y > 0 and proxy > 0 (both proxies positive).
 #
 # INPUTS
-#   {PROC_DATA}/training_sample.RData
-#   {PROC_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUTS
 #   Console output (diagnostic, not a paper table)
@@ -44,18 +43,12 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 
 # ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading training sample...\n")
-load(file.path(PROC_DATA, "training_sample.RData"))
+cat("Loading firm-year panel with proxies...\n")
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-cat("Loading fold-specific proxy...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
-
-# Merge
 panel <- training_sample %>%
-  left_join(fs_proxy_panel %>% select(vat, year, fold_specific_proxy),
-            by = c("vat", "year")) %>%
-  mutate(fold_specific_proxy = coalesce(fold_specific_proxy, 0))
-rm(training_sample, fs_proxy_panel)
+  rename(fold_specific_proxy = fold_specific_proxy_asinh)
+rm(training_sample)
 
 # ── Regression sample ────────────────────────────────────────────────────────
 # Common sample: both proxies positive, y > 0

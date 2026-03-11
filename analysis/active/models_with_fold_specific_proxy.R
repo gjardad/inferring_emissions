@@ -13,8 +13,7 @@
 #   Row 5: Row 4 + clipping (calibrate_with_cap)
 #
 # INPUT
-#   {PROC_DATA}/training_sample.RData
-#   {PROC_DATA}/fold_specific_proxy.RData
+#   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUT
 #   {OUTPUT_DIR}/main_results_table.csv
@@ -35,23 +34,15 @@ source(file.path(UTILS_DIR, "calibration.R"))
 
 
 # ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading training sample...\n")
-load(file.path(PROC_DATA, "training_sample.RData"))
+cat("Loading firm-year panel with proxies...\n")
+load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-cat("Loading fold-specific proxy...\n")
-load(file.path(PROC_DATA, "fold_specific_proxy.RData"))
-
-# Merge fold_specific_proxy and fold_k into training_sample
 panel <- training_sample %>%
-  left_join(fs_proxy_panel %>% select(vat, year, fold_k, fold_specific_proxy,
-                                       fold_specific_proxy_all, primary_nace2d),
-            by = c("vat", "year")) %>%
-  mutate(
-    fold_specific_proxy     = coalesce(fold_specific_proxy, 0),
-    fold_specific_proxy_all = coalesce(fold_specific_proxy_all, 0),
-    emit = as.integer(y > 0)
+  rename(
+    fold_specific_proxy     = fold_specific_proxy_asinh,
+    fold_specific_proxy_all = fold_specific_proxy_all_asinh
   )
-rm(training_sample, fs_proxy_panel)
+rm(training_sample)
 
 # Revenue: prefer turnover_VAT (raw), fallback to exp(log_revenue)
 if ("turnover_VAT" %in% names(panel)) {

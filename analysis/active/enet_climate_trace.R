@@ -21,7 +21,7 @@
 #
 # INPUTS
 #   {PROC_DATA}/b2b_selected_sample.RData
-#   {PROC_DATA}/loocv_training_sample.RData
+#   {PROC_DATA}/training_sample.RData
 #   {RAW_DATA}/Climate TRACE/BEL/             (CT source-level CSVs)
 #   {RAW_DATA}/EUTL/Oct_2024_version/         (installation.csv, account.csv)
 #   {RAW_DATA}/NBB/EUTL_Belgium.dta           (BvD-to-VAT mapping)
@@ -248,9 +248,9 @@ cat("CT sources matched to VAT:", sum(!is.na(ct_eutl_match$vat)), "\n\n")
 # =============================================================================
 cat("== STEP 3: Building train/test split ==\n")
 
-load(file.path(PROC_DATA, "loocv_training_sample.RData"))
+load(file.path(PROC_DATA, "training_sample.RData"))
 
-lhs <- loocv_training_sample %>%
+lhs <- training_sample %>%
   filter(year >= 2005) %>%
   mutate(
     y = emissions,
@@ -258,7 +258,7 @@ lhs <- loocv_training_sample %>%
   ) %>%
   select(vat, year, y, log_revenue, nace2d, euets) %>%
   arrange(vat, year)
-rm(loocv_training_sample)
+rm(training_sample)
 
 lhs$emit <- as.integer(lhs$y > 0)
 
