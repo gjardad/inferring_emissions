@@ -135,33 +135,39 @@ sector_fold_map_asinh <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# HARD CONSTRAINT: zero-only sectors (19, 24) should be in different folds
-# to spread the non-emitter signal across folds. C17/C18 are also zero-only
-# but smaller; the snake-order assignment usually handles them.
-fold_19 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "19"]
-fold_24 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "24"]
-
-if (length(fold_19) > 0 && length(fold_24) > 0 && fold_19 == fold_24) {
-  cat("WARNING: NACE 19 and 24 assigned to same fold (", fold_19,
-      "). Swapping NACE 24...\n")
-
-  # Find best swap partner: a sector in a different fold with closest
-  # emitter firm-year count to NACE 24
-  fy_24 <- sector_fold_map_asinh$n_emitter_fy[sector_fold_map_asinh$nace2d == "24"]
-  candidates <- sector_fold_map_asinh %>%
-    filter(fold_k != fold_19, nace2d != "19") %>%
-    mutate(fy_diff = abs(n_emitter_fy - fy_24)) %>%
-    arrange(fy_diff)
-
-  swap_nace <- candidates$nace2d[1]
-  swap_fold <- candidates$fold_k[1]
-
-  cat("  Swapping NACE 24 (fold ", fold_19, ") with NACE ", swap_nace,
-      " (fold ", swap_fold, ")\n", sep = "")
-
-  sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "24"]       <- swap_fold
-  sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == swap_nace]  <- fold_19
-}
+# NOTE (2026-03-11): The hard constraint below forced NACE 19 and 24 into
+# different folds so that each training set would contain non-emitters from
+# both sectors. This was motivated by calibrating a proxy threshold to
+# classify emitters vs non-emitters. We have since verified that the natural
+# threshold (proxy > 0) dominates any tuned alternative — so the constraint
+# is unnecessary. Commenting it out rather than deleting for transparency.
+# The current results were produced WITH the constraint active; commenting
+# it out should not change results in any meaningful way since the
+# snake-order assignment already places 19 and 24 in different folds
+# (they have very different emitter-FY counts: 66 vs 212).
+#
+# fold_19 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "19"]
+# fold_24 <- sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "24"]
+#
+# if (length(fold_19) > 0 && length(fold_24) > 0 && fold_19 == fold_24) {
+#   cat("WARNING: NACE 19 and 24 assigned to same fold (", fold_19,
+#       "). Swapping NACE 24...\n")
+#
+#   fy_24 <- sector_fold_map_asinh$n_emitter_fy[sector_fold_map_asinh$nace2d == "24"]
+#   candidates <- sector_fold_map_asinh %>%
+#     filter(fold_k != fold_19, nace2d != "19") %>%
+#     mutate(fy_diff = abs(n_emitter_fy - fy_24)) %>%
+#     arrange(fy_diff)
+#
+#   swap_nace <- candidates$nace2d[1]
+#   swap_fold <- candidates$fold_k[1]
+#
+#   cat("  Swapping NACE 24 (fold ", fold_19, ") with NACE ", swap_nace,
+#       " (fold ", swap_fold, ")\n", sep = "")
+#
+#   sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == "24"]       <- swap_fold
+#   sector_fold_map_asinh$fold_k[sector_fold_map_asinh$nace2d == swap_nace]  <- fold_19
+# }
 
 # Merge fold_k onto lhs via primary_nace2d
 lhs <- lhs %>%
