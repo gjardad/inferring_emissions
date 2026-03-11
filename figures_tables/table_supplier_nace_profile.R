@@ -346,7 +346,7 @@ tex <- c(tex,
   "\\addlinespace",
   sprintf("& Total & %d & %d & %.2f \\\\", pa_total_pos, pa_total_neg, pa_total_ws),
   "\\midrule",
-  sprintf("\\multicolumn{5}{l}{\\textit{Panel B: Top EN-selected sectors}} \\\\"),
+  sprintf("\\multicolumn{5}{l}{\\textit{Panel B: Top sectors selected by Elastic Net}} \\\\"),
   "\\addlinespace"
 )
 
