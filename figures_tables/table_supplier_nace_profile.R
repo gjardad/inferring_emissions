@@ -126,8 +126,8 @@ nace2d_table <- matched %>%
     # Same three shares but coefficient-weighted
     wshare_all     = round(100 * (weight_pos + weight_neg) / total_weight_all, 2),
     wshare_of_pos  = round(100 * weight_pos / total_weight_pos, 2),
-    wshare_of_neg  = if_else(total_weight_neg > 0,
-                             round(100 * weight_neg / total_weight_neg, 2), 0),
+    wshare_of_neg  = if (total_weight_neg > 0)
+                       round(100 * weight_neg / total_weight_neg, 2) else 0,
     wpct_pos_within = round(100 * weight_pos / (weight_pos + weight_neg), 1),
     wpct_neg_within = round(100 * weight_neg / (weight_pos + weight_neg), 1),
     # Tabachova flag
