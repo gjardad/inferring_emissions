@@ -87,31 +87,18 @@ cat("  Deployment only:", deploy_only_5d, "\n")
 
 # ── Build LaTeX table ────────────────────────────────────────────────────────
 tex <- c(
-  "\\begin{table}[htbp]",
-  "  \\centering",
-  "  \\caption{Sector Overlap Between Training and Deployment Samples}",
-  "  \\label{tab:sector_overlap}",
-  "  \\begin{tabular}{lcc}",
-  "    \\toprule",
-  "    & NACE 2-digit & NACE 5-digit \\\\",
-  "    \\midrule",
-  sprintf("    In both             & %d & %d \\\\", both_2d, both_5d),
-  sprintf("    Training only       & %d & %d \\\\", train_only_2d, train_only_5d),
-  sprintf("    Deployment only     & %d & %d \\\\", deploy_only_2d, deploy_only_5d),
-  "    \\midrule",
-  sprintf("    Total training      & %d & %d \\\\", length(train_2d), length(train_5d)),
-  sprintf("    Total deployment    & %d & %d \\\\", length(deploy_2d), length(deploy_5d)),
-  "    \\bottomrule",
-  "  \\end{tabular}",
-  "  \\begin{minipage}{0.85\\textwidth}",
-  "    \\vspace{0.3em}",
-  "    \\footnotesize",
-  "    \\textit{Notes:} Training sectors are NACE sectors with at least one",
-  "    firm-year in the training sample (EU~ETS firms and non-ETS firms in",
-  "    sectors 17, 18, 19, and iron \\& steel subsectors of 24).",
-  "    Deployment sectors are all other NACE sectors observed in annual accounts.",
-  "  \\end{minipage}",
-  "\\end{table}"
+  "\\begin{tabular}{lcc}",
+  "  \\toprule",
+  "  & NACE 2-digit & NACE 5-digit \\\\",
+  "  \\midrule",
+  sprintf("  In both             & %d & %d \\\\", both_2d, both_5d),
+  sprintf("  Training only       & %d & %d \\\\", train_only_2d, train_only_5d),
+  sprintf("  Deployment only     & %d & %d \\\\", deploy_only_2d, deploy_only_5d),
+  "  \\midrule",
+  sprintf("  Total training      & %d & %d \\\\", length(train_2d), length(train_5d)),
+  sprintf("  Total deployment    & %d & %d \\\\", length(deploy_2d), length(deploy_5d)),
+  "  \\bottomrule",
+  "\\end{tabular}"
 )
 
 out_path <- file.path(OUTPUT_DIR, "sector_overlap.tex")
