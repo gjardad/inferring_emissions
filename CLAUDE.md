@@ -91,8 +91,16 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## For Tomorrow
 
-1. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). `table_supplier_nace_profile.R` is ready to run; others may need updating.
-2. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
+1. **Repeated cross-fitting on RMD.** Script ready: `analysis/active/build_repeated_cv_proxy_asinh.R`. Before running M=50 repeats:
+   - Check available RAM on RMD: `as.numeric(system("wmic computersystem get totalphysicalmemory", intern=TRUE)[2]) / 1e9` (Windows) or `grep MemTotal /proc/meminfo` (Linux).
+   - Profile memory for one repeat: `gc(reset=TRUE)`, run one repeat, `gc()` — check "max used (Mb)".
+   - Based on RAM/repeat ratio, decide how many cores to parallelize with (`floor(total_GB / (per_repeat_GB * 1.5))`).
+   - Add `doParallel` backend if warranted, then run both sector CV (`CV_TYPE="sector"`, K=5, M=50) and firm CV (`CV_TYPE="firm"`, K=10, M=50). Estimated ~12.5 hours each sequential.
+   - Copy outputs (`repeated_cv_proxy_sector_asinh.RData`, `repeated_cv_proxy_firm_asinh.RData`) to local 1.
+   - Update `figures_tables/table_main_results.R` to use the averaged proxies.
+2. **Statistical comparison of models.** Read Fava (2025) Section 4 for formal inference on model comparisons using repeated cross-fitting. Within each repeat r, compute nRMSE for both models (shared fold assignment) and examine the distribution of differences. Fava's CLT accounts for dependence across splits. Diebold-Mariano test is the standard econometric alternative.
+3. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). `table_supplier_nace_profile.R` is ready to run; others may need updating.
+4. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
    - `analysis/active/build_fold_specific_proxy.R`
    - `analysis/active/build_loso_proxy.R`
    - `analysis/active/build_loso_proxy_asinh.R`

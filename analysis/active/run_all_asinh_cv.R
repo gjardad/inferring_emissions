@@ -44,7 +44,7 @@ cat("##########################################################\n\n")
 
 t0 <- Sys.time()
 t0_1 <- t0
-source(file.path(SCRIPT_DIR, "build_fold_specific_proxy_asinh.R"), local = new.env())
+source(file.path(SCRIPT_DIR, "build_sectorfoldcv_proxy_asinh.R"), local = new.env())
 t_1 <- round(difftime(Sys.time(), t0_1, units = "mins"), 1)
 cat("\n>>> Sector-fold completed in", t_1, "minutes\n\n")
 gc()

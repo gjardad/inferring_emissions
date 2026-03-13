@@ -9,7 +9,7 @@
 #
 # INPUT
 #   {PROC_DATA}/training_sample.RData              (from build_training_sample.R)
-#   {PROC_DATA}/fold_specific_proxy_asinh.RData     (from build_fold_specific_proxy_asinh.R)
+#   {PROC_DATA}/fold_specific_proxy_asinh.RData     (from build_sectorfoldcv_proxy_asinh.R)
 #   {PROC_DATA}/tabachova_proxy.RData               (from build_tabachova_proxy.R)
 #   {PROC_DATA}/annual_accounts_selected_sample.RData (full annual accounts)
 #

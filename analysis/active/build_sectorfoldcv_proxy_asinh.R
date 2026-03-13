@@ -1,5 +1,5 @@
 ###############################################################################
-# analysis/active/build_fold_specific_proxy_asinh.R
+# analysis/active/build_sectorfoldcv_proxy_asinh.R
 #
 # PURPOSE
 #   Fold-specific (leakage-free) fuel-supply proxy via elastic net.
