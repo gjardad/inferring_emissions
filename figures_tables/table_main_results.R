@@ -3,13 +3,19 @@
 #
 # PURPOSE
 #   Generate the main results table (Table X) for Section 4.
-#   Three rows, all using rank-and-calibrate with national-aggregate target:
+#   Three rows, all using sector-level calibration:
 #     1. EN, sector CV    — EN proxy built with sector-level K=5 CV (M=200 repeats)
 #     2. EN, firm CV      — EN proxy built with firm-level K=10 CV (M=200 repeats)
 #     3. NACE-based       — Tabachova (deterministic, NACE-based) proxy
 #
 #   Columns: nRMSE | Median APD | Rank corr. | FPR | TPR | FP sev. p50 | FP sev. p99
 #   Column groups: "Prediction accuracy" (first 3) | "Extensive margin" (last 4)
+#
+#   Calibration is fold-aware sector-level:
+#     For each fold k and each (sector, year) cell, the emission total to
+#     distribute is E_sy - E_train_sy_k, allocated proportionally to
+#     sinh(proxy) among held-out firms in that cell. This uses only observed
+#     training-sample aggregates (no external data).
 #
 #   For EN rows: calibration and metrics are computed within each repeat using
 #   the repeat's own fold assignment, then averaged across M repeats.
@@ -30,6 +36,7 @@
 #
 # OUTPUT
 #   {OUTPUT_DIR}/table_main_results.tex
+#   {OUTPUT_DIR}/table_main_results.rds
 #   Printed to console
 #
 # RUNS ON: local 1
@@ -86,13 +93,14 @@ panel_sec <- panel_sec %>%
 # ── Helper: back-transform asinh proxy to levels ─────────────────────────
 proxy_to_levels <- function(proxy) pmax(sinh(proxy), 0)
 
-# ── Helper: fold-aware national-aggregate calibration ────────────────────
-# For each fold k:
-#   E_target_k = E_nat - E_train_k  (what's left to distribute to held-out)
-#   Distribute proportionally to proxy among held-out firms, per year.
-calibrate_national <- function(df, proxy_raw, fold_k) {
-  E_nat_by_year <- tapply(df$y, df$year, sum, na.rm = TRUE)
-  years <- names(E_nat_by_year)
+# ── Helper: fold-aware sector-level calibration ──────────────────────────
+# For each fold k and each (sector, year) cell among held-out firms:
+#   E_target = E_total_sy - E_train_sy_k
+#   Distribute E_target proportionally to proxy among held-out firms in the cell.
+calibrate_sector <- function(df, proxy_raw, fold_k) {
+  sy_key <- paste(df$nace2d, df$year)
+  E_sy <- tapply(df$y, sy_key, sum, na.rm = TRUE)
+
   folds <- sort(unique(fold_k))
   result <- rep(NA_real_, nrow(df))
 
@@ -100,15 +108,20 @@ calibrate_national <- function(df, proxy_raw, fold_k) {
     held_out <- which(fold_k == k)
     train_k  <- which(fold_k != k)
 
-    E_train_by_year <- tapply(df$y[train_k], df$year[train_k], sum, na.rm = TRUE)
+    sy_train <- paste(df$nace2d[train_k], df$year[train_k])
+    E_train_sy <- tapply(df$y[train_k], sy_train, sum, na.rm = TRUE)
 
-    for (yr in years) {
-      idx <- held_out[df$year[held_out] == as.integer(yr)]
-      if (length(idx) == 0) next
+    ho_sy <- paste(df$nace2d[held_out], df$year[held_out])
 
-      E_target <- E_nat_by_year[yr] - ifelse(is.na(E_train_by_year[yr]), 0, E_train_by_year[yr])
+    for (sy in unique(ho_sy)) {
+      idx_in_ho <- which(ho_sy == sy)
+      idx <- held_out[idx_in_ho]
 
-      if (E_target <= 0) {
+      E_total <- E_sy[sy]
+      E_train <- ifelse(is.na(E_train_sy[sy]), 0, E_train_sy[sy])
+      E_target <- E_total - E_train
+
+      if (is.na(E_target) || E_target <= 0) {
         result[idx] <- 0
         next
       }
@@ -169,7 +182,7 @@ colnames(metrics_sec) <- metric_names
 for (r in seq_len(M_sec)) {
   fold_k_r <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + r)
   proxy_raw_r <- proxy_to_levels(proxy_matrix_sec[, r])
-  yhat_r <- calibrate_national(panel_sec, proxy_raw_r, fold_k_r)
+  yhat_r <- calibrate_sector(panel_sec, proxy_raw_r, fold_k_r)
   m_r <- calc_metrics(panel_sec$y, yhat_r, fp_threshold = 0,
                       nace2d = panel_sec$nace2d, year = panel_sec$year)
   metrics_sec[r, ] <- extract_metrics(m_r)
@@ -193,7 +206,7 @@ colnames(metrics_firm) <- metric_names
 for (r in seq_len(M_firm)) {
   fold_k_r <- assign_folds(panel_firm, "firm", K_firm, BASE_SEED + r)
   proxy_raw_r <- proxy_to_levels(proxy_matrix_firm[, r])
-  yhat_r <- calibrate_national(panel_firm, proxy_raw_r, fold_k_r)
+  yhat_r <- calibrate_sector(panel_firm, proxy_raw_r, fold_k_r)
   m_r <- calc_metrics(panel_firm$y, yhat_r, fp_threshold = 0,
                       nace2d = panel_firm$nace2d, year = panel_firm$year)
   metrics_firm[r, ] <- extract_metrics(m_r)
@@ -213,7 +226,7 @@ cat("Computing Row 3: NACE-based...\n")
 # Use sector-fold assignment from repeat 1 (arbitrary; proxy doesn't depend on folds)
 fold_k_tab <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + 1L)
 tabachova_raw <- proxy_to_levels(panel_sec$proxy_tabachova_asinh)
-yhat_tab <- calibrate_national(panel_sec, tabachova_raw, fold_k_tab)
+yhat_tab <- calibrate_sector(panel_sec, tabachova_raw, fold_k_tab)
 m3 <- calc_metrics(panel_sec$y, yhat_tab, fp_threshold = 0,
                    nace2d = panel_sec$nace2d, year = panel_sec$year)
 m3_vals <- extract_metrics(m3)
@@ -225,9 +238,9 @@ cat("  Done.\n")
 # =============================================================================
 col_labels <- c("nRMSE", "Med.APD", "Rho", "FPR", "TPR", "FPsev50", "FPsev99")
 
-cat("\n══════════════════════════════════════════════════════════════════════\n")
-cat("MAIN RESULTS TABLE (national-aggregate calibration)\n")
-cat("══════════════════════════════════════════════════════════════════════\n\n")
+cat("\n======================================================================\n")
+cat("MAIN RESULTS TABLE (sector-level calibration)\n")
+cat("======================================================================\n\n")
 
 cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s\n",
             "", col_labels[1], col_labels[2], col_labels[3],
@@ -258,11 +271,6 @@ cat("\n")
 
 # ── Generate LaTeX table ─────────────────────────────────────────────────────
 fmt <- function(x, digits = 3) formatC(x, format = "f", digits = digits)
-
-# Format mean with sd in parentheses below
-fmt_with_sd <- function(mn, sd, digits = 3) {
-  paste0(fmt(mn, digits), "\n", "\\textrm{\\scriptsize(", fmt(sd, digits), ")}")
-}
 
 tex_lines <- c(
   "\\begin{table}[htbp]",
