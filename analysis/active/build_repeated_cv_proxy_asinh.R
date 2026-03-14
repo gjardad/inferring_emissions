@@ -41,6 +41,8 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(Matrix)
 library(glmnet)
+library(doParallel)
+library(foreach)
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 CV_TYPE        <- "sector"   # "sector" or "firm"
@@ -50,10 +52,12 @@ K_INNER        <- 10L        # inner folds for cv.glmnet lambda tuning
 MIN_LHS_BUYERS <- 5L
 ALPHA          <- 0.5
 BASE_SEED      <- 2026L      # each repeat r uses seed = BASE_SEED + r
+N_CORES        <- 20L        # parallel workers (0 or 1 = sequential)
 
 cat("═══════════════════════════════════════════════════════════════\n")
 cat("  REPEATED CROSS-FITTING (", CV_TYPE, " folds)\n")
-cat("  M =", M_REPEATS, "repeats, K =", K_OUTER, "folds\n")
+cat("  M =", M_REPEATS, "repeats, K =", K_OUTER, "folds,",
+    N_CORES, "cores\n")
 cat("═══════════════════════════════════════════════════════════════\n\n")
 
 
@@ -312,49 +316,89 @@ run_one_cv <- function(lhs_with_folds, b2b_lhs, K, alpha, K_inner, min_buyers, s
 
 
 # =============================================================================
-# STEP 7: Main loop over M repeats
+# STEP 7: Main loop over M repeats (parallel or sequential)
 # =============================================================================
-cat("\n═══ Starting", M_REPEATS, "repeated cross-fitting rounds ═══\n\n")
+use_parallel <- N_CORES > 1
 
-t0_all <- Sys.time()
-all_repeat_proxies <- list()
-repeat_timing <- numeric(M_REPEATS)
+if (use_parallel) {
+  cat("\n═══ Starting", M_REPEATS, "repeats in PARALLEL (",
+      N_CORES, "cores) ═══\n\n")
 
-for (r in seq_len(M_REPEATS)) {
-  t0_r <- Sys.time()
-  cat(sprintf("── Repeat %d / %d ", r, M_REPEATS))
+  cl <- makeCluster(N_CORES)
+  registerDoParallel(cl)
 
-  seed_r <- BASE_SEED + r
+  # Export data and functions to workers
+  clusterEvalQ(cl, {
+    library(dplyr)
+    library(Matrix)
+    library(glmnet)
+  })
 
-  # Assign folds
-  lhs_r <- assign_folds(lhs, CV_TYPE, K_OUTER, seed_r)
+  t0_all <- Sys.time()
 
-  # Run one complete CV
-  proxy_r <- run_one_cv(lhs_r, b2b_lhs, K_OUTER, ALPHA, K_INNER,
-                         MIN_LHS_BUYERS, seed_r)
-
-  all_repeat_proxies[[r]] <- proxy_r
-  gc()
-
-  elapsed_r <- round(difftime(Sys.time(), t0_r, units = "mins"), 1)
-  repeat_timing[r] <- as.numeric(elapsed_r)
-
-  # Estimate remaining time
-  avg_time <- mean(repeat_timing[1:r])
-  remaining <- round(avg_time * (M_REPEATS - r), 1)
-
-  cat(sprintf("(%.1f min, est. %.0f min remaining) ──\n", elapsed_r, remaining))
-
-  # Progress summary every 10 repeats
-  if (r %% 10 == 0) {
-    cat(sprintf("\n  Progress: %d/%d complete | Avg %.1f min/repeat | Total %.1f min\n\n",
-                r, M_REPEATS, avg_time, sum(repeat_timing[1:r])))
+  all_repeat_results <- foreach(
+    r = seq_len(M_REPEATS),
+    .packages = c("dplyr", "Matrix", "glmnet"),
+    .export = c("lhs", "b2b_lhs", "CV_TYPE", "K_OUTER", "ALPHA",
+                "K_INNER", "MIN_LHS_BUYERS", "BASE_SEED",
+                "assign_folds", "run_one_cv", "extract_suppliers")
+  ) %dopar% {
+    t0_r <- Sys.time()
+    seed_r <- BASE_SEED + r
+    lhs_r <- assign_folds(lhs, CV_TYPE, K_OUTER, seed_r)
+    proxy_r <- run_one_cv(lhs_r, b2b_lhs, K_OUTER, ALPHA, K_INNER,
+                           MIN_LHS_BUYERS, seed_r)
+    elapsed_r <- as.numeric(difftime(Sys.time(), t0_r, units = "mins"))
+    list(proxy = proxy_r, time = elapsed_r)
   }
-}
 
-total_time <- round(difftime(Sys.time(), t0_all, units = "mins"), 1)
-cat(sprintf("\n═══ All %d repeats complete in %.1f min (avg %.1f min/repeat) ═══\n\n",
-            M_REPEATS, total_time, mean(repeat_timing)))
+  stopCluster(cl)
+
+  total_time <- round(difftime(Sys.time(), t0_all, units = "mins"), 1)
+
+  all_repeat_proxies <- lapply(all_repeat_results, `[[`, "proxy")
+  repeat_timing <- sapply(all_repeat_results, `[[`, "time")
+  rm(all_repeat_results)
+
+  cat(sprintf("═══ All %d repeats complete in %.1f min (avg %.1f min/repeat) ═══\n\n",
+              M_REPEATS, total_time, mean(repeat_timing)))
+
+} else {
+  cat("\n═══ Starting", M_REPEATS, "repeats SEQUENTIALLY ═══\n\n")
+
+  t0_all <- Sys.time()
+  all_repeat_proxies <- list()
+  repeat_timing <- numeric(M_REPEATS)
+
+  for (r in seq_len(M_REPEATS)) {
+    t0_r <- Sys.time()
+    cat(sprintf("── Repeat %d / %d ", r, M_REPEATS))
+
+    seed_r <- BASE_SEED + r
+    lhs_r <- assign_folds(lhs, CV_TYPE, K_OUTER, seed_r)
+    proxy_r <- run_one_cv(lhs_r, b2b_lhs, K_OUTER, ALPHA, K_INNER,
+                           MIN_LHS_BUYERS, seed_r)
+
+    all_repeat_proxies[[r]] <- proxy_r
+    gc()
+
+    elapsed_r <- round(difftime(Sys.time(), t0_r, units = "mins"), 1)
+    repeat_timing[r] <- as.numeric(elapsed_r)
+
+    avg_time <- mean(repeat_timing[1:r])
+    remaining <- round(avg_time * (M_REPEATS - r), 1)
+    cat(sprintf("(%.1f min, est. %.0f min remaining) ──\n", elapsed_r, remaining))
+
+    if (r %% 10 == 0) {
+      cat(sprintf("\n  Progress: %d/%d complete | Avg %.1f min/repeat | Total %.1f min\n\n",
+                  r, M_REPEATS, avg_time, sum(repeat_timing[1:r])))
+    }
+  }
+
+  total_time <- round(difftime(Sys.time(), t0_all, units = "mins"), 1)
+  cat(sprintf("\n═══ All %d repeats complete in %.1f min (avg %.1f min/repeat) ═══\n\n",
+              M_REPEATS, total_time, mean(repeat_timing)))
+}
 
 
 # =============================================================================
