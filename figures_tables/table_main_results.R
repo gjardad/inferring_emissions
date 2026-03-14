@@ -4,26 +4,29 @@
 # PURPOSE
 #   Generate the main results table (Table X) for Section 4.
 #   Three rows, all using rank-and-calibrate with national-aggregate target:
-#     1. EN, sector CV    — EN proxy built with sector-level K=5 CV
-#     2. EN, firm CV      — EN proxy built with firm-level K=10 CV
+#     1. EN, sector CV    — EN proxy built with sector-level K=5 CV (M=200 repeats)
+#     2. EN, firm CV      — EN proxy built with firm-level K=10 CV (M=200 repeats)
 #     3. NACE-based       — Tabachova (deterministic, NACE-based) proxy
 #
 #   Columns: nRMSE | Median APD | Rank corr. | FPR | TPR | FP sev. p50 | FP sev. p99
 #   Column groups: "Prediction accuracy" (first 3) | "Extensive margin" (last 4)
 #
-#   Calibration is fold-aware national-aggregate:
-#     For each held-out fold k, the national total to distribute is
-#       E_nat_k = sum(all emissions) - sum(emissions used to train the EN in fold k)
-#     This mimics deployment where we observe training-set emissions and must
-#     allocate the remainder to held-out firms proportionally to their proxy rank.
+#   For EN rows: calibration and metrics are computed within each repeat using
+#   the repeat's own fold assignment, then averaged across M repeats.
+#   Fold assignments are reconstructed deterministically from the same seeds
+#   used on RMD (seed = BASE_SEED + r).
+#
+#   For NACE-based: the proxy is deterministic so we use a single calibration
+#   with sector-fold assignment from repeat 1 (arbitrary, since the proxy
+#   itself doesn't depend on fold assignment).
 #
 # INPUT
+#   {PROC_DATA}/repeated_cv_proxy_sector_asinh.RData
+#     Contains: proxy_matrix (N x M), repeated_cv_proxy_panel, firmyear_index
+#   {PROC_DATA}/repeated_cv_proxy_firm_asinh.RData
+#     Contains: proxy_matrix (N x M), repeated_cv_proxy_panel, firmyear_index
 #   {PROC_DATA}/firm_year_panel_with_proxies.RData
-#     Contains: training_sample (with fold_specific_proxy_all_asinh,
-#               proxy_tabachova_asinh, fold_k for sector-level folds)
-#   {PROC_DATA}/firmfoldcv_proxy_asinh.RData
-#     Contains: firmfoldcv_proxy_panel_asinh (with firmfoldcv_proxy_all_asinh,
-#               fold_k for firm-level folds)
+#     Contains: training_sample (with proxy_tabachova_asinh)
 #
 # OUTPUT
 #   {OUTPUT_DIR}/table_main_results.tex
@@ -43,156 +46,222 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 source(file.path(UTILS_DIR, "calc_metrics.R"))
 
-# ── Load data ────────────────────────────────────────────────────────────────
-cat("Loading panel...\n")
+# ── Parameters (must match build_repeated_cv_proxy_asinh.R) ────────────────
+BASE_SEED <- 2026L
+
+# ── Load data ──────────────────────────────────────────────────────────────
+
+# Repeated CV outputs
+cat("Loading repeated CV proxy (sector)...\n")
+e_sec <- new.env()
+load(file.path(PROC_DATA, "repeated_cv_proxy_sector_asinh.RData"), envir = e_sec)
+proxy_matrix_sec <- e_sec$proxy_matrix
+panel_sec        <- e_sec$repeated_cv_proxy_panel
+M_sec <- ncol(proxy_matrix_sec)
+rm(e_sec)
+
+cat("Loading repeated CV proxy (firm)...\n")
+e_firm <- new.env()
+load(file.path(PROC_DATA, "repeated_cv_proxy_firm_asinh.RData"), envir = e_firm)
+proxy_matrix_firm <- e_firm$proxy_matrix
+panel_firm        <- e_firm$repeated_cv_proxy_panel
+M_firm <- ncol(proxy_matrix_firm)
+rm(e_firm)
+
+cat(sprintf("  Sector CV: %d obs x %d repeats\n", nrow(proxy_matrix_sec), M_sec))
+cat(sprintf("  Firm CV:   %d obs x %d repeats\n", nrow(proxy_matrix_firm), M_firm))
+
+# Training sample (for Tabachova proxy)
+cat("Loading training sample (for NACE-based proxy)...\n")
 load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
-cat("Loading firm-fold CV proxy...\n")
-e_ff <- new.env()
-load(file.path(PROC_DATA, "firmfoldcv_proxy_asinh.RData"), envir = e_ff)
-ff_panel <- e_ff$firmfoldcv_proxy_panel_asinh
-rm(e_ff)
+# Merge Tabachova proxy into sector panel (they may have different row orders)
+tabachova_df <- training_sample %>%
+  select(vat, year, proxy_tabachova_asinh)
+rm(training_sample, syt)
 
-# ── Helper: back-transform asinh proxy to levels ─────────────────────────────
+panel_sec <- panel_sec %>%
+  left_join(tabachova_df, by = c("vat", "year"))
+
+# ── Helper: back-transform asinh proxy to levels ─────────────────────────
 proxy_to_levels <- function(proxy) pmax(sinh(proxy), 0)
 
-# ── Helper: fold-aware national-aggregate calibration ────────────────────────
+# ── Helper: fold-aware national-aggregate calibration ────────────────────
 # For each fold k:
-#   E_nat = sum of all emissions in the full sample
-#   E_train_k = sum of emissions among firms in the training set for fold k
-#   E_target_k = E_nat - E_train_k  (what's left to distribute to held-out firms)
-#   Distribute E_target_k proportionally to proxy values among held-out firms,
-#   separately per year.
-calibrate_national <- function(df, proxy_col, fold_col) {
-  # Total emissions by year (full sample)
-  E_nat_by_year <- df %>%
-    group_by(year) %>%
-    summarise(E_nat = sum(y, na.rm = TRUE), .groups = "drop")
-
-  folds <- sort(unique(df[[fold_col]]))
+#   E_target_k = E_nat - E_train_k  (what's left to distribute to held-out)
+#   Distribute proportionally to proxy among held-out firms, per year.
+calibrate_national <- function(df, proxy_raw, fold_k) {
+  E_nat_by_year <- tapply(df$y, df$year, sum, na.rm = TRUE)
+  years <- names(E_nat_by_year)
+  folds <- sort(unique(fold_k))
   result <- rep(NA_real_, nrow(df))
 
   for (k in folds) {
-    held_out <- which(df[[fold_col]] == k)
-    train_k  <- which(df[[fold_col]] != k)
+    held_out <- which(fold_k == k)
+    train_k  <- which(fold_k != k)
 
-    # Training-set emissions by year for fold k
-    E_train_k <- df[train_k, ] %>%
-      group_by(year) %>%
-      summarise(E_train = sum(y, na.rm = TRUE), .groups = "drop")
+    E_train_by_year <- tapply(df$y[train_k], df$year[train_k], sum, na.rm = TRUE)
 
-    # Target for held-out firms by year
-    targets <- E_nat_by_year %>%
-      left_join(E_train_k, by = "year") %>%
-      mutate(E_target = E_nat - coalesce(E_train, 0))
+    for (yr in years) {
+      idx <- held_out[df$year[held_out] == as.integer(yr)]
+      if (length(idx) == 0) next
 
-    # Distribute among held-out firms proportionally to proxy, per year
-    for (yr in unique(df$year[held_out])) {
-      idx <- held_out[df$year[held_out] == yr]
-      raw <- df[[proxy_col]][idx]
-      E_target_yr <- targets$E_target[targets$year == yr]
+      E_target <- E_nat_by_year[yr] - ifelse(is.na(E_train_by_year[yr]), 0, E_train_by_year[yr])
 
-      if (length(E_target_yr) == 0 || E_target_yr <= 0) {
+      if (E_target <= 0) {
         result[idx] <- 0
         next
       }
 
+      raw <- proxy_raw[idx]
       denom <- sum(raw, na.rm = TRUE)
       if (denom > 0) {
-        result[idx] <- E_target_yr * (raw / denom)
+        result[idx] <- E_target * (raw / denom)
       } else {
-        # Fallback: equal split
-        result[idx] <- E_target_yr / length(idx)
+        result[idx] <- E_target / length(idx)
       }
     }
   }
   result
 }
 
-# ── Prepare sector-fold data ─────────────────────────────────────────────────
-df_sec <- training_sample %>%
-  mutate(
-    proxy_raw = proxy_to_levels(fold_specific_proxy_all_asinh),
-    tabachova_raw = proxy_to_levels(proxy_tabachova_asinh)
-  )
+# ── Reconstruct fold assignments (same logic as build_repeated_cv_proxy_asinh.R)
+assign_folds <- function(panel, cv_type, K, seed) {
+  set.seed(seed)
+  if (cv_type == "sector") {
+    sectors <- sort(unique(panel$primary_nace2d))
+    sector_folds <- sample(rep(1:K, length.out = length(sectors)))
+    sfm <- data.frame(primary_nace2d = sectors, fold_k = sector_folds,
+                       stringsAsFactors = FALSE)
+    fold_k <- sfm$fold_k[match(panel$primary_nace2d, sfm$primary_nace2d)]
+  } else {
+    firms <- unique(panel[, c("vat", "primary_nace2d")])
+    firms <- firms[order(firms$vat), ]
+    firm_folds <- integer(nrow(firms))
+    for (sec in unique(firms$primary_nace2d)) {
+      idx <- which(firms$primary_nace2d == sec)
+      firm_folds[idx] <- sample(rep(1:K, length.out = length(idx)))
+    }
+    firms$fold_k <- firm_folds
+    fold_k <- firms$fold_k[match(panel$vat, firms$vat)]
+  }
+  fold_k
+}
 
-# ── Prepare firm-fold data ───────────────────────────────────────────────────
-# Merge firm-fold proxy into training_sample (use firm-fold's own fold_k)
-df_firm <- training_sample %>%
-  select(-fold_k) %>%
-  left_join(
-    ff_panel %>% select(vat, year, firmfoldcv_proxy_all_asinh, fold_k),
-    by = c("vat", "year")
-  ) %>%
-  mutate(
-    proxy_raw = proxy_to_levels(firmfoldcv_proxy_all_asinh)
-  )
+# ── Metric names to extract ─────────────────────────────────────────────────
+metric_names <- c("nrmse_sd", "median_apd", "rho_pooled_global",
+                  "fpr_nonemitters", "tpr_emitters",
+                  "avg_nonemit_p50_rank", "avg_nonemit_p99_rank")
 
-# ── Row 1: EN, sector CV ─────────────────────────────────────────────────────
-cat("Computing Row 1: EN, sector CV...\n")
-df_sec$yhat_cal <- calibrate_national(df_sec, "proxy_raw", "fold_k")
-m1 <- calc_metrics(df_sec$y, df_sec$yhat_cal, fp_threshold = 0,
-                    nace2d = df_sec$nace2d, year = df_sec$year)
+extract_metrics <- function(m) {
+  sapply(metric_names, function(nm) m[[nm]])
+}
 
-# ── Row 2: EN, firm CV ───────────────────────────────────────────────────────
-cat("Computing Row 2: EN, firm CV...\n")
-df_firm$yhat_cal <- calibrate_national(df_firm, "proxy_raw", "fold_k")
-m2 <- calc_metrics(df_firm$y, df_firm$yhat_cal, fp_threshold = 0,
-                    nace2d = df_firm$nace2d, year = df_firm$year)
+# =============================================================================
+# Row 1: EN, sector CV — average metrics across M repeats
+# =============================================================================
+cat("\nComputing Row 1: EN, sector CV (", M_sec, "repeats)...\n")
 
-# ── Row 3: NACE-based ────────────────────────────────────────────────────────
-# Tabachova is deterministic (no CV), so we calibrate using sector-fold structure
-# as a conservative choice. The proxy itself doesn't depend on the fold.
+K_sec <- 5L
+metrics_sec <- matrix(NA_real_, nrow = M_sec, ncol = length(metric_names))
+colnames(metrics_sec) <- metric_names
+
+for (r in seq_len(M_sec)) {
+  fold_k_r <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + r)
+  proxy_raw_r <- proxy_to_levels(proxy_matrix_sec[, r])
+  yhat_r <- calibrate_national(panel_sec, proxy_raw_r, fold_k_r)
+  m_r <- calc_metrics(panel_sec$y, yhat_r, fp_threshold = 0,
+                      nace2d = panel_sec$nace2d, year = panel_sec$year)
+  metrics_sec[r, ] <- extract_metrics(m_r)
+
+  if (r %% 50 == 0) cat(sprintf("  %d/%d\n", r, M_sec))
+}
+
+m1_mean <- colMeans(metrics_sec, na.rm = TRUE)
+m1_sd   <- apply(metrics_sec, 2, sd, na.rm = TRUE)
+cat("  Done.\n")
+
+# =============================================================================
+# Row 2: EN, firm CV — average metrics across M repeats
+# =============================================================================
+cat("Computing Row 2: EN, firm CV (", M_firm, "repeats)...\n")
+
+K_firm <- 10L
+metrics_firm <- matrix(NA_real_, nrow = M_firm, ncol = length(metric_names))
+colnames(metrics_firm) <- metric_names
+
+for (r in seq_len(M_firm)) {
+  fold_k_r <- assign_folds(panel_firm, "firm", K_firm, BASE_SEED + r)
+  proxy_raw_r <- proxy_to_levels(proxy_matrix_firm[, r])
+  yhat_r <- calibrate_national(panel_firm, proxy_raw_r, fold_k_r)
+  m_r <- calc_metrics(panel_firm$y, yhat_r, fp_threshold = 0,
+                      nace2d = panel_firm$nace2d, year = panel_firm$year)
+  metrics_firm[r, ] <- extract_metrics(m_r)
+
+  if (r %% 50 == 0) cat(sprintf("  %d/%d\n", r, M_firm))
+}
+
+m2_mean <- colMeans(metrics_firm, na.rm = TRUE)
+m2_sd   <- apply(metrics_firm, 2, sd, na.rm = TRUE)
+cat("  Done.\n")
+
+# =============================================================================
+# Row 3: NACE-based (deterministic — single evaluation)
+# =============================================================================
 cat("Computing Row 3: NACE-based...\n")
-df_sec$tab_cal <- calibrate_national(df_sec, "tabachova_raw", "fold_k")
-m3 <- calc_metrics(df_sec$y, df_sec$tab_cal, fp_threshold = 0,
-                    nace2d = df_sec$nace2d, year = df_sec$year)
 
-# ── Assemble results ─────────────────────────────────────────────────────────
-rows <- list(m1, m2, m3)
-row_labels <- c(
-  "EN, sector CV",
-  "EN, firm CV",
-  "NACE-based"
-)
+# Use sector-fold assignment from repeat 1 (arbitrary; proxy doesn't depend on folds)
+fold_k_tab <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + 1L)
+tabachova_raw <- proxy_to_levels(panel_sec$proxy_tabachova_asinh)
+yhat_tab <- calibrate_national(panel_sec, tabachova_raw, fold_k_tab)
+m3 <- calc_metrics(panel_sec$y, yhat_tab, fp_threshold = 0,
+                   nace2d = panel_sec$nace2d, year = panel_sec$year)
+m3_vals <- extract_metrics(m3)
 
-results <- data.frame(
-  row_label      = row_labels,
-  nrmse_sd       = sapply(rows, `[[`, "nrmse_sd"),
-  median_apd     = sapply(rows, `[[`, "median_apd"),
-  rho_pooled_global = sapply(rows, `[[`, "rho_pooled_global"),
-  fpr            = sapply(rows, `[[`, "fpr_nonemitters"),
-  tpr            = sapply(rows, `[[`, "tpr_emitters"),
-  fp_sev_p50     = sapply(rows, `[[`, "avg_nonemit_p50_rank"),
-  fp_sev_p99     = sapply(rows, `[[`, "avg_nonemit_p99_rank"),
-  stringsAsFactors = FALSE
-)
+cat("  Done.\n")
 
-# ── Print to console ─────────────────────────────────────────────────────────
+# =============================================================================
+# Assemble and print results
+# =============================================================================
+col_labels <- c("nRMSE", "Med.APD", "Rho", "FPR", "TPR", "FPsev50", "FPsev99")
+
 cat("\n══════════════════════════════════════════════════════════════════════\n")
-cat("MAIN RESULTS TABLE\n")
+cat("MAIN RESULTS TABLE (national-aggregate calibration)\n")
 cat("══════════════════════════════════════════════════════════════════════\n\n")
 
-cat(sprintf("%-20s %8s %10s %8s %8s %8s %8s %8s\n",
-            "", "nRMSE", "Med.APD", "Rho", "FPR", "TPR", "FPsev50", "FPsev99"))
-cat(paste(rep("-", 80), collapse = ""), "\n")
+cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s\n",
+            "", col_labels[1], col_labels[2], col_labels[3],
+            col_labels[4], col_labels[5], col_labels[6], col_labels[7]))
+cat(paste(rep("-", 90), collapse = ""), "\n")
 
-for (i in seq_len(nrow(results))) {
-  cat(sprintf("%-20s %8.3f %10.3f %8.3f %8.3f %8.3f %8.3f %8.3f\n",
-              results$row_label[i],
-              results$nrmse_sd[i],
-              results$median_apd[i],
-              results$rho_pooled_global[i],
-              results$fpr[i],
-              results$tpr[i],
-              results$fp_sev_p50[i],
-              results$fp_sev_p99[i]))
+# EN rows: mean (sd)
+for (i in 1:2) {
+  lbl <- c("EN, sector CV", "EN, firm CV")[i]
+  mn <- if (i == 1) m1_mean else m2_mean
+  sd <- if (i == 1) m1_sd else m2_sd
+  cat(sprintf("%-20s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f\n",
+              lbl, mn[1], mn[2], mn[3], mn[4], mn[5], mn[6], mn[7]))
+  cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s\n",
+              "",
+              sprintf("(%.3f)", sd[1]), sprintf("(%.3f)", sd[2]),
+              sprintf("(%.3f)", sd[3]), sprintf("(%.3f)", sd[4]),
+              sprintf("(%.3f)", sd[5]), sprintf("(%.3f)", sd[6]),
+              sprintf("(%.3f)", sd[7])))
 }
+
+# NACE-based: no sd
+cat(sprintf("%-20s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f\n",
+            "NACE-based",
+            m3_vals[1], m3_vals[2], m3_vals[3],
+            m3_vals[4], m3_vals[5], m3_vals[6], m3_vals[7]))
 cat("\n")
 
 # ── Generate LaTeX table ─────────────────────────────────────────────────────
-fmt <- function(x, digits = 3) {
-  ifelse(is.na(x), "---", formatC(x, format = "f", digits = digits))
+fmt <- function(x, digits = 3) formatC(x, format = "f", digits = digits)
+
+# Format mean with sd in parentheses below
+fmt_with_sd <- function(mn, sd, digits = 3) {
+  paste0(fmt(mn, digits), "\n", "\\textrm{\\scriptsize(", fmt(sd, digits), ")}")
 }
 
 tex_lines <- c(
@@ -210,19 +279,33 @@ tex_lines <- c(
   "\\midrule"
 )
 
-for (i in seq_len(nrow(results))) {
+# EN rows with sd
+for (i in 1:2) {
+  lbl <- c("EN, sector CV", "EN, firm CV")[i]
+  mn <- if (i == 1) m1_mean else m2_mean
+  sd <- if (i == 1) m1_sd else m2_sd
+
+  # Main row
   tex_lines <- c(tex_lines, sprintf(
     "%s & %s & %s & %s & %s & %s & %s & %s \\\\",
-    results$row_label[i],
-    fmt(results$nrmse_sd[i]),
-    fmt(results$median_apd[i]),
-    fmt(results$rho_pooled_global[i]),
-    fmt(results$fpr[i]),
-    fmt(results$tpr[i]),
-    fmt(results$fp_sev_p50[i]),
-    fmt(results$fp_sev_p99[i])
+    lbl, fmt(mn[1]), fmt(mn[2]), fmt(mn[3]),
+    fmt(mn[4]), fmt(mn[5]), fmt(mn[6]), fmt(mn[7])
+  ))
+
+  # SD row (smaller font, in parentheses)
+  tex_lines <- c(tex_lines, sprintf(
+    " & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} \\\\",
+    fmt(sd[1]), fmt(sd[2]), fmt(sd[3]),
+    fmt(sd[4]), fmt(sd[5]), fmt(sd[6]), fmt(sd[7])
   ))
 }
+
+# NACE-based (no sd)
+tex_lines <- c(tex_lines, sprintf(
+  "NACE-based & %s & %s & %s & %s & %s & %s & %s \\\\",
+  fmt(m3_vals[1]), fmt(m3_vals[2]), fmt(m3_vals[3]),
+  fmt(m3_vals[4]), fmt(m3_vals[5]), fmt(m3_vals[6]), fmt(m3_vals[7])
+))
 
 tex_lines <- c(tex_lines,
   "\\bottomrule",
@@ -237,9 +320,18 @@ cat("LaTeX table written to:", tex_path, "\n")
 
 # ── Save full results for later use ──────────────────────────────────────────
 full_results <- list(
-  results_df = results,
-  metrics = setNames(rows, row_labels),
-  row_labels = row_labels
+  metric_names = metric_names,
+  col_labels   = col_labels,
+  # EN sector CV
+  m1_mean = m1_mean, m1_sd = m1_sd, metrics_sec = metrics_sec,
+  # EN firm CV
+  m2_mean = m2_mean, m2_sd = m2_sd, metrics_firm = metrics_firm,
+  # NACE-based
+  m3_vals = m3_vals,
+  # Metadata
+  M_sec = M_sec, M_firm = M_firm,
+  K_sec = K_sec, K_firm = K_firm,
+  BASE_SEED = BASE_SEED
 )
 rds_path <- file.path(OUTPUT_DIR, "table_main_results.rds")
 saveRDS(full_results, rds_path)
