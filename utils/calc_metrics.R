@@ -57,7 +57,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     return(list(
       n = 0,
       rmse = NA_real_, nrmse_mean = NA_real_, nrmse_sd = NA_real_,
-      mae = NA_real_, mape = NA_real_, spearman = NA_real_,
+      mae = NA_real_, mape = NA_real_, pearson = NA_real_, spearman = NA_real_,
       fp_threshold = fp_threshold,
       fpr_nonemitters = NA_real_, tpr_emitters = NA_real_, ppv_precision = NA_real_,
       f1 = NA_real_, predicted_positive_rate = NA_real_, emitter_mass_captured = NA_real_,
@@ -99,6 +99,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
   idx_pos_y <- (y > 0)
   mape <- if (any(idx_pos_y)) mean(abs(err[idx_pos_y]) / y[idx_pos_y]) else NA_real_
   
+  pearson  <- suppressWarnings(stats::cor(y, yhat, method = "pearson",  use = "complete.obs"))
   spearman <- suppressWarnings(stats::cor(y, yhat, method = "spearman", use = "complete.obs"))
   
   # -----------------------------
@@ -230,8 +231,8 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     cell_sectors   <- character(0)
     cell_years     <- character(0)
 
-    for (sec in c("19", "24")) {
-      in_sec <- (nace2d == sec)
+    for (sec in c("19", "24", "17/18")) {
+      in_sec <- if (sec == "17/18") nace2d %in% c("17", "18") else nace2d == sec
       yrs <- sort(unique(year[in_sec]))
 
       for (yr in yrs) {
@@ -397,6 +398,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     nrmse_sd = nrmse_sd,
     mae = mae,
     mape = mape,
+    pearson = pearson,
     spearman = spearman,
 
     # classification-style (threshold-based)
