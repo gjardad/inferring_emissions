@@ -74,7 +74,8 @@ tabachova_proxy <- b2b %>%
          vat_i_ano %in% suppliers_tabachova,
          year >= 2005) %>%
   group_by(vat_j_ano, year) %>%
-  summarise(proxy_tabachova_asinh = sum(asinh(corr_sales_ij), na.rm = TRUE),
+  summarise(proxy_tabachova       = sum(corr_sales_ij, na.rm = TRUE),
+            proxy_tabachova_asinh = sum(asinh(corr_sales_ij), na.rm = TRUE),
             .groups = "drop") %>%
   rename(vat = vat_j_ano)
 

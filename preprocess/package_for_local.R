@@ -70,6 +70,7 @@ training_sample <- training_sample %>%
   mutate(
     fold_specific_proxy_asinh     = coalesce(fold_specific_proxy_asinh, 0),
     fold_specific_proxy_all_asinh = coalesce(fold_specific_proxy_all_asinh, 0),
+    proxy_tabachova               = coalesce(proxy_tabachova, 0),
     proxy_tabachova_asinh         = coalesce(proxy_tabachova_asinh, 0)
   )
 
