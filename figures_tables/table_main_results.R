@@ -86,7 +86,7 @@ load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
 # Merge Tabachova proxy into sector panel (they may have different row orders)
 tabachova_df <- training_sample %>%
-  select(vat, year, proxy_tabachova_asinh)
+  select(vat, year, proxy_tabachova, proxy_tabachova_asinh)
 rm(training_sample, syt)
 
 panel_sec <- panel_sec %>%
