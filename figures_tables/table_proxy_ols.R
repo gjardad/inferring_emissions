@@ -53,7 +53,7 @@ load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
 panel <- training_sample %>%
   mutate(fold_specific_proxy_all_asinh = pmax(coalesce(fold_specific_proxy_all_asinh, 0), 0),
-         proxy_tabachova_asinh         = coalesce(proxy_tabachova_asinh, 0))
+         asinh_proxy_tabachova         = asinh(pmax(coalesce(proxy_tabachova, 0), 0)))
 rm(training_sample)
 
 # Log revenue (matches the EN specification)
@@ -122,9 +122,9 @@ run_ols_table <- function(data, label, out_file) {
   m3 <- lm(asinh_y ~ log_revenue + fold_specific_proxy_all_asinh + year_f + firm_f, data = reg)
 
   # Tabachova proxy: columns (4)-(6)
-  m4 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f, data = reg)
-  m5 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f + sector_f, data = reg)
-  m6 <- lm(asinh_y ~ log_revenue + proxy_tabachova_asinh + year_f + firm_f, data = reg)
+  m4 <- lm(asinh_y ~ log_revenue + asinh_proxy_tabachova + year_f, data = reg)
+  m5 <- lm(asinh_y ~ log_revenue + asinh_proxy_tabachova + year_f + sector_f, data = reg)
+  m6 <- lm(asinh_y ~ log_revenue + asinh_proxy_tabachova + year_f + firm_f, data = reg)
 
   # Firm-clustered standard errors
   ct1 <- coeftest(m1, vcov. = cluster_vcov(m1, reg$vat))
@@ -140,7 +140,7 @@ run_ols_table <- function(data, label, out_file) {
   rev_en    <- fmt_coef_row(cts_en, "log_revenue")
   proxy_en  <- fmt_coef_row(cts_en, "fold_specific_proxy_all_asinh")
   rev_tab   <- fmt_coef_row(cts_tab, "log_revenue")
-  proxy_tab <- fmt_coef_row(cts_tab, "proxy_tabachova_asinh")
+  proxy_tab <- fmt_coef_row(cts_tab, "asinh_proxy_tabachova")
 
   models  <- list(m1, m2, m3, m4, m5, m6)
   n_obs   <- sapply(models, nobs)
@@ -185,7 +185,7 @@ run_ols_table <- function(data, label, out_file) {
   cat("\n--- EN proxy ---\n")
   print(ct1[c("log_revenue", "fold_specific_proxy_all_asinh"), ])
   cat("\n--- Tabachova proxy ---\n")
-  print(ct4[c("log_revenue", "proxy_tabachova_asinh"), ])
+  print(ct4[c("log_revenue", "asinh_proxy_tabachova"), ])
 }
 
 # ── Save ─────────────────────────────────────────────────────────────────────

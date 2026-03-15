@@ -38,7 +38,7 @@ load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 
 panel <- training_sample %>%
   mutate(fold_specific_proxy_all_asinh = pmax(coalesce(fold_specific_proxy_all_asinh, 0), 0),
-         proxy_tabachova_asinh         = coalesce(proxy_tabachova_asinh, 0),
+         proxy_tabachova               = asinh(pmax(coalesce(proxy_tabachova, 0), 0)),
          nace2d = as.character(nace2d))
 rm(training_sample)
 
@@ -51,7 +51,7 @@ df <- panel %>%
   ) %>%
   select(vat, year, sector, group,
          EN  = fold_specific_proxy_all_asinh,
-         Tab = proxy_tabachova_asinh) %>%
+         Tab = proxy_tabachova) %>%
   pivot_longer(cols = c(EN, Tab),
                names_to = "proxy_type", values_to = "proxy_value") %>%
   mutate(

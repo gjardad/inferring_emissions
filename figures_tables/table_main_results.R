@@ -8,8 +8,9 @@
 #     2. EN, firm CV      — EN proxy built with firm-level K=10 CV (M=200 repeats)
 #     3. NACE-based       — Tabachova (deterministic, NACE-based) proxy
 #
-#   Columns: nRMSE | Median APD | Rank corr. | FPR | TPR | FP sev. p50 | FP sev. p99
-#   Column groups: "Prediction accuracy" (first 3) | "Extensive margin" (last 4)
+#   Columns: nRMSE | Median APD | Pearson rho | Spearman rho |
+#            FPR | TPR | FP sev. p50 | FP sev. p99
+#   Column groups: "Prediction accuracy" (first 4) | "Extensive margin" (last 4)
 #
 #   Calibration is fold-aware sector-level:
 #     For each fold k and each (sector, year) cell, the emission total to
@@ -22,9 +23,10 @@
 #   Fold assignments are reconstructed deterministically from the same seeds
 #   used on RMD (seed = BASE_SEED + r).
 #
-#   For NACE-based: the proxy is deterministic so we use a single calibration
-#   with sector-fold assignment from repeat 1 (arbitrary, since the proxy
-#   itself doesn't depend on fold assignment).
+#   For NACE-based: the proxy is deterministic but the fold assignment (which
+#   determines calibration targets) varies across repeats. We average across
+#   M repeats using the sector-CV fold assignments to make the comparison
+#   apples-to-apples with the EN rows.
 #
 # INPUT
 #   {PROC_DATA}/repeated_cv_proxy_sector_asinh.RData
@@ -162,7 +164,7 @@ assign_folds <- function(panel, cv_type, K, seed) {
 }
 
 # ── Metric names to extract ─────────────────────────────────────────────────
-metric_names <- c("nrmse_sd", "median_apd", "rho_pooled_global",
+metric_names <- c("nrmse_sd", "median_apd", "pearson", "spearman",
                   "fpr_nonemitters", "tpr_emitters",
                   "avg_nonemit_p50_rank", "avg_nonemit_p99_rank")
 
@@ -219,106 +221,95 @@ m2_sd   <- apply(metrics_firm, 2, sd, na.rm = TRUE)
 cat("  Done.\n")
 
 # =============================================================================
-# Row 3: NACE-based (deterministic — single evaluation)
+# Row 3: NACE-based — average across M repeats (proxy is deterministic but
+# fold assignment varies, affecting calibration targets)
 # =============================================================================
-cat("Computing Row 3: NACE-based...\n")
+cat("Computing Row 3: NACE-based (", M_sec, "repeats)...\n")
 
-# Use sector-fold assignment from repeat 1 (arbitrary; proxy doesn't depend on folds)
-fold_k_tab <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + 1L)
-tabachova_raw <- proxy_to_levels(panel_sec$proxy_tabachova_asinh)
-yhat_tab <- calibrate_sector(panel_sec, tabachova_raw, fold_k_tab)
-m3 <- calc_metrics(panel_sec$y, yhat_tab, fp_threshold = 0,
-                   nace2d = panel_sec$nace2d, year = panel_sec$year)
-m3_vals <- extract_metrics(m3)
+tabachova_raw <- panel_sec$proxy_tabachova
+metrics_tab <- matrix(NA_real_, nrow = M_sec, ncol = length(metric_names))
+colnames(metrics_tab) <- metric_names
 
+for (r in seq_len(M_sec)) {
+  fold_k_r <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + r)
+  yhat_tab_r <- calibrate_sector(panel_sec, tabachova_raw, fold_k_r)
+  m_r <- calc_metrics(panel_sec$y, yhat_tab_r, fp_threshold = 0,
+                      nace2d = panel_sec$nace2d, year = panel_sec$year)
+  metrics_tab[r, ] <- extract_metrics(m_r)
+
+  if (r %% 50 == 0) cat(sprintf("  %d/%d\n", r, M_sec))
+}
+
+m3_mean <- colMeans(metrics_tab, na.rm = TRUE)
+m3_sd   <- apply(metrics_tab, 2, sd, na.rm = TRUE)
 cat("  Done.\n")
 
 # =============================================================================
 # Assemble and print results
 # =============================================================================
-col_labels <- c("nRMSE", "Med.APD", "Rho", "FPR", "TPR", "FPsev50", "FPsev99")
+col_labels <- c("nRMSE", "Med.APD", "rho", "rho_S", "FPR", "TPR", "FPsev50", "FPsev99")
 
 cat("\n======================================================================\n")
 cat("MAIN RESULTS TABLE (sector-level calibration)\n")
 cat("======================================================================\n\n")
 
-cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s\n",
-            "", col_labels[1], col_labels[2], col_labels[3],
-            col_labels[4], col_labels[5], col_labels[6], col_labels[7]))
-cat(paste(rep("-", 90), collapse = ""), "\n")
+cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s\n",
+            "", col_labels[1], col_labels[2], col_labels[3], col_labels[4],
+            col_labels[5], col_labels[6], col_labels[7], col_labels[8]))
+cat(paste(rep("-", 100), collapse = ""), "\n")
 
-# EN rows: mean (sd)
-for (i in 1:2) {
-  lbl <- c("EN, sector CV", "EN, firm CV")[i]
-  mn <- if (i == 1) m1_mean else m2_mean
-  sd <- if (i == 1) m1_sd else m2_sd
-  cat(sprintf("%-20s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f\n",
-              lbl, mn[1], mn[2], mn[3], mn[4], mn[5], mn[6], mn[7]))
-  cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s\n",
+# All rows: mean (sd)
+for (i in 1:3) {
+  lbl <- c("EN, sector CV", "EN, firm CV", "NACE-based")[i]
+  mn <- list(m1_mean, m2_mean, m3_mean)[[i]]
+  sd <- list(m1_sd, m2_sd, m3_sd)[[i]]
+  cat(sprintf("%-20s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f\n",
+              lbl, mn[1], mn[2], mn[3], mn[4], mn[5], mn[6], mn[7], mn[8]))
+  cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s\n",
               "",
               sprintf("(%.3f)", sd[1]), sprintf("(%.3f)", sd[2]),
               sprintf("(%.3f)", sd[3]), sprintf("(%.3f)", sd[4]),
               sprintf("(%.3f)", sd[5]), sprintf("(%.3f)", sd[6]),
-              sprintf("(%.3f)", sd[7])))
+              sprintf("(%.3f)", sd[7]), sprintf("(%.3f)", sd[8])))
 }
-
-# NACE-based: no sd
-cat(sprintf("%-20s %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f %10.3f\n",
-            "NACE-based",
-            m3_vals[1], m3_vals[2], m3_vals[3],
-            m3_vals[4], m3_vals[5], m3_vals[6], m3_vals[7]))
 cat("\n")
 
 # ── Generate LaTeX table ─────────────────────────────────────────────────────
 fmt <- function(x, digits = 3) formatC(x, format = "f", digits = digits)
 
 tex_lines <- c(
-  "\\begin{table}[htbp]",
-  "\\centering",
-  "\\caption{Main prediction results}",
-  "\\label{tab:main_results}",
-  "\\begin{tabular}{l ccc cccc}",
+  "\\begin{tabular}{l cc cc cccc}",
   "\\toprule",
-  " & \\multicolumn{3}{c}{Prediction accuracy} & \\multicolumn{4}{c}{Extensive margin} \\\\",
-  "\\cmidrule(lr){2-4} \\cmidrule(lr){5-8}",
-  " & nRMSE & Med.\\ APD & Rank corr. & FPR & TPR & \\multicolumn{2}{c}{FP severity} \\\\",
-  "\\cmidrule(lr){7-8}",
-  " & & & & & & p50 & p99 \\\\",
+  " & \\multicolumn{2}{c}{Prediction error} & \\multicolumn{2}{c}{Correlation} & \\multicolumn{4}{c}{Extensive margin} \\\\",
+  "\\cmidrule(lr){2-3} \\cmidrule(lr){4-5} \\cmidrule(lr){6-9}",
+  " & nRMSE & Med.\\ APD & Levels & Rank & FPR & TPR & p50 & p99 \\\\",
   "\\midrule"
 )
 
-# EN rows with sd
-for (i in 1:2) {
-  lbl <- c("EN, sector CV", "EN, firm CV")[i]
-  mn <- if (i == 1) m1_mean else m2_mean
-  sd <- if (i == 1) m1_sd else m2_sd
+# All rows with sd
+for (i in 1:3) {
+  lbl <- c("EN, sector CV", "EN, firm CV", "NACE-based")[i]
+  mn <- list(m1_mean, m2_mean, m3_mean)[[i]]
+  sd <- list(m1_sd, m2_sd, m3_sd)[[i]]
 
   # Main row
   tex_lines <- c(tex_lines, sprintf(
-    "%s & %s & %s & %s & %s & %s & %s & %s \\\\",
-    lbl, fmt(mn[1]), fmt(mn[2]), fmt(mn[3]),
-    fmt(mn[4]), fmt(mn[5]), fmt(mn[6]), fmt(mn[7])
+    "%s & %s & %s & %s & %s & %s & %s & %s & %s \\\\",
+    lbl, fmt(mn[1]), fmt(mn[2]), fmt(mn[3]), fmt(mn[4]),
+    fmt(mn[5]), fmt(mn[6]), fmt(mn[7]), fmt(mn[8])
   ))
 
   # SD row (smaller font, in parentheses)
   tex_lines <- c(tex_lines, sprintf(
-    " & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} \\\\",
-    fmt(sd[1]), fmt(sd[2]), fmt(sd[3]),
-    fmt(sd[4]), fmt(sd[5]), fmt(sd[6]), fmt(sd[7])
+    " & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} \\\\",
+    fmt(sd[1]), fmt(sd[2]), fmt(sd[3]), fmt(sd[4]),
+    fmt(sd[5]), fmt(sd[6]), fmt(sd[7]), fmt(sd[8])
   ))
 }
 
-# NACE-based (no sd)
-tex_lines <- c(tex_lines, sprintf(
-  "NACE-based & %s & %s & %s & %s & %s & %s & %s \\\\",
-  fmt(m3_vals[1]), fmt(m3_vals[2]), fmt(m3_vals[3]),
-  fmt(m3_vals[4]), fmt(m3_vals[5]), fmt(m3_vals[6]), fmt(m3_vals[7])
-))
-
 tex_lines <- c(tex_lines,
   "\\bottomrule",
-  "\\end{tabular}",
-  "\\end{table}"
+  "\\end{tabular}"
 )
 
 # Write LaTeX
@@ -335,7 +326,7 @@ full_results <- list(
   # EN firm CV
   m2_mean = m2_mean, m2_sd = m2_sd, metrics_firm = metrics_firm,
   # NACE-based
-  m3_vals = m3_vals,
+  m3_mean = m3_mean, m3_sd = m3_sd, metrics_tab = metrics_tab,
   # Metadata
   M_sec = M_sec, M_firm = M_firm,
   K_sec = K_sec, K_firm = K_firm,
