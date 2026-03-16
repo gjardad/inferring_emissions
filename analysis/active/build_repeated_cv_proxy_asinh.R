@@ -47,7 +47,7 @@ library(foreach)
 # ── Parameters ───────────────────────────────────────────────────────────────
 CV_TYPE        <- "sector"   # "sector" or "firm"
 M_REPEATS      <- 200L       # number of repeated cross-fitting rounds
-K_OUTER        <- if (CV_TYPE == "sector") 5L else 5L
+K_OUTER        <- 5L
 K_INNER        <- 10L        # inner folds for cv.glmnet lambda tuning
 MIN_LHS_BUYERS <- 5L
 ALPHA          <- 0.5
