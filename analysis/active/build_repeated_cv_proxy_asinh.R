@@ -46,13 +46,13 @@ library(foreach)
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 CV_TYPE        <- "sector"   # "sector" or "firm"
-M_REPEATS      <- 50L        # number of repeated cross-fitting rounds
-K_OUTER        <- if (CV_TYPE == "sector") 5L else 10L
+M_REPEATS      <- 200L       # number of repeated cross-fitting rounds
+K_OUTER        <- if (CV_TYPE == "sector") 5L else 5L
 K_INNER        <- 10L        # inner folds for cv.glmnet lambda tuning
 MIN_LHS_BUYERS <- 5L
 ALPHA          <- 0.5
 BASE_SEED      <- 2026L      # each repeat r uses seed = BASE_SEED + r
-N_CORES        <- 20L        # parallel workers (0 or 1 = sequential)
+N_CORES        <- 40L        # parallel workers (0 or 1 = sequential)
 
 cat("═══════════════════════════════════════════════════════════════\n")
 cat("  REPEATED CROSS-FITTING (", CV_TYPE, " folds)\n")
