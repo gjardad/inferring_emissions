@@ -44,34 +44,14 @@ cat(sprintf("Lost EU ETS firm-years (have AA, fail wage_bill/FTE): %d (%d firms)
 
 # ── Check B2B presence ──────────────────────────────────────────────────────
 # B2B data: check if lost firms appear as buyer or supplier
-# Adapt column names to whatever the B2B data uses
+# df_b2b columns: vat_i_ano (buyer), vat_j_ano (supplier), year, sales_ij
 b2b_cols <- names(df_b2b)
 cat("\nB2B columns:", paste(b2b_cols, collapse = ", "), "\n\n")
 
-# Check as buyer
 lost_vats <- unique(lost$vat)
 
-# Firms appearing in B2B as buyer
-if ("buyer" %in% b2b_cols) {
-  buyer_col <- "buyer"
-} else if ("vat_buyer" %in% b2b_cols) {
-  buyer_col <- "vat_buyer"
-} else {
-  buyer_col <- b2b_cols[grep("buy", b2b_cols, ignore.case = TRUE)[1]]
-}
-
-if ("supplier" %in% b2b_cols) {
-  supplier_col <- "supplier"
-} else if ("vat_supplier" %in% b2b_cols) {
-  supplier_col <- "vat_supplier"
-} else {
-  supplier_col <- b2b_cols[grep("sup|sell", b2b_cols, ignore.case = TRUE)[1]]
-}
-
-cat(sprintf("Using buyer col: '%s', supplier col: '%s'\n\n", buyer_col, supplier_col))
-
-b2b_buyers <- unique(df_b2b[[buyer_col]])
-b2b_suppliers <- unique(df_b2b[[supplier_col]])
+b2b_buyers <- unique(df_b2b$vat_i_ano)
+b2b_suppliers <- unique(df_b2b$vat_j_ano)
 
 lost_in_b2b <- lost %>%
   mutate(
