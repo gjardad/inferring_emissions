@@ -68,10 +68,11 @@ library(dplyr) # even though dplyr is included in tidyverse, still need to load 
 # Import data -------
 
 library(haven)
-df_belgium_euets <- read_dta(paste0(RAW_DATA,"/NBB/EUTL_Belgium.dta")) %>% 
+df_belgium_euets <- read_dta(paste0(RAW_DATA,"/NBB/EUTL_Belgium.dta")) %>%
   rename(bvd_id = bvdid, firm_id = companyregistrationnumber)
 
 load(paste0(PROC_DATA, "/firm_year_emissions.RData"))
+load(paste0(PROC_DATA, "/installation_year_in_belgium.RData"))
 
 df_national_accounts <- read_dta(paste0(RAW_DATA,"/NBB/Annual_Accounts_MASTER_ANO.dta"))
 
@@ -107,8 +108,31 @@ firm_year_belgian_euets <- firm_year_emissions %>%
               by = c("vat" = "vat_ano", "year"))
 
   # clean duplicates (different firmid but are actually the same obs)
-  firm_year_belgian_euets <- firm_year_belgian_euets %>% 
+  firm_year_belgian_euets <- firm_year_belgian_euets %>%
     distinct(vat, year, bvd_id, .keep_all = TRUE)
+
+  # ── Flag emissions from foreign installations ──────────────────────────────
+  # `emissions` sums ALL installations per bvd_id (including non-Belgian).
+  # `emissions_belgian` sums only Belgian installations (prefix "BE").
+  # `emissions_foreign` = emissions - emissions_belgian.
+  # This matters for sector-year calibration (NIR covers Belgian territory only)
+  # but NOT for EN training (firm-level covariates correlate with total emissions).
+  emissions_belgian <- installation_year_in_belgium %>%
+    filter(!is.na(vat_ano), !is.na(verified)) %>%
+    group_by(vat_ano, year) %>%
+    summarise(emissions_belgian = sum(verified, na.rm = TRUE), .groups = "drop")
+
+  firm_year_belgian_euets <- firm_year_belgian_euets %>%
+    left_join(emissions_belgian, by = c("vat" = "vat_ano", "year")) %>%
+    mutate(
+      emissions_belgian = coalesce(emissions_belgian, 0),
+      emissions_foreign = pmax(emissions - emissions_belgian, 0)
+    )
+
+  n_foreign <- sum(firm_year_belgian_euets$emissions_foreign > 0, na.rm = TRUE)
+  cat("Firm-years with foreign emissions:", n_foreign, "\n")
+  cat("Total foreign emissions:",
+      sum(firm_year_belgian_euets$emissions_foreign, na.rm = TRUE) / 1e3, "kt\n")
 
 # Save it -------
 save(firm_year_belgian_euets, file = paste0(PROC_DATA,"/firm_year_belgian_euets.RData"))  

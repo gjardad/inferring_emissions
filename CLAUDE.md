@@ -10,7 +10,7 @@ The model should be first evaluated with respect to whether it satisfies interna
 
 It should also be evaluated with respect to its external validity: it should generalize beyond the training distribution. External validity is impossible to guarantee with certainty in our context, so the goal here is to mitigate any obvious concerns.
 
-**Concern of distribution shift is real.** Training data consists of all the firms regulated by the EU ETS (for which we observe their yearly emissions) plus non-EUETS firms from sectors with NACE 2-digit codes 19 and 24. We confidently assume emissions are 0 in the latter group, since EU ETS covers nearly 100% of the emissions from fuel combustion in these two sectors. Deployment data consists of all the non-EUETS firms from all other sectors. A lot of sectors that are present in deployment are not present in EU ETS, and vice-versa. It is not clear if conditional on observables distribution of emissions across firms is the same in the two data. Any suggestion in framing or modelling that alleviates this concern is welcome.
+**Concern of distribution shift is real.** Training data consists of all the firms regulated by the EU ETS (for which we observe their yearly emissions) plus non-EUETS firms from sectors with NACE 2-digit codes 17, 18, 19, and 24. We confidently assume emissions are 0 in the latter group, since EU ETS covers nearly 100% of the emissions from fuel combustion in these two sectors. Deployment data consists of all the non-EUETS firms from all other sectors. A lot of sectors that are present in deployment are not present in EU ETS, and vice-versa. It is not clear if conditional on observables distribution of emissions across firms is the same in the two data. Any suggestion in framing or modelling that alleviates this concern is welcome.
 
 If it satisfies internal validity and there's no obvious concerns with respect to external validity, the performance of the model should be evaluated with respect to
 
@@ -69,7 +69,7 @@ Processed data (located in DATA_DIR/processed):
 - `df_national_accounts_with_5digits.RData`
 - `firms_in_selected_sample.RData`
 
-The full training sample (`training_sample.RData` and `fold_specific_proxy.RData`) are NOT downsampled and are available in full on local 1.
+The full training sample (`training_sample.RData` and `ffirm_year_panel_with_proxies.RData`) are NOT downsampled and are available in full on local 1.
 
 ### Hardware setup:
 
@@ -89,33 +89,7 @@ This is the first chapter of my PhD thesis. It is supposed to be a standalone pa
 
 See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approaches.
 
-## For Tomorrow
-
-1. **Repeated cross-fitting on RMD.** Script ready: `analysis/active/build_repeated_cv_proxy_asinh.R`. Before running M=50 repeats:
-   - Check available RAM on RMD: `as.numeric(system("wmic computersystem get totalphysicalmemory", intern=TRUE)[2]) / 1e9` (Windows) or `grep MemTotal /proc/meminfo` (Linux).
-   - Profile memory for one repeat: `gc(reset=TRUE)`, run one repeat, `gc()` — check "max used (Mb)".
-   - Based on RAM/repeat ratio, decide how many cores to parallelize with (`floor(total_GB / (per_repeat_GB * 1.5))`).
-   - Add `doParallel` backend if warranted, then run both sector CV (`CV_TYPE="sector"`, K=5, M=50) and firm CV (`CV_TYPE="firm"`, K=10, M=50). Estimated ~12.5 hours each sequential.
-   - Copy outputs (`repeated_cv_proxy_sector_asinh.RData`, `repeated_cv_proxy_firm_asinh.RData`) to local 1.
-   - Update `figures_tables/table_main_results.R` to use the averaged proxies.
-2. **Statistical comparison of models.** Read Fava (2025) Section 4 for formal inference on model comparisons using repeated cross-fitting. Within each repeat r, compute nRMSE for both models (shared fold assignment) and examine the distribution of differences. Fava's CLT accounts for dependence across splits. Diebold-Mariano test is the standard econometric alternative.
-3. **Run `table_supplier_*.R` scripts on RMD** for paper-ready supplier descriptives (NACE profile, coefficient concentration, buyer count, sector reach). `table_supplier_nace_profile.R` is ready to run; others may need updating.
-4. **Delete `preprocess/build_loocv_training_sample.R`** and migrate all downstream references from `loocv_training_sample` → `training_sample`. Active scripts that need updating:
-   - `analysis/active/build_fold_specific_proxy.R`
-   - `analysis/active/build_loso_proxy.R`
-   - `analysis/active/build_loso_proxy_asinh.R`
-   - `analysis/active/build_firmfoldcv_proxy.R`
-   - `analysis/active/build_firmfoldcv_proxy_asinh.R`
-   - `analysis/active/enet_climate_trace.R`
-   - `preprocess/build_design_matrix.R`
-   - `preprocess/build_proxy.R`
-   - `preprocess/run_full_pipeline.R`
-   - `preprocess/data_dimensions.R`
-   - `figures_tables/elastic_net_proxy_diagnostics.R`
-   - `analysis/outstanding/alpha_sensitivity.R`
-3. **Check `nace2d` vs `primary_nace2d` consistency downstream.** In `firm_year_panel_with_proxies.RData`, `nace2d` is the year-specific NACE code from annual accounts, while `primary_nace2d` is the firm's modal NACE code (used for LOSOCV fold assignment). They disagree for some firm-years due to NACE code switching over time (e.g., NACE 17: 3,213 vs 3,245 obs; NACE 33 appears in `nace2d` but not `primary_nace2d`). Need to audit which variable is used where — fold assignment, sector-level evaluation, zero-sector definition — and make sure it's intentional and consistent.
-4. **Compare levels-LHS vs asinh-LHS proxies** once new outputs are local. Write comparison script: Spearman ρ, AUC, proxy coverage, supplier overlap side by side.
-5. **Fair EN-vs-Tabachova R² comparison** once new `proxy_tabachova_asinh` is built. Run `y ~ EN proxy` vs `y ~ tabachova_asinh` on full data.
+## TO-DO List
 
 ## Writing Notes
 
@@ -129,48 +103,16 @@ Drafting the paper in `paper/winter26_version/`. The `dec25_version/` is obsolet
 
 | # | Item | Section | Script | Where | Blocker |
 |---|------|---------|--------|-------|---------|
-| 1 | NIR emissions by sector + EU ETS coverage | proxy 3.1 | needs writing (extend `build_emissions_by_sector_year_from_nir.R`) | local 1 | — |
-| 2 | Sectors 19/24 summary by emitter status | proxy 3.1 | needs writing | local 1 | — |
-| 3 | Supplier characterization | proxy 3.3 | `selected_supplier_nace_profile.R` + `validate_against_cn8.R` (verify format) | local 1 or RMD | — |
-| 4 | ~~OLS proxy regressions (4-col)~~ | proxy 3.3 | `figures_tables/table_proxy_ols.R` | local 1 | **done** |
-| 5 | Kernel density proxy by emitter status (19/24) | proxy 3.3 | `elastic_net_proxy_diagnostics.R` or `diagnostic_proxy_classification_19_24.R` (verify) | local 1 | — |
-| 6 | Binscatter: levels vs within-sector ranks | proxy 3.3 | needs writing | local 1 | — |
-| 7 | Sector overlap training vs deployment | pred. perf. 4.1 | needs writing | local 1 | — |
-| 8 | EN on financials vs EN + proxy | pred. perf. 4.3 | partially in `enet_financials_calibrated.R`; needs updated fold-specific proxy | RMD | needs full annual accounts |
-| 9 | Cross-sector proxy threshold transfer (19↔24) | pred. perf. 4.4 | `diagnostic_proxy_classification_19_24.R` (verify cross-sector transfer) | local 1 | — |
-| 10 | **Main results (5-row build-up, nat-agg calibration)** | pred. perf. 4.5 | `models_with_fold_specific_proxy.R` (modify to add nat-agg calibration) | local 1 | **nat-agg calibration not implemented** |
-| 11 | Rows 1–2 restricted to sectors 19/24 | pred. perf. 4.5 | `models_with_fold_specific_proxy.R` (subset evaluation) | local 1 | depends on #10 |
-| 12 | R² decomposition (revenue, EN residual, proxy) | pred. perf. 4.5 | needs writing | local 1 | depends on EN predictions from #10 |
-| 13 | Within-sector rho by sector size | pred. perf. 4.6 | `rho_star_test.R` + `table_rho_star.R` (basic); pooling test needs writing | local 1 (basic) / RMD (pooling) | pooling test needs re-running EN |
-| 14 | Sectoral gains Row 1: sector-year calibration | pred. perf. 4.7 | `models_with_fold_specific_proxy.R` (already exists) | local 1 | — |
-| 15 | Sectoral gains Row 2: firm-fold CV | pred. perf. 4.7 | needs firm-fold CV proxy | RMD | firm-fold CV proxy not built |
 | 16 | Classifier battery (GAM, XGBoost, RF) | appendix | `fit_extensive_margin.R` (re-run with fold-specific proxy) | local 1 | stale results, needs re-run |
 | 17 | EN hyperparameter sensitivity (alpha grid) | appendix | `alpha_sensitivity.R` | RMD | not yet run |
-| 18 | **Tabachova 2×2 comparison** (NACE-based vs EN supplier ID × proportional vs hybrid allocation) | pred. perf. 4.5 | `figures_tables/table_hungarian_comparison.R` | local 1 | `proxy_tabachova` exists in training_sample; script not yet run |
 
 ### Pending pipeline: proxy R² and alternative CV schemes
 
 | Step | Task | Script | Where | Status |
 |------|------|--------|-------|--------|
-| A | **Full-sample proxy R² upper bound** — report in paper (proxy 3.3 or 3.4). Shows R²=0.41 vs CV R²=0.17; gap due to supplier non-overlap across sectors. | `figures_tables/r2_full_sample_enet.R` | local 1 | **done** (results ready, needs formatting for paper) |
-| B1 | **LOSO proxy** — run EN leaving one sector out at a time (29 folds). | `analysis/active/build_loso_proxy.R` | RMD | **done** |
-| B2 | **Firm-fold CV proxy** — run EN with K=10 firm-level folds, stratified by sector. | `analysis/active/build_firmfoldcv_proxy.R` | RMD | **done** |
-| B3 | Copy `loso_proxy.RData` and `firmfoldcv_proxy.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | **done** |
-| B4 | Evaluate LOSO and firm-fold CV proxies locally (OOS prediction metrics). | needs writing (adapt `models_with_fold_specific_proxy.R`) | local 1 | blocked on B3 |
 | C1 | **Climate TRACE EN** — train EN with CT emissions as LHS; build proxy for non-CT EUTL firms. | `analysis/active/enet_climate_trace.R` | RMD | **done** |
 | C2 | Copy `enet_climate_trace_results.RData` from RMD → local 1. | — | local 2 → cloud → local 1 | **done** |
 | C3 | Evaluate CT-trained proxy locally against EUTL verified emissions on test set. | needs writing | local 1 | blocked on C2 |
-| D | **(Maybe) Sector-level bootstrap CIs** — resample sectors with replacement to build CIs on proxy correlations, AUC, etc. Useful for testing significance of LOSO vs K=5 differences. | needs writing | local 1 | — |
-
-**Paper reporting plan:**
-- Full-sample R² upper bound goes in proxy diagnostics (Section 3.3/3.4) to motivate the supplier-overlap discussion.
-- LOSO vs LOSOCV(K=5) comparison goes in predictive performance to show gains from finer sector-level CV.
-- Firm-fold CV results go in predictive performance to show gains from within-sector firm overlap.
-- Climate TRACE EN results go in discussion/extension section (satellite-derived training signal feasibility).
-
-## Model Selection Table
-
-Scripts in `analysis/model_selection/losocv/` (01–07) and `analysis/model_selection/firmfoldcv/`. Section structure and table design documented in `paper/winter26_version/section/model_selection.tex`.
 
 ## Referee 2 Correspondence
 

@@ -4,14 +4,13 @@
 # PURPOSE
 #   Generate Table: Coverage of Selected Sample.
 #   Shows firm counts, value added, wage bill, and emissions coverage
-#   for selected years (2002, 2012, 2022).
+#   for selected years (2005, 2010, 2015, 2020).
 #
 # INPUTS
 #   - df_national_accounts_with_5digits.RData  (full AA universe, MUST be full data)
 #   - annual_accounts_more_selected_sample.RData  (De Loecker/Dhyne sample)
-#   - firm_year_belgian_euets.RData  (EUETS firms matched to sample)
-#   - emissions_by_crf_year.RData  (sector-year emissions from NIR, optional)
-#   - crf_to_nace_map.RData  (CRF-to-NACE crosswalk)
+#   - firm_year_belgian_euets.RData  (EUETS firms matched to sample, with emissions_foreign flag)
+#   - belcrt_denominators.tsv  (NIR CO2 totals extracted from BEL-CRT 2025 files)
 #
 # OUTPUTS
 #   - sample_coverage.tex  (LaTeX table)
@@ -40,7 +39,7 @@ source(file.path(REPO_DIR, "paths.R"))
 library(dplyr)
 library(tidyr)
 
-DISPLAY_YEARS <- c(2002, 2012, 2022)
+DISPLAY_YEARS <- c(2005, 2010, 2015, 2020)
 
 # ── Variable definitions ─────────────────────────────────────────────────────
 # From annual_accounts_key_variables.R:
@@ -58,7 +57,7 @@ load(file.path(PROC_DATA, "df_national_accounts_with_5digits.RData"))
 # De Loecker/Dhyne selected sample
 load(file.path(PROC_DATA, "annual_accounts_more_selected_sample.RData"))
 
-# EUETS firms matched to sample
+# EUETS firms matched to sample (includes emissions_foreign flag)
 load(file.path(PROC_DATA, "firm_year_belgian_euets.RData"))
 
 # ── 2. Compute sample-level aggregates ───────────────────────────────────────
@@ -98,64 +97,58 @@ euets_in_sample <- firm_year_belgian_euets %>%
              by = c("vat" = "vat_ano", "year" = "year")) %>%
   filter(year %in% DISPLAY_YEARS)
 
+# Emissions numerator: Belgian-only emissions (subtract foreign installations)
+# If emissions_foreign column is not yet available, fall back to total emissions
+has_foreign_flag <- "emissions_foreign" %in% names(euets_in_sample)
+
 agg_euets <- euets_in_sample %>%
   group_by(year) %>%
   summarise(
-    n_euets          = n_distinct(vat),
-    emissions_sample = sum(emissions, na.rm = TRUE),
+    n_euets              = n_distinct(vat),
+    emissions_total      = sum(emissions, na.rm = TRUE),
+    emissions_belgian    = if (has_foreign_flag) {
+      sum(emissions - emissions_foreign, na.rm = TRUE)
+    } else {
+      sum(emissions, na.rm = TRUE)
+    },
     .groups = "drop"
   )
 
-# ── 4. National emission aggregates ─────────────────────────────────────────
+if (!has_foreign_flag) {
+  message("WARNING: emissions_foreign column not found in firm_year_belgian_euets. ",
+          "Emissions column includes foreign installations. ",
+          "Re-run preprocess/build_firm_year_euets.R to add the flag.")
+}
 
-# Try to load sector-year emissions from NIR (built by
-# preprocess/build_emissions_by_sector_year_from_nir.R)
-nir_file <- file.path(PROC_DATA, "emissions_by_crf_year.RData")
-has_nir <- file.exists(nir_file)
+# ── 4. National emission denominators from BEL-CRT ──────────────────────────
+# Denominator = 1.A.1. + 1.A.2. + 1.A.4. - 1.A.4.b. + 2.
+# = stationary combustion (excl. residential & transport) + industrial processes
+# Source: BEL-CRT-2025 files, CO2 column (kt)
 
-if (has_nir) {
-  load(nir_file)
-  load(file.path(PROC_DATA, "crf_to_nace_map.RData"))
+nir_denom_file <- file.path(RAW_DATA, "NIR", "belcrt_denominators.tsv")
+if (file.exists(nir_denom_file)) {
+  nir_raw <- read.delim(nir_denom_file, stringsAsFactors = FALSE)
+  # Parse comma-formatted numbers
+  nir_raw$co2_kt <- as.numeric(gsub(",", "", nir_raw$co2_kt))
 
-  # Total national emissions by year (sum across all CRF categories)
-  national_emissions <- emissions_by_crf_year %>%
-    filter(year %in% DISPLAY_YEARS) %>%
-    group_by(year) %>%
-    summarise(emissions_national = sum(co2_emissions, na.rm = TRUE),
-              .groups = "drop")
+  nir_wide <- nir_raw %>%
+    mutate(crf_clean = gsub("\\.", "_", crf)) %>%
+    select(year, crf_clean, co2_kt) %>%
+    pivot_wider(names_from = crf_clean, values_from = co2_kt)
 
-  # Emissions in NACE sectors where EUETS firms are present (per year)
-  euets_nace2d_by_year <- firm_year_belgian_euets %>%
-    mutate(nace2d = substr(nace5d, 1, 2)) %>%
-    select(year, nace2d) %>%
-    distinct()
-
-  # Map CRF to NACE 2-digit
-  crf_nace2d <- crf_to_nace_map %>%
-    mutate(nace2d = substr(nace_code, 2, 3)) %>%
-    select(crf, nace2d) %>%
-    distinct()
-
-  euets_sector_emissions <- emissions_by_crf_year %>%
-    left_join(crf_nace2d, by = "crf") %>%
-    inner_join(euets_nace2d_by_year, by = c("year", "nace2d")) %>%
-    filter(year %in% DISPLAY_YEARS) %>%
-    group_by(year) %>%
-    summarise(emissions_euets_sectors = sum(co2_emissions, na.rm = TRUE),
-              .groups = "drop")
+  national_stationary <- nir_wide %>%
+    transmute(
+      year = year,
+      # 1.A.1 + 1.A.2 + 1.A.4 - 1.A.4.b + 2 (all in kt CO2)
+      nir_denominator_kt = `1_A_1_` + `1_A_2_` + `1_A_4_` - `1_A_4_b_` + `2_`
+    )
 } else {
-  message(
-    "emissions_by_crf_year.RData not found. ",
-    "Run preprocess/build_emissions_by_sector_year_from_nir.R first, ",
-    "or emissions columns will show NA."
-  )
-  national_emissions <- data.frame(
+  message("belcrt_denominators.tsv not found. ",
+          "Run scripts/extract_belcrt_denominators.ps1 first, ",
+          "or emissions share column will show NA.")
+  national_stationary <- data.frame(
     year = DISPLAY_YEARS,
-    emissions_national = NA_real_
-  )
-  euets_sector_emissions <- data.frame(
-    year = DISPLAY_YEARS,
-    emissions_euets_sectors = NA_real_
+    nir_denominator_kt = NA_real_
   )
 }
 
@@ -164,36 +157,27 @@ if (has_nir) {
 tbl <- agg_selected %>%
   left_join(agg_full, by = "year") %>%
   left_join(agg_euets, by = "year") %>%
-  left_join(national_emissions, by = "year") %>%
-  left_join(euets_sector_emissions, by = "year") %>%
+  left_join(national_stationary, by = "year") %>%
   mutate(
     # Value added in billion euros
-    va_bn       = va_selected / 1e9,         # v_0009800 is in EUR
+    va_bn       = va_selected / 1e9,
     va_pct      = va_selected / va_full * 100,
 
     # Wage bill in billion euros
-    wb_bn       = wage_bill_selected / 1e9,  # v_0001023 is in EUR
+    wb_bn       = wage_bill_selected / 1e9,
     wb_pct      = wage_bill_selected / wage_bill_full * 100,
 
-    # Emissions in million tonnes CO2eq
-    em_mt       = emissions_sample / 1e6,
-    em_pct      = ifelse(!is.na(emissions_national) & emissions_national > 0,
-                         emissions_sample / emissions_national * 100, NA),
-    em_sector_pct = ifelse(!is.na(emissions_euets_sectors) & emissions_euets_sectors > 0,
-                           emissions_sample / emissions_euets_sectors * 100, NA),
-
-    # Handle 2002 (no EUETS)
-    n_euets     = ifelse(year < 2005, NA_integer_, n_euets),
-    em_mt       = ifelse(year < 2005, NA_real_, em_mt),
-    em_pct      = ifelse(year < 2005, NA_real_, em_pct),
-    em_sector_pct = ifelse(year < 2005, NA_real_, em_sector_pct)
+    # Emissions: Belgian-only, in kt (firm_year_belgian_euets uses tonnes)
+    em_sample_kt = emissions_belgian / 1e3,
+    em_pct       = ifelse(!is.na(nir_denominator_kt) & nir_denominator_kt > 0,
+                          em_sample_kt / nir_denominator_kt * 100, NA)
   )
 
 # ── 6. Save CSV ─────────────────────────────────────────────────────────────
 
 out_csv <- tbl %>%
   select(year, n_selected, n_euets, va_bn, va_pct,
-         wb_bn, wb_pct, em_mt, em_pct, em_sector_pct)
+         wb_bn, wb_pct, em_sample_kt, nir_denominator_kt, em_pct)
 
 write.csv(out_csv, file.path(OUTPUT_DIR, "sample_coverage.csv"), row.names = FALSE)
 cat("Saved:", file.path(OUTPUT_DIR, "sample_coverage.csv"), "\n")
@@ -202,8 +186,8 @@ cat("Saved:", file.path(OUTPUT_DIR, "sample_coverage.csv"), "\n")
 
 fmt_int   <- function(x) ifelse(is.na(x), "$-$", formatC(x, format = "d", big.mark = ","))
 fmt_bn    <- function(x) ifelse(is.na(x), "$-$", formatC(round(x), format = "d", big.mark = ","))
-fmt_pct   <- function(x) ifelse(is.na(x), "$-$", paste0(round(x), "\\%"))
-fmt_mt    <- function(x) ifelse(is.na(x), "$-$", formatC(round(x), format = "d", big.mark = ","))
+fmt_pct   <- function(x) ifelse(is.na(x), "$-$", sprintf("%.1f\\%%", x))
+fmt_kt    <- function(x) ifelse(is.na(x), "$-$", formatC(round(x), format = "d", big.mark = ","))
 
 rows <- lapply(seq_len(nrow(tbl)), function(i) {
   r <- tbl[i, ]
@@ -215,9 +199,8 @@ rows <- lapply(seq_len(nrow(tbl)), function(i) {
     fmt_pct(r$va_pct), " & ",
     fmt_bn(r$wb_bn), " & ",
     fmt_pct(r$wb_pct), " & ",
-    fmt_mt(round(r$em_mt)), " & ",
-    fmt_pct(r$em_pct), " & ",
-    fmt_pct(r$em_sector_pct),
+    fmt_kt(r$em_sample_kt), " & ",
+    fmt_pct(r$em_pct),
     " \\\\"
   )
 })
@@ -236,12 +219,12 @@ tex <- paste0(
   "\\caption{Coverage of Selected Sample}\n",
   "\\label{table: sample coverage}\n",
   "\\scalebox{0.85}{\n",
-  "\\begin{tabular}{lccccccccc}\n",
+  "\\begin{tabular}{lcccccccc}\n",
   "\\toprule\n",
-  " & & & \\multicolumn{2}{c}{GDP (Value added)} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{3}{c}{Emissions} \\\\\n",
-  " \\cmidrule(lr){4-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-10}\n",
-  " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) & (9) \\\\\n",
-  "Year & Count & \\# EU\\,ETS firms &  & \\% of agg. &  & \\% of agg. & & \\% of agg. & \\% of EU\\,ETS sectors\\\\\n",
+  " & & & \\multicolumn{2}{c}{Value added} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{2}{c}{Emissions} \\\\\n",
+  " \\cmidrule(lr){4-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n",
+  " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) \\\\\n",
+  "Year & Firms & EU\\,ETS firms &  bn\\,\\euro{} & \\% of agg. &  bn\\,\\euro{} & \\% of agg. & kt\\,CO$_2$ & \\% of stat.\\,+\\,ind. \\\\\n",
   "\\midrule\\midrule\n",
   rows_with_rules, "\n",
   "\\bottomrule\n",
@@ -249,18 +232,18 @@ tex <- paste0(
   "}\n",
   "\\begin{minipage}{1.05\\textwidth}\n",
   "    {\\footnotesize \\vspace{0.25cm} \\noindent \\textit{Notes:} ",
-  "Column~(1) reports the number of firms in the selected sample. ",
+  "Column~(1) reports the number of firms in the selected sample, ",
+  "following the selection criteria of \\citet{dhyne2020} and \\citet{deloecker2016}. ",
   "Column~(2) reports the number of EU\\,ETS-regulated firms in the sample. ",
   "Columns~(3) and~(5) report aggregate value added and wage bill of sample firms, ",
   "respectively, in billion euro (current prices). ",
   "Columns~(4) and~(6) report these as a share of the corresponding totals ",
   "across all firms filing annual accounts. ",
-  "Column~(7) reports total verified emissions of EU\\,ETS firms in the sample, ",
-  "in million tonnes of CO$_2$-equivalent GHG. ",
-  "Column~(8) reports this as a share of total Belgian GHG emissions from the National Inventory. ",
-  "Column~(9) reports it as a share of total emissions in NACE~2-digit sectors ",
-  "where EU\\,ETS firms are present. ",
-  "There are no emission figures for 2002 because the EU\\,ETS was introduced in 2005.}\n",
+  "Column~(7) reports total verified CO$_2$ emissions of EU\\,ETS firms in the sample ",
+  "from installations located in Belgium, in kilotonnes. ",
+  "Column~(8) reports this as a share of total Belgian CO$_2$ emissions from ",
+  "stationary combustion (CRF~1.A.1 + 1.A.2 + 1.A.4 $-$ 1.A.4.b) and ",
+  "industrial processes (CRF~2), as reported in the National Inventory.}\n",
   "\\end{minipage}\n",
   "\\end{table}\n"
 )
@@ -274,7 +257,7 @@ cat("\n=== Sample Coverage Summary ===\n\n")
 for (i in seq_len(nrow(out_csv))) {
   r <- out_csv[i, ]
   cat(sprintf(
-    "Year %d: %s firms (%s EUETS) | VA: %.0f bn (%.0f%%) | WB: %.0f bn (%.0f%%) | Em: %.0f Mt (%.0f%%, %.0f%% of EUETS sectors)\n",
+    "Year %d: %s firms (%s EUETS) | VA: %.0f bn (%.1f%%) | WB: %.0f bn (%.1f%%) | Em: %s kt (%.1f%% of stat.+ind.)\n",
     r$year,
     fmt_int(r$n_selected),
     ifelse(is.na(r$n_euets), "-", fmt_int(r$n_euets)),
@@ -282,8 +265,7 @@ for (i in seq_len(nrow(out_csv))) {
     ifelse(is.na(r$va_pct), NA, r$va_pct),
     ifelse(is.na(r$wb_bn), NA, r$wb_bn),
     ifelse(is.na(r$wb_pct), NA, r$wb_pct),
-    ifelse(is.na(r$em_mt), NA, r$em_mt),
-    ifelse(is.na(r$em_pct), NA, r$em_pct),
-    ifelse(is.na(r$em_sector_pct), NA, r$em_sector_pct)
+    ifelse(is.na(r$em_sample_kt), "-", fmt_kt(r$em_sample_kt)),
+    ifelse(is.na(r$em_pct), NA, r$em_pct)
   ))
 }

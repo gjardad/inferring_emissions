@@ -62,10 +62,11 @@ source(file.path(UTILS_DIR, "calc_metrics.R"))
 source(file.path(UTILS_DIR, "calibration_helpers.R"))
 
 # ── Parameters (must match build_repeated_cv_proxy_asinh.R) ────────────────
-BASE_SEED          <- 2026L
-K_sec              <- 5L
-K_firm             <- 5L
-MIN_FIRMS_FIRM_CV  <- 15L   # Panel B: exclude sectors with fewer firms
+BASE_SEED           <- 2026L
+K_sec               <- 5L
+K_firm              <- 5L
+MIN_FIRMS_SECTOR_CV <- 3L    # Panel A: exclude sectors with fewer firms
+MIN_FIRMS_FIRM_CV   <- 15L   # Panel B: exclude sectors with fewer firms
 
 # ── Load data ──────────────────────────────────────────────────────────────
 
@@ -128,6 +129,11 @@ extract_metrics <- function(m) {
   sapply(metric_names, function(nm) m[[nm]])
 }
 
+# ── Sector size filter (shared by both panels) ─────────────────────────────
+firms_per_sector <- panel_sec %>%
+  distinct(vat, primary_nace2d) %>%
+  count(primary_nace2d, name = "n_firms")
+
 # =============================================================================
 # Panel A: Sector-level CV design
 # =============================================================================
@@ -137,22 +143,37 @@ extract_metrics <- function(m) {
 #   fold assignment. Use any fold assignment (r = 1).
 #
 # EN: proxy varies per repeat → loop over M repeats.
+#
+# Restricted to sectors with >= MIN_FIRMS_SECTOR_CV firms to avoid mechanical
+# accuracy in tiny sectors (1-2 firm sectors get perfect predictions under
+# sector-level calibration regardless of proxy quality).
+# Calibration uses the FULL panel (so E_target is correct), then metrics
+# are computed on the subset.
 # =============================================================================
 cat("\n── Panel A: Sector-level CV design ──\n")
+
+sectors_A <- firms_per_sector %>%
+  filter(n_firms >= MIN_FIRMS_SECTOR_CV) %>%
+  pull(primary_nace2d)
+idx_A <- which(panel_sec$primary_nace2d %in% sectors_A)
+cat(sprintf("  Sector filter: >= %d firms → %d of %d sectors retained\n",
+            MIN_FIRMS_SECTOR_CV, length(sectors_A), nrow(firms_per_sector)))
+cat(sprintf("  Firm-years in Panel A: %d of %d (%.1f%%)\n",
+            length(idx_A), nrow(panel_sec), 100 * length(idx_A) / nrow(panel_sec)))
 
 # Revenue and NACE-based: compute once
 cat("  Computing Revenue and NACE-based (deterministic)...\n")
 fold_k_A <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + 1L)
 
 yhat_rev_A <- calibrate_sector(panel_sec, panel_sec$revenue, fold_k_A)
-mA_rev <- calc_metrics(panel_sec$y, yhat_rev_A, fp_threshold = 0,
-                       nace2d = panel_sec$nace2d, year = panel_sec$year)
+mA_rev <- calc_metrics(panel_sec$y[idx_A], yhat_rev_A[idx_A], fp_threshold = 0,
+                       nace2d = panel_sec$nace2d[idx_A], year = panel_sec$year[idx_A])
 mA_rev_mean <- extract_metrics(mA_rev)
 mA_rev_sd   <- setNames(rep(0, length(metric_names)), metric_names)
 
 yhat_nace_A <- calibrate_sector(panel_sec, panel_sec$proxy_tabachova, fold_k_A)
-mA_nace <- calc_metrics(panel_sec$y, yhat_nace_A, fp_threshold = 0,
-                        nace2d = panel_sec$nace2d, year = panel_sec$year)
+mA_nace <- calc_metrics(panel_sec$y[idx_A], yhat_nace_A[idx_A], fp_threshold = 0,
+                        nace2d = panel_sec$nace2d[idx_A], year = panel_sec$year[idx_A])
 mA_nace_mean <- extract_metrics(mA_nace)
 mA_nace_sd   <- setNames(rep(0, length(metric_names)), metric_names)
 
@@ -167,8 +188,8 @@ for (r in seq_len(M)) {
   fold_k_r <- assign_folds(panel_sec, "sector", K_sec, BASE_SEED + r)
   yhat_r <- calibrate_sector(panel_sec, proxy_to_levels(proxy_matrix_sec[, r]),
                              fold_k_r)
-  m_r <- calc_metrics(panel_sec$y, yhat_r, fp_threshold = 0,
-                      nace2d = panel_sec$nace2d, year = panel_sec$year)
+  m_r <- calc_metrics(panel_sec$y[idx_A], yhat_r[idx_A], fp_threshold = 0,
+                      nace2d = panel_sec$nace2d[idx_A], year = panel_sec$year[idx_A])
   metrics_en_sec[r, ] <- extract_metrics(m_r)
 
   if (r %% 50 == 0) cat(sprintf("    %d/%d\n", r, M))
@@ -190,11 +211,6 @@ cat("  Done.\n")
 # are computed on the subset.
 # =============================================================================
 cat("\n── Panel B: Firm-level CV design ──\n")
-
-# Identify sectors with enough firms for meaningful firm-level evaluation
-firms_per_sector <- panel_sec %>%
-  distinct(vat, primary_nace2d) %>%
-  count(primary_nace2d, name = "n_firms")
 
 eligible_sectors <- firms_per_sector %>%
   filter(n_firms >= MIN_FIRMS_FIRM_CV) %>%
@@ -292,7 +308,10 @@ print_row <- function(lbl, dv) {
               dv$rmse[1], dv$nrmse[1], dv$mapd[1],
               dv$pearson[1], dv$spear[1],
               dv$fpr[1], dv$tpr[1], dv$p50[1], dv$p99[1]))
-  if (!dv$deterministic) {
+  if (dv$deterministic) {
+    cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
+                "", "", "", "", "", "", "", "", "", ""))
+  } else {
     cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
                 "",
                 sprintf("(%.1f)",  dv$rmse[2]),
@@ -326,15 +345,15 @@ cat("======================================================================\n\n"
 cat("Panel A: Sector-level CV design\n")
 cat(hdr); cat(sep, "\n")
 print_row("Revenue",       display_vals(mA_rev_mean,  mA_rev_sd,  rmse_baseline_A, deterministic = TRUE))
-print_row("EN, sector CV", display_vals(mA_en_mean,   mA_en_sd,   rmse_baseline_A))
-print_row("NACE-based",    display_vals(mA_nace_mean, mA_nace_sd, rmse_baseline_A, deterministic = TRUE))
+print_row("Elastic Net",   display_vals(mA_en_mean,   mA_en_sd,   rmse_baseline_A))
+print_row("NACE",          display_vals(mA_nace_mean, mA_nace_sd, rmse_baseline_A, deterministic = TRUE))
 cat(sprintf("  Revenue RMSE baseline: %.1f kt\n\n", rmse_baseline_A / 1e3))
 
 cat("Panel B: Firm-level CV design\n")
 cat(hdr); cat(sep, "\n")
 print_row("Revenue",       display_vals(mB_rev_mean,  mB_rev_sd,  rmse_baseline_B))
-print_row("EN, firm CV",   display_vals(mB_en_mean,   mB_en_sd,   rmse_baseline_B))
-print_row("NACE-based",    display_vals(mB_nace_mean, mB_nace_sd, rmse_baseline_B))
+print_row("Elastic Net",   display_vals(mB_en_mean,   mB_en_sd,   rmse_baseline_B))
+print_row("NACE",          display_vals(mB_nace_mean, mB_nace_sd, rmse_baseline_B))
 cat(sprintf("  Revenue RMSE baseline: %.1f kt\n\n", rmse_baseline_B / 1e3))
 
 # ── Generate LaTeX table ─────────────────────────────────────────────────────
@@ -347,12 +366,15 @@ tex_row <- function(lbl, dv) {
                        fmt1(dv$rmse[1]), fmt(dv$nrmse[1]), fmt(dv$mapd[1]),
                        fmt(dv$pearson[1]), fmt(dv$spear[1]),
                        fmt(dv$fpr[1]), fmt(dv$tpr[1]), fmt(dv$p50[1]), fmt(dv$p99[1]))
-  if (dv$deterministic) return(mean_line)
-  sd_line <- sprintf(" & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} \\\\",
-                     fmt1(dv$rmse[2]),
-                     fmt(dv$nrmse[2]), fmt(dv$mapd[2]),
-                     fmt(dv$pearson[2]), fmt(dv$spear[2]),
-                     fmt(dv$fpr[2]), fmt(dv$tpr[2]), fmt(dv$p50[2]), fmt(dv$p99[2]))
+  if (dv$deterministic) {
+    sd_line <- " & & & & & & & & & \\\\"
+  } else {
+    sd_line <- sprintf(" & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} & {\\scriptsize(%s)} \\\\",
+                       fmt1(dv$rmse[2]),
+                       fmt(dv$nrmse[2]), fmt(dv$mapd[2]),
+                       fmt(dv$pearson[2]), fmt(dv$spear[2]),
+                       fmt(dv$fpr[2]), fmt(dv$tpr[2]), fmt(dv$p50[2]), fmt(dv$p99[2]))
+  }
   c(mean_line, sd_line)
 }
 
@@ -366,14 +388,14 @@ tex_lines <- c(
   "\\multicolumn{10}{l}{\\textit{Panel A: Sector-level CV design}} \\\\",
   "\\addlinespace[2pt]",
   tex_row("Revenue",       display_vals(mA_rev_mean,  mA_rev_sd,  rmse_baseline_A, deterministic = TRUE)),
-  tex_row("EN, sector CV", display_vals(mA_en_mean,   mA_en_sd,   rmse_baseline_A)),
-  tex_row("NACE-based",    display_vals(mA_nace_mean, mA_nace_sd, rmse_baseline_A, deterministic = TRUE)),
+  tex_row("Elastic Net",   display_vals(mA_en_mean,   mA_en_sd,   rmse_baseline_A)),
+  tex_row("NACE",          display_vals(mA_nace_mean, mA_nace_sd, rmse_baseline_A, deterministic = TRUE)),
   "\\addlinespace[4pt]",
   "\\multicolumn{10}{l}{\\textit{Panel B: Firm-level CV design}} \\\\",
   "\\addlinespace[2pt]",
   tex_row("Revenue",       display_vals(mB_rev_mean,  mB_rev_sd,  rmse_baseline_B)),
-  tex_row("EN, firm CV",   display_vals(mB_en_mean,   mB_en_sd,   rmse_baseline_B)),
-  tex_row("NACE-based",    display_vals(mB_nace_mean, mB_nace_sd, rmse_baseline_B)),
+  tex_row("Elastic Net",   display_vals(mB_en_mean,   mB_en_sd,   rmse_baseline_B)),
+  tex_row("NACE",          display_vals(mB_nace_mean, mB_nace_sd, rmse_baseline_B)),
   "\\bottomrule",
   "\\end{tabular}"
 )
