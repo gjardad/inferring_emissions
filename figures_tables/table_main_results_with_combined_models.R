@@ -7,7 +7,8 @@
 #     - Combined: EN^alpha * revenue^(1-alpha) with cross-validated alpha
 #
 # OUTPUT
-#   {OUTPUT_DIR}/table_main_results_with_combined_models.tex
+#   {OUTPUT_DIR}/table_main_results_sector_cv_design.tex
+#   {OUTPUT_DIR}/table_main_results_firm_cv_design.tex
 #   {OUTPUT_DIR}/table_main_results_with_combined_models.rds
 #   Console output
 #
@@ -370,35 +371,43 @@ tex_row <- function(lbl, dv) {
   c(mean_line, sd_line)
 }
 
-tex_lines <- c(
+tabular_header <- c(
   "\\begin{tabular}{l ccc cc cccc}",
   "\\toprule",
   " & \\multicolumn{3}{c}{Prediction error} & \\multicolumn{2}{c}{Correlation} & \\multicolumn{4}{c}{Extensive margin} \\\\",
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-10}",
   " & RMSE (kt) & nRMSE & Med.\\ APD & Levels & Rank & FPR & TPR & p50 & p99 \\\\",
-  "\\midrule",
-  "\\multicolumn{10}{l}{\\textit{Panel A: Sector-level CV design}} \\\\",
-  "\\addlinespace[2pt]",
+  "\\midrule"
+)
+tabular_footer <- c("\\bottomrule", "\\end{tabular}")
+
+# Sector-level CV design table
+tex_sector <- c(
+  tabular_header,
   tex_row("Revenue",              display_vals(mean_A[, "Revenue"],     sd_A[, "Revenue"],     rmse_baseline_A, deterministic = TRUE)),
   tex_row("Elastic Net",          display_vals(mean_A[, "Elastic Net"], sd_A[, "Elastic Net"], rmse_baseline_A)),
   tex_row("NACE",                 display_vals(mean_A[, "NACE"],        sd_A[, "NACE"],        rmse_baseline_A, deterministic = TRUE)),
   tex_row("Gated Revenue",        display_vals(mean_A[, "Gated Rev"],   sd_A[, "Gated Rev"],   rmse_baseline_A)),
   tex_row("Combined",             display_vals(mean_A[, "Combined"],    sd_A[, "Combined"],    rmse_baseline_A)),
-  "\\addlinespace[4pt]",
-  "\\multicolumn{10}{l}{\\textit{Panel B: Firm-level CV design}} \\\\",
-  "\\addlinespace[2pt]",
+  tabular_footer
+)
+tex_path_sec <- file.path(OUTPUT_DIR, "table_main_results_sector_cv_design.tex")
+writeLines(tex_sector, tex_path_sec)
+cat("LaTeX table written to:", tex_path_sec, "\n")
+
+# Firm-level CV design table
+tex_firm <- c(
+  tabular_header,
   tex_row("Revenue",              display_vals(mean_B[, "Revenue"],     sd_B[, "Revenue"],     rmse_baseline_B)),
   tex_row("Elastic Net",          display_vals(mean_B[, "Elastic Net"], sd_B[, "Elastic Net"], rmse_baseline_B)),
   tex_row("NACE",                 display_vals(mean_B[, "NACE"],        sd_B[, "NACE"],        rmse_baseline_B)),
   tex_row("Gated Revenue",        display_vals(mean_B[, "Gated Rev"],   sd_B[, "Gated Rev"],   rmse_baseline_B)),
   tex_row("Combined",             display_vals(mean_B[, "Combined"],    sd_B[, "Combined"],    rmse_baseline_B)),
-  "\\bottomrule",
-  "\\end{tabular}"
+  tabular_footer
 )
-
-tex_path <- file.path(OUTPUT_DIR, "table_main_results_with_combined_models.tex")
-writeLines(tex_lines, tex_path)
-cat("LaTeX table written to:", tex_path, "\n")
+tex_path_firm <- file.path(OUTPUT_DIR, "table_main_results_firm_cv_design.tex")
+writeLines(tex_firm, tex_path_firm)
+cat("LaTeX table written to:", tex_path_firm, "\n")
 
 # ── Save full results ────────────────────────────────────────────────────────
 full_results <- list(

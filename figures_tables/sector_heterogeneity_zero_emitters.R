@@ -27,7 +27,8 @@
 #   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUT
-#   {OUTPUT_DIR}/table_sector_zero_emitters.tex
+#   {OUTPUT_DIR}/table_zero_emitters_sector_cv_design.tex
+#   {OUTPUT_DIR}/table_zero_emitters_firm_cv_design.tex
 #   {OUTPUT_DIR}/table_sector_zero_emitters.rds
 #   Printed to console
 #
@@ -475,16 +476,20 @@ tex_row <- function(lbl, nrmse_vec, spear_vec, fpr_vec, p99_vec,
   c(mean_line, sd_line)
 }
 
-tex_lines <- c(
+tabular_header <- c(
   "\\begin{tabular}{l cccc cccc cccc}",
   "\\toprule",
   sprintf(" & \\multicolumn{4}{c}{%s} & \\multicolumn{4}{c}{%s} & \\multicolumn{4}{c}{%s} \\\\",
           SECTOR_LABELS[1], SECTOR_LABELS[2], SECTOR_LABELS[3]),
   "\\cmidrule(lr){2-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-13}",
   paste0(" & ", paste(rep("nRMSE & $\\rho_S$ & FPR & p99", 3), collapse = " & "), " \\\\"),
-  "\\midrule",
-  "\\multicolumn{13}{l}{\\textit{Panel A: Sector-level CV design}} \\\\",
-  "\\addlinespace[2pt]",
+  "\\midrule"
+)
+tabular_footer <- c("\\bottomrule", "\\end{tabular}")
+
+# Sector-level CV design table
+tex_sector <- c(
+  tabular_header,
   tex_row("Revenue", nrmse_A_rev, mA_rev[, "spearman"], mA_rev[, "fpr"], mA_rev[, "fp_sev_p99"]),
   tex_row("Elastic Net", nrmse_A_en, mA_en_mean[, "spearman"], mA_en_mean[, "fpr"], mA_en_mean[, "fp_sev_p99"],
           nrmse_A_en_sd, mA_en_sd[, "spearman"], mA_en_sd[, "fpr"], mA_en_sd[, "fp_sev_p99"]),
@@ -493,9 +498,15 @@ tex_lines <- c(
           nrmse_A_gated_sd, mA_gated_sd[, "spearman"], mA_gated_sd[, "fpr"], mA_gated_sd[, "fp_sev_p99"]),
   tex_row("Combined", nrmse_A_combined, mA_combined_mean[, "spearman"], mA_combined_mean[, "fpr"], mA_combined_mean[, "fp_sev_p99"],
           nrmse_A_combined_sd, mA_combined_sd[, "spearman"], mA_combined_sd[, "fpr"], mA_combined_sd[, "fp_sev_p99"]),
-  "\\addlinespace[4pt]",
-  "\\multicolumn{13}{l}{\\textit{Panel B: Firm-level CV design}} \\\\",
-  "\\addlinespace[2pt]",
+  tabular_footer
+)
+tex_path_sec <- file.path(OUTPUT_DIR, "table_zero_emitters_sector_cv_design.tex")
+writeLines(tex_sector, tex_path_sec)
+cat("\nLaTeX table written to:", tex_path_sec, "\n")
+
+# Firm-level CV design table
+tex_firm <- c(
+  tabular_header,
   tex_row("Revenue", nrmse_B_rev, mB_rev_mean[, "spearman"], mB_rev_mean[, "fpr"], mB_rev_mean[, "fp_sev_p99"],
           nrmse_B_rev_sd, mB_rev_sd[, "spearman"], mB_rev_sd[, "fpr"], mB_rev_sd[, "fp_sev_p99"]),
   tex_row("Elastic Net", nrmse_B_en, mB_en_mean[, "spearman"], mB_en_mean[, "fpr"], mB_en_mean[, "fp_sev_p99"],
@@ -506,13 +517,11 @@ tex_lines <- c(
           nrmse_B_gated_sd, mB_gated_sd[, "spearman"], mB_gated_sd[, "fpr"], mB_gated_sd[, "fp_sev_p99"]),
   tex_row("Combined", nrmse_B_combined, mB_combined_mean[, "spearman"], mB_combined_mean[, "fpr"], mB_combined_mean[, "fp_sev_p99"],
           nrmse_B_combined_sd, mB_combined_sd[, "spearman"], mB_combined_sd[, "fpr"], mB_combined_sd[, "fp_sev_p99"]),
-  "\\bottomrule",
-  "\\end{tabular}"
+  tabular_footer
 )
-
-tex_path <- file.path(OUTPUT_DIR, "table_sector_zero_emitters.tex")
-writeLines(tex_lines, tex_path)
-cat("\nLaTeX table written to:", tex_path, "\n")
+tex_path_firm <- file.path(OUTPUT_DIR, "table_zero_emitters_firm_cv_design.tex")
+writeLines(tex_firm, tex_path_firm)
+cat("LaTeX table written to:", tex_path_firm, "\n")
 
 
 # =============================================================================
