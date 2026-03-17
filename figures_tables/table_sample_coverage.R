@@ -237,7 +237,7 @@ tex <- paste0(
   " & & & \\multicolumn{2}{c}{Value added} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{3}{c}{Emissions} \\\\\n",
   " \\cmidrule(lr){4-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-10}\n",
   " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) & (9) \\\\\n",
-  "Year & Firms & EU\\,ETS firms &  bn\\,\\euro{} & \\% of agg. &  bn\\,\\euro{} & \\% of agg. & kt\\,CO$_2$ & \\% of stat.\\,+\\,ind. & \\% of EU\\,ETS \\\\\n",
+  "Year & Firms & EU\\,ETS firms &  bn\\,\\euro{} & \\% of agg. &  bn\\,\\euro{} & \\% of agg. & kt\\,CO$_2$ & \\% of stationary & \\% of EU\\,ETS \\\\\n",
   "\\midrule\\midrule\n",
   rows_with_rules, "\n",
   "\\bottomrule\n",
