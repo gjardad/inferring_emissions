@@ -128,7 +128,7 @@ if (!has_foreign_flag) {
 # = stationary combustion (excl. residential & transport) + industrial processes
 # Source: BEL-CRT-2025 files, CO2 column (kt)
 
-nir_denom_file <- file.path(RAW_DATA, "NIR", "belcrt_denominators.tsv")
+nir_denom_file <- file.path(PROC_DATA, "belcrt_denominators.tsv")
 if (file.exists(nir_denom_file)) {
   nir_raw <- read.delim(nir_denom_file, stringsAsFactors = FALSE)
   # Parse comma-formatted numbers
@@ -232,11 +232,6 @@ rows_with_rules <- paste(
 )
 
 tex <- paste0(
-  "\\begin{table}[!htp]\n",
-  "\\centering\n",
-  "\\caption{Coverage of Selected Sample}\n",
-  "\\label{table: sample coverage}\n",
-  "\\scalebox{0.85}{\n",
   "\\begin{tabular}{lccccccccc}\n",
   "\\toprule\n",
   " & & & \\multicolumn{2}{c}{Value added} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{3}{c}{Emissions} \\\\\n",
@@ -246,27 +241,7 @@ tex <- paste0(
   "\\midrule\\midrule\n",
   rows_with_rules, "\n",
   "\\bottomrule\n",
-  "\\end{tabular}\n",
-  "}\n",
-  "\\begin{minipage}{1.05\\textwidth}\n",
-  "    {\\footnotesize \\vspace{0.25cm} \\noindent \\textit{Notes:} ",
-  "Column~(1) reports the number of firms in the selected sample, ",
-  "following the selection criteria of \\citet{dhyne2020} and \\citet{deloecker2016}. ",
-  "Column~(2) reports the number of EU\\,ETS-regulated firms in the sample. ",
-  "Columns~(3) and~(5) report aggregate value added and wage bill of sample firms, ",
-  "respectively, in billion euro (current prices). ",
-  "Columns~(4) and~(6) report these as a share of the corresponding totals ",
-  "across all firms filing annual accounts. ",
-  "Column~(7) reports total verified CO$_2$ emissions of EU\\,ETS firms in the sample ",
-  "from installations located in Belgium, in kilotonnes. ",
-  "Column~(8) reports this as a share of total Belgian CO$_2$ emissions from ",
-  "stationary combustion (CRF~1.A.1 + 1.A.2 + 1.A.4 $-$ 1.A.4.b) and ",
-  "industrial processes (CRF~2), as reported in the National Inventory. ",
-  "Column~(9) reports sample emissions as a share of total verified emissions ",
-  "across all Belgian EU\\,ETS installations; the gap reflects EU\\,ETS firms ",
-  "that do not meet the sample selection criteria.}\n",
-  "\\end{minipage}\n",
-  "\\end{table}\n"
+  "\\end{tabular}\n"
 )
 
 writeLines(tex, file.path(OUTPUT_DIR, "sample_coverage.tex"))

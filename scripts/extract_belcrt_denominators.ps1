@@ -3,7 +3,7 @@
 # Labels are in column B (col 2), CO2 values in column C (col 3)
 $years = @(2005, 2010, 2015, 2020)
 $nirDir = "C:\Users\jota_\Documents\NBB_data\raw\NIR"
-$outFile = "C:\Users\jota_\Documents\NBB_data\raw\NIR\belcrt_denominators.tsv"
+$outFile = "C:\Users\jota_\Documents\NBB_data\processed\belcrt_denominators.tsv"
 
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $false
