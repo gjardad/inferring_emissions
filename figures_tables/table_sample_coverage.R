@@ -60,6 +60,9 @@ load(file.path(PROC_DATA, "annual_accounts_more_selected_sample.RData"))
 # EUETS firms matched to sample (includes emissions_foreign flag)
 load(file.path(PROC_DATA, "firm_year_belgian_euets.RData"))
 
+# All Belgian EU ETS installations (for total Belgian ETS emissions denominator)
+load(file.path(PROC_DATA, "installation_year_in_belgium.RData"))
+
 # ── 2. Compute sample-level aggregates ───────────────────────────────────────
 
 # 2a. Full universe aggregates (denominator for "% of agg.")
@@ -152,12 +155,22 @@ if (file.exists(nir_denom_file)) {
   )
 }
 
+# ── 4b. Total Belgian EU ETS installation emissions (denominator for col 9) ─
+agg_be_installations <- installation_year_in_belgium %>%
+  filter(year %in% DISPLAY_YEARS, !is.na(verified)) %>%
+  group_by(year) %>%
+  summarise(
+    emissions_all_be_inst = sum(verified, na.rm = TRUE),
+    .groups = "drop"
+  )
+
 # ── 5. Assemble table ───────────────────────────────────────────────────────
 
 tbl <- agg_selected %>%
   left_join(agg_full, by = "year") %>%
   left_join(agg_euets, by = "year") %>%
   left_join(national_stationary, by = "year") %>%
+  left_join(agg_be_installations, by = "year") %>%
   mutate(
     # Value added in billion euros
     va_bn       = va_selected / 1e9,
@@ -170,14 +183,18 @@ tbl <- agg_selected %>%
     # Emissions: Belgian-only, in kt (firm_year_belgian_euets uses tonnes)
     em_sample_kt = emissions_belgian / 1e3,
     em_pct       = ifelse(!is.na(nir_denominator_kt) & nir_denominator_kt > 0,
-                          em_sample_kt / nir_denominator_kt * 100, NA)
+                          em_sample_kt / nir_denominator_kt * 100, NA),
+
+    # Column 9: sample emissions as % of total Belgian EU ETS installation emissions
+    em_euets_pct = ifelse(emissions_all_be_inst > 0,
+                          emissions_belgian / emissions_all_be_inst * 100, NA)
   )
 
 # ── 6. Save CSV ─────────────────────────────────────────────────────────────
 
 out_csv <- tbl %>%
   select(year, n_selected, n_euets, va_bn, va_pct,
-         wb_bn, wb_pct, em_sample_kt, nir_denominator_kt, em_pct)
+         wb_bn, wb_pct, em_sample_kt, nir_denominator_kt, em_pct, em_euets_pct)
 
 write.csv(out_csv, file.path(OUTPUT_DIR, "sample_coverage.csv"), row.names = FALSE)
 cat("Saved:", file.path(OUTPUT_DIR, "sample_coverage.csv"), "\n")
@@ -200,7 +217,8 @@ rows <- lapply(seq_len(nrow(tbl)), function(i) {
     fmt_bn(r$wb_bn), " & ",
     fmt_pct(r$wb_pct), " & ",
     fmt_kt(r$em_sample_kt), " & ",
-    fmt_pct(r$em_pct),
+    fmt_pct(r$em_pct), " & ",
+    fmt_pct(r$em_euets_pct),
     " \\\\"
   )
 })
@@ -219,12 +237,12 @@ tex <- paste0(
   "\\caption{Coverage of Selected Sample}\n",
   "\\label{table: sample coverage}\n",
   "\\scalebox{0.85}{\n",
-  "\\begin{tabular}{lcccccccc}\n",
+  "\\begin{tabular}{lccccccccc}\n",
   "\\toprule\n",
-  " & & & \\multicolumn{2}{c}{Value added} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{2}{c}{Emissions} \\\\\n",
-  " \\cmidrule(lr){4-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-9}\n",
-  " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) \\\\\n",
-  "Year & Firms & EU\\,ETS firms &  bn\\,\\euro{} & \\% of agg. &  bn\\,\\euro{} & \\% of agg. & kt\\,CO$_2$ & \\% of stat.\\,+\\,ind. \\\\\n",
+  " & & & \\multicolumn{2}{c}{Value added} & \\multicolumn{2}{c}{Wage bill} & \\multicolumn{3}{c}{Emissions} \\\\\n",
+  " \\cmidrule(lr){4-5} \\cmidrule(lr){6-7} \\cmidrule(lr){8-10}\n",
+  " & (1) & (2) & (3) & (4) & (5) & (6) & (7) & (8) & (9) \\\\\n",
+  "Year & Firms & EU\\,ETS firms &  bn\\,\\euro{} & \\% of agg. &  bn\\,\\euro{} & \\% of agg. & kt\\,CO$_2$ & \\% of stat.\\,+\\,ind. & \\% of EU\\,ETS \\\\\n",
   "\\midrule\\midrule\n",
   rows_with_rules, "\n",
   "\\bottomrule\n",
@@ -243,7 +261,10 @@ tex <- paste0(
   "from installations located in Belgium, in kilotonnes. ",
   "Column~(8) reports this as a share of total Belgian CO$_2$ emissions from ",
   "stationary combustion (CRF~1.A.1 + 1.A.2 + 1.A.4 $-$ 1.A.4.b) and ",
-  "industrial processes (CRF~2), as reported in the National Inventory.}\n",
+  "industrial processes (CRF~2), as reported in the National Inventory. ",
+  "Column~(9) reports sample emissions as a share of total verified emissions ",
+  "across all Belgian EU\\,ETS installations; the gap reflects EU\\,ETS firms ",
+  "that do not meet the sample selection criteria.}\n",
   "\\end{minipage}\n",
   "\\end{table}\n"
 )
@@ -257,7 +278,7 @@ cat("\n=== Sample Coverage Summary ===\n\n")
 for (i in seq_len(nrow(out_csv))) {
   r <- out_csv[i, ]
   cat(sprintf(
-    "Year %d: %s firms (%s EUETS) | VA: %.0f bn (%.1f%%) | WB: %.0f bn (%.1f%%) | Em: %s kt (%.1f%% of stat.+ind.)\n",
+    "Year %d: %s firms (%s EUETS) | VA: %.0f bn (%.1f%%) | WB: %.0f bn (%.1f%%) | Em: %s kt (%.1f%% stat+ind, %.1f%% EUETS)\n",
     r$year,
     fmt_int(r$n_selected),
     ifelse(is.na(r$n_euets), "-", fmt_int(r$n_euets)),
@@ -266,6 +287,7 @@ for (i in seq_len(nrow(out_csv))) {
     ifelse(is.na(r$wb_bn), NA, r$wb_bn),
     ifelse(is.na(r$wb_pct), NA, r$wb_pct),
     ifelse(is.na(r$em_sample_kt), "-", fmt_kt(r$em_sample_kt)),
-    ifelse(is.na(r$em_pct), NA, r$em_pct)
+    ifelse(is.na(r$em_pct), NA, r$em_pct),
+    ifelse(is.na(r$em_euets_pct), NA, r$em_euets_pct)
   ))
 }
