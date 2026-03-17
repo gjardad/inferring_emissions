@@ -27,7 +27,7 @@ library(dplyr)
 # ── Load data ────────────────────────────────────────────────────────────────
 load(file.path(PROC_DATA, "firm_year_belgian_euets.RData"))
 load(file.path(PROC_DATA, "training_sample.RData"))
-load(file.path(PROC_DATA, "b2b_selected_sample.RData"))  # or df_b2b.RData
+load(file.path(PROC_DATA, "df_b2b.RData"))
 
 # ── Identify lost EU ETS firms ──────────────────────────────────────────────
 ts_euets <- training_sample %>% filter(euets == 1) %>% select(vat, year)
