@@ -45,6 +45,13 @@ panel            <- e_sec$repeated_cv_proxy_panel
 M_sec <- ncol(proxy_matrix_sec)
 rm(e_sec)
 
+# Combine NACE 17 (Paper) and 18 (Printing) into a single sector "17/18"
+# EU ETS covers ~97% of combustion emissions in C17/18, but only sector 17
+# has EUETS installations. Without combining, sector 18 has E_total = 0 and
+# calibration trivially assigns zero to all 18k+ non-emitters there.
+panel$primary_nace2d[panel$primary_nace2d %in% c("17", "18")] <- "17/18"
+panel$nace2d[panel$nace2d %in% c("17", "18")] <- "17/18"
+
 cat("Loading EN proxy (firm CV)...\n")
 e_firm <- new.env()
 load(file.path(PROC_DATA, "repeated_cv_proxy_firm_asinh.RData"), envir = e_firm)
@@ -271,6 +278,26 @@ sd_B   <- apply(metrics_B, c(2, 3), sd,   na.rm = TRUE)
 rmse_baseline_A <- mean_A["rmse", "Revenue"]
 rmse_baseline_B <- mean_B["rmse", "Revenue"]
 
+# ── Save full results early (before display, in case of R crash) ───────────
+full_results <- list(
+  metric_names = metric_names,
+  models = models,
+  metrics_A = metrics_A, metrics_B = metrics_B,
+  mean_A = mean_A, sd_A = sd_A,
+  mean_B = mean_B, sd_B = sd_B,
+  rmse_baseline_A = rmse_baseline_A,
+  rmse_baseline_B = rmse_baseline_B,
+  alphas_A = alphas_A, alphas_B = alphas_B,
+  M = M, K_sec = K_sec, K_firm = K_firm, BASE_SEED = BASE_SEED,
+  K_INNER = K_INNER, ALPHA_GRID = ALPHA_GRID,
+  MIN_FIRMS_FIRM_CV = MIN_FIRMS_FIRM_CV,
+  eligible_sectors = eligible_sectors,
+  firms_per_sector = firms_per_sector
+)
+rds_path <- file.path(OUTPUT_DIR, "table_main_results_with_combined_models.rds")
+saveRDS(full_results, rds_path)
+cat("Full results saved to:", rds_path, "\n")
+
 # ── Display helpers ──────────────────────────────────────────────────────────
 display_vals <- function(mn, sd_vec, rmse_baseline, deterministic = FALSE) {
   list(
@@ -328,7 +355,7 @@ print_row("Revenue",     display_vals(mean_A[, "Revenue"],     sd_A[, "Revenue"]
 print_row("Elastic Net", display_vals(mean_A[, "Elastic Net"], sd_A[, "Elastic Net"], rmse_baseline_A))
 print_row("NACE",        display_vals(mean_A[, "NACE"],        sd_A[, "NACE"],        rmse_baseline_A, deterministic = TRUE))
 print_row("Gated Rev",   display_vals(mean_A[, "Gated Rev"],   sd_A[, "Gated Rev"],   rmse_baseline_A))
-print_row("Combined",    display_vals(mean_A[, "Combined"],    sd_A[, "Combined"],    rmse_baseline_A))
+print_row("Geom. Mean",  display_vals(mean_A[, "Combined"],    sd_A[, "Combined"],    rmse_baseline_A))
 cat(sprintf("  Revenue RMSE baseline: %.1f kt\n\n", rmse_baseline_A / 1e3))
 
 cat("Panel B: Firm-level CV design\n")
@@ -337,7 +364,7 @@ print_row("Revenue",     display_vals(mean_B[, "Revenue"],     sd_B[, "Revenue"]
 print_row("Elastic Net", display_vals(mean_B[, "Elastic Net"], sd_B[, "Elastic Net"], rmse_baseline_B))
 print_row("NACE",        display_vals(mean_B[, "NACE"],        sd_B[, "NACE"],        rmse_baseline_B))
 print_row("Gated Rev",   display_vals(mean_B[, "Gated Rev"],   sd_B[, "Gated Rev"],   rmse_baseline_B))
-print_row("Combined",    display_vals(mean_B[, "Combined"],    sd_B[, "Combined"],    rmse_baseline_B))
+print_row("Geom. Mean",  display_vals(mean_B[, "Combined"],    sd_B[, "Combined"],    rmse_baseline_B))
 cat(sprintf("  Revenue RMSE baseline: %.1f kt\n\n", rmse_baseline_B / 1e3))
 
 # Alpha distribution
@@ -376,7 +403,7 @@ tabular_header <- c(
   "\\toprule",
   " & \\multicolumn{3}{c}{Prediction error} & \\multicolumn{2}{c}{Correlation} & \\multicolumn{4}{c}{Extensive margin} \\\\",
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-10}",
-  " & RMSE (kt) & nRMSE & Med.\\ APD & Levels & Rank & FPR & TPR & p50 & p99 \\\\",
+  " & RMSE & nRMSE & MAPD & Levels & Rank & FPR & TPR & p50 & p99 \\\\",
   "\\midrule"
 )
 tabular_footer <- c("\\bottomrule", "\\end{tabular}")
@@ -387,8 +414,8 @@ tex_sector <- c(
   tex_row("Revenue",              display_vals(mean_A[, "Revenue"],     sd_A[, "Revenue"],     rmse_baseline_A, deterministic = TRUE)),
   tex_row("Elastic Net",          display_vals(mean_A[, "Elastic Net"], sd_A[, "Elastic Net"], rmse_baseline_A)),
   tex_row("NACE",                 display_vals(mean_A[, "NACE"],        sd_A[, "NACE"],        rmse_baseline_A, deterministic = TRUE)),
-  tex_row("Gated Revenue",        display_vals(mean_A[, "Gated Rev"],   sd_A[, "Gated Rev"],   rmse_baseline_A)),
-  tex_row("Combined",             display_vals(mean_A[, "Combined"],    sd_A[, "Combined"],    rmse_baseline_A)),
+  tex_row("Gated Rev.",           display_vals(mean_A[, "Gated Rev"],   sd_A[, "Gated Rev"],   rmse_baseline_A)),
+  tex_row("Geom.\\ Mean",         display_vals(mean_A[, "Combined"],    sd_A[, "Combined"],    rmse_baseline_A)),
   tabular_footer
 )
 tex_path_sec <- file.path(OUTPUT_DIR, "table_main_results_sector_cv_design.tex")
@@ -401,32 +428,14 @@ tex_firm <- c(
   tex_row("Revenue",              display_vals(mean_B[, "Revenue"],     sd_B[, "Revenue"],     rmse_baseline_B)),
   tex_row("Elastic Net",          display_vals(mean_B[, "Elastic Net"], sd_B[, "Elastic Net"], rmse_baseline_B)),
   tex_row("NACE",                 display_vals(mean_B[, "NACE"],        sd_B[, "NACE"],        rmse_baseline_B)),
-  tex_row("Gated Revenue",        display_vals(mean_B[, "Gated Rev"],   sd_B[, "Gated Rev"],   rmse_baseline_B)),
-  tex_row("Combined",             display_vals(mean_B[, "Combined"],    sd_B[, "Combined"],    rmse_baseline_B)),
+  tex_row("Gated Rev.",           display_vals(mean_B[, "Gated Rev"],   sd_B[, "Gated Rev"],   rmse_baseline_B)),
+  tex_row("Geom.\\ Mean",         display_vals(mean_B[, "Combined"],    sd_B[, "Combined"],    rmse_baseline_B)),
   tabular_footer
 )
 tex_path_firm <- file.path(OUTPUT_DIR, "table_main_results_firm_cv_design.tex")
 writeLines(tex_firm, tex_path_firm)
 cat("LaTeX table written to:", tex_path_firm, "\n")
 
-# ── Save full results ────────────────────────────────────────────────────────
-full_results <- list(
-  metric_names = metric_names,
-  models = models,
-  metrics_A = metrics_A, metrics_B = metrics_B,
-  mean_A = mean_A, sd_A = sd_A,
-  mean_B = mean_B, sd_B = sd_B,
-  rmse_baseline_A = rmse_baseline_A,
-  rmse_baseline_B = rmse_baseline_B,
-  alphas_A = alphas_A, alphas_B = alphas_B,
-  M = M, K_sec = K_sec, K_firm = K_firm, BASE_SEED = BASE_SEED,
-  K_INNER = K_INNER, ALPHA_GRID = ALPHA_GRID,
-  MIN_FIRMS_FIRM_CV = MIN_FIRMS_FIRM_CV,
-  eligible_sectors = eligible_sectors,
-  firms_per_sector = firms_per_sector
-)
-rds_path <- file.path(OUTPUT_DIR, "table_main_results_with_combined_models.rds")
-saveRDS(full_results, rds_path)
-cat("Full results saved to:", rds_path, "\n")
+# (RDS already saved above, before display section)
 
 cat("\nDone.\n")

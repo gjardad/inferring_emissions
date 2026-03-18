@@ -232,7 +232,7 @@ calc_metrics <- function(y, yhat, fp_threshold = 0, nace2d = NULL, year = NULL) 
     cell_years     <- character(0)
 
     for (sec in c("19", "24", "17/18")) {
-      in_sec <- if (sec == "17/18") nace2d %in% c("17", "18") else nace2d == sec
+      in_sec <- if (sec == "17/18") nace2d %in% c("17", "18", "17/18") else nace2d == sec
       yrs <- sort(unique(year[in_sec]))
 
       for (yr in yrs) {

@@ -496,7 +496,7 @@ tex_sector <- c(
   tex_row("NACE", nrmse_A_nace, mA_nace[, "spearman"], mA_nace[, "fpr"], mA_nace[, "fp_sev_p99"]),
   tex_row("Gated Rev", nrmse_A_gated, mA_gated_mean[, "spearman"], mA_gated_mean[, "fpr"], mA_gated_mean[, "fp_sev_p99"],
           nrmse_A_gated_sd, mA_gated_sd[, "spearman"], mA_gated_sd[, "fpr"], mA_gated_sd[, "fp_sev_p99"]),
-  tex_row("Combined", nrmse_A_combined, mA_combined_mean[, "spearman"], mA_combined_mean[, "fpr"], mA_combined_mean[, "fp_sev_p99"],
+  tex_row("Geometric Mean", nrmse_A_combined, mA_combined_mean[, "spearman"], mA_combined_mean[, "fpr"], mA_combined_mean[, "fp_sev_p99"],
           nrmse_A_combined_sd, mA_combined_sd[, "spearman"], mA_combined_sd[, "fpr"], mA_combined_sd[, "fp_sev_p99"]),
   tabular_footer
 )
@@ -515,7 +515,7 @@ tex_firm <- c(
           nrmse_B_nace_sd, mB_nace_sd[, "spearman"], mB_nace_sd[, "fpr"], mB_nace_sd[, "fp_sev_p99"]),
   tex_row("Gated Rev", nrmse_B_gated, mB_gated_mean[, "spearman"], mB_gated_mean[, "fpr"], mB_gated_mean[, "fp_sev_p99"],
           nrmse_B_gated_sd, mB_gated_sd[, "spearman"], mB_gated_sd[, "fpr"], mB_gated_sd[, "fp_sev_p99"]),
-  tex_row("Combined", nrmse_B_combined, mB_combined_mean[, "spearman"], mB_combined_mean[, "fpr"], mB_combined_mean[, "fp_sev_p99"],
+  tex_row("Geometric Mean", nrmse_B_combined, mB_combined_mean[, "spearman"], mB_combined_mean[, "fpr"], mB_combined_mean[, "fp_sev_p99"],
           nrmse_B_combined_sd, mB_combined_sd[, "spearman"], mB_combined_sd[, "fpr"], mB_combined_sd[, "fp_sev_p99"]),
   tabular_footer
 )
