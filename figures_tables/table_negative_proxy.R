@@ -6,8 +6,8 @@
 #   proxy values are almost entirely driven by zero-emission sector firms.
 #
 #   Three-row table: proxy sign group (negative, zero, positive) with
-#   columns for N, % in zero-emission sectors, % emitters, and median
-#   emissions conditional on being an emitter.
+#   columns for N, % emitters, and median emissions conditional on
+#   being an emitter.
 #
 # INPUTS
 #   {PROC_DATA}/firm_year_panel_with_proxies.RData
@@ -38,9 +38,6 @@ load(file.path(PROC_DATA, "firm_year_panel_with_proxies.RData"))
 dt <- as.data.table(training_sample)
 rm(training_sample)
 
-# Zero-emission sectors: NACE 17, 18, 19, 24
-zero_sectors <- c("17", "18", "19", "24")
-
 # ── Proxy sign groups ───────────────────────────────────────────────────────
 dt[, proxy_group := fifelse(
   fold_specific_proxy_all_asinh < 0, "Negative",
@@ -53,7 +50,6 @@ dt[, proxy_group := factor(proxy_group, levels = c("Negative", "Zero", "Positive
 # ── Compute summary ─────────────────────────────────────────────────────────
 tab <- dt[, .(
   n              = .N,
-  pct_zero_sect  = round(100 * mean(primary_nace2d %in% zero_sectors), 1),
   pct_emitters   = round(100 * mean(emit == 1), 1),
   median_y_emit  = {
     ys <- y[emit == 1]
@@ -70,23 +66,20 @@ fmt_pct <- function(x) sprintf("%.1f", x)
 fmt_med <- function(x) ifelse(is.na(x), "---", fmt_n(x))
 
 tex <- c(
-  "\\begin{tabular}{l cccc}",
+  "\\begin{tabular}{l ccc}",
   "\\toprule",
-  "Proxy sign & $N$ & \\% zero-emission sectors & \\% emitters & Median $y \\mid$ emit \\\\",
+  "Proxy sign & $N$ & \\% emitters & Median $y \\mid$ emit \\\\",
   "\\midrule",
-  sprintf("Negative & %s & %s & %s & %s \\\\",
+  sprintf("Negative & %s & %s & %s \\\\",
           fmt_n(tab[proxy_group == "Negative", n]),
-          fmt_pct(tab[proxy_group == "Negative", pct_zero_sect]),
           fmt_pct(tab[proxy_group == "Negative", pct_emitters]),
           fmt_med(tab[proxy_group == "Negative", median_y_emit])),
-  sprintf("Zero & %s & %s & %s & %s \\\\",
+  sprintf("Zero & %s & %s & %s \\\\",
           fmt_n(tab[proxy_group == "Zero", n]),
-          fmt_pct(tab[proxy_group == "Zero", pct_zero_sect]),
           fmt_pct(tab[proxy_group == "Zero", pct_emitters]),
           fmt_med(tab[proxy_group == "Zero", median_y_emit])),
-  sprintf("Positive & %s & %s & %s & %s \\\\",
+  sprintf("Positive & %s & %s & %s \\\\",
           fmt_n(tab[proxy_group == "Positive", n]),
-          fmt_pct(tab[proxy_group == "Positive", pct_zero_sect]),
           fmt_pct(tab[proxy_group == "Positive", pct_emitters]),
           fmt_med(tab[proxy_group == "Positive", median_y_emit])),
   "\\bottomrule",
