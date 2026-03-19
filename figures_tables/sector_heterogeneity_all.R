@@ -77,6 +77,14 @@ panel_sec  <- panel_sec  %>% left_join(determ_df, by = c("vat", "year"))
 panel_firm <- panel_firm %>% left_join(determ_df, by = c("vat", "year"))
 rm(determ_df)
 
+# Combine NACE 17 and 18 into a single sector for calibration
+for (p in c("panel_sec", "panel_firm")) {
+  df <- get(p)
+  df$primary_nace2d[df$primary_nace2d %in% c("17", "18")] <- "17/18"
+  df$nace2d[df$nace2d %in% c("17", "18")] <- "17/18"
+  assign(p, df)
+}
+
 # Verify panels match
 stopifnot(all(panel_sec$vat == panel_firm$vat),
           all(panel_sec$year == panel_firm$year))
@@ -426,8 +434,9 @@ draw_figure_eligible <- function(filepath, separator = FALSE) {
 
   plot(NULL, xlim = xlim, ylim = ylim_rho,
        xlab = "", ylab = "Rank correlation",
-       xaxt = "n", main = "(a)")
-  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 0.75)
+       xaxt = "n", yaxt = "n", main = "(a)", cex.lab = 1.3)
+  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 1.1)
+  axis(2, cex.axis = 1.1)
   abline(h = 0, lty = 2, col = "grey60")
   if (separator) abline(v = sep_x, lty = 2, col = "grey40", lwd = 1)
 
@@ -451,8 +460,8 @@ draw_figure_eligible <- function(filepath, separator = FALSE) {
 
   plot(NULL, xlim = xlim, ylim = ylim_apd,
        xlab = "", ylab = "Median APD",
-       xaxt = "n", main = "(b)")
-  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 0.75)
+       xaxt = "n", yaxt = "n", main = "(b)", cex.lab = 1.3)
+  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 1.1)
   if (separator) abline(v = sep_x, lty = 2, col = "grey40", lwd = 1)
 
   for (m in 1:6) {
@@ -493,7 +502,7 @@ draw_figure_all_sectors <- function(filepath) {
 
   pos <- c(1, 2, 3, 4, 5)
   xlim <- c(0.3, 5.7)
-  tick_labels <- c("Revenue", "Elastic Net", "NACE", "Gated Rev", "Combined")
+  tick_labels <- c("Revenue", "Elastic Net", "NACE", "Gated Rev", "Geom. Mean")
 
   # Subset to fig_sectors only
   rho_rev      <- sm_rev_A_all$rho[fig_sectors];       rho_rev      <- rho_rev[is.finite(rho_rev)]
@@ -512,8 +521,8 @@ draw_figure_all_sectors <- function(filepath) {
 
   col_A <- adjustcolor("steelblue", 0.6)
 
-  pdf(filepath, width = 10, height = 5)
-  par(mfrow = c(1, 2), mar = c(6, 4, 3, 1), oma = c(0, 0, 0, 0))
+  pdf(filepath, width = 10, height = 5.5)
+  par(mfrow = c(1, 2), mar = c(7, 2.5, 3, 1), oma = c(2, 0, 0, 0))
 
   # ── Sub-panel: Spearman rho ──
   rho_all_vals <- unlist(rho_list)
@@ -521,9 +530,10 @@ draw_figure_all_sectors <- function(filepath) {
   ylim_rho <- ylim_rho + c(-0.05, 0.05) * diff(ylim_rho)
 
   plot(NULL, xlim = xlim, ylim = ylim_rho,
-       xlab = "", ylab = "Rank correlation",
-       xaxt = "n", main = "(a)")
-  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 0.75)
+       xlab = "", ylab = "",
+       xaxt = "n", yaxt = "n", main = "(a)")
+  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 1.1)
+  axis(2, at = seq(-0.4, 0.8, by = 0.4), cex.axis = 1.1)
   abline(h = 0, lty = 2, col = "grey60")
 
   for (m in seq_along(pos)) {
@@ -545,9 +555,10 @@ draw_figure_all_sectors <- function(filepath) {
   ylim_apd <- ylim_apd + c(-0.05, 0.05) * diff(ylim_apd)
 
   plot(NULL, xlim = xlim, ylim = ylim_apd,
-       xlab = "", ylab = "Median APD",
-       xaxt = "n", main = "(b)")
-  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 0.75)
+       xlab = "", ylab = "",
+       xaxt = "n", yaxt = "n", main = "(b)")
+  axis(1, at = pos, labels = tick_labels, las = 2, cex.axis = 1.1)
+  axis(2, cex.axis = 1.1)
 
   for (m in seq_along(pos)) {
     vals <- apd_list[[m]]
@@ -561,6 +572,16 @@ draw_figure_all_sectors <- function(filepath) {
     segments(pos[m] - 0.25, median(vals, na.rm = TRUE),
              pos[m] + 0.25, median(vals, na.rm = TRUE), col = "red", lwd = 2)
   }
+
+  # ── Legend ──
+  par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+  plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+  legend("bottom", horiz = TRUE, inset = c(0, 0),
+         legend = c("Within-sector avg. across CV repeats", "Median across sectors"),
+         col = c(col_A, "red"),
+         pch = c(19, NA),
+         lty = c(NA, 1), lwd = c(NA, 2),
+         pt.cex = 1.2, cex = 0.85, bty = "n")
 
   dev.off()
   cat("Figure saved:", filepath, "\n")

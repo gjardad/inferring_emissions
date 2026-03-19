@@ -55,7 +55,7 @@ ALPHA_GRID        <- seq(0, 1, by = 0.1)
 
 # Sector groups: name → vector of NACE 2-digit codes
 SECTOR_GROUPS <- list(
-  "17/18" = c("17", "18"),
+  "17/18" = "17/18",
   "19"    = "19",
   "24"    = "24"
 )
@@ -89,6 +89,14 @@ rm(training_sample, syt)
 panel_sec  <- panel_sec  %>% left_join(determ_df, by = c("vat", "year"))
 panel_firm <- panel_firm %>% left_join(determ_df, by = c("vat", "year"))
 rm(determ_df)
+
+# Combine NACE 17 and 18 into a single sector for calibration
+for (p in c("panel_sec", "panel_firm")) {
+  df <- get(p)
+  df$primary_nace2d[df$primary_nace2d %in% c("17", "18")] <- "17/18"
+  df$nace2d[df$nace2d %in% c("17", "18")] <- "17/18"
+  assign(p, df)
+}
 
 stopifnot(all(panel_sec$vat == panel_firm$vat),
           all(panel_sec$year == panel_firm$year))
