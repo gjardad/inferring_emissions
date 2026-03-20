@@ -9,3 +9,5 @@
 3. **Comparison with EN on financials only.** Train an elastic net using only financial variables from annual accounts (revenue, assets, wage bill, etc.) as predictors — no B2B data. This serves as a benchmark in the spirit of the Trucost/Bloomberg literature that infers emissions from publicly available financial data.
 
 4. **Robustness to zero-emissions imputation in NACE 17/18, 19, and 24.** For each of these sectors, take the share of sector-level emissions not covered by the EU ETS and distribute these residual emissions across non-EU ETS firms such that the resulting nRMSE (or another performance metric) for the EN model is the worst possible. This provides a worst-case bound on how sensitive our results are to the assumption that non-ETS firms in these sectors have zero combustion emissions.
+
+5. **Do OOS predictive performance changes if we ask emitters NOT to be selected suppliers themselves?** The idea is to differentiate those who buy fuels (or, more generally, inputs relevant for emissions) and resell them from those who buy and consume them. 
