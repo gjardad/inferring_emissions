@@ -102,6 +102,18 @@ Analyses explored during the project that are **not** part of the final results.
 
 ---
 
+## 11. Cross-Validated Percentile Threshold for Extensive Margin
+
+**Idea:** Instead of classifying any firm with positive calibrated prediction as an emitter (threshold = 0), cross-validate a percentile threshold on year-demeaned calibrated predictions. For each of three sector groups {17/18, 19, 24}, hold one out, find the percentile p* that maximizes mean(TPR − FPR) across the two training groups (averaging over 200 EN repetitions), and apply p* to the held-out group.
+
+**Scripts:** `analysis/scratch/threshold_cv.R`, `analysis/scratch/threshold_1718_insample.R`
+
+**Results:** The CV threshold improved TPR − FPR for sectors 19 (+0.21) and 24 (+0.09) but worsened it for 17/18 (−0.13). The in-sample optimal percentile for 17/18 is p* = 0.95, far from the p* = 0.63–0.69 transferred from {19, 24}. The three sector groups have very different emitter shares (17/18: 0.6%, 19: 34%, 24: 12%), so the optimal percentile varies dramatically across groups and does not transfer.
+
+**Why dropped:** With only 3 sector groups available for cross-validation, any threshold rule is too fragile to generalize — and deployment sectors are even more heterogeneous than the training groups. The zero threshold is the only choice that requires no cross-fitting justification and avoids the risk of missing real emitters in deployment. The EN's naive FPR is already low where it matters most (0.147 in 17/18).
+
+---
+
 ## Not Dropped — Supporting Analyses
 
 The following scripts are **not** part of the main results table but remain relevant as diagnostics, validation, or planned extensions:
