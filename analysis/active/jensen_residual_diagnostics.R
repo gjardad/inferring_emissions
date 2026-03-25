@@ -14,7 +14,11 @@
 #     fitted_asinh = full EN prediction (FE + log_revenue + suppliers)
 #     resid_asinh  = asinh(y) - fitted_asinh
 #     proxy_asinh  = supplier-only component (positive coefficients)
-#   Then we test whether resid^2 varies with the proxy within sector-year.
+#   Then we run three heteroskedasticity regressions:
+#     asinh(resid^2) = alpha + beta * Z + sector-year FE + u
+#   where Z is (1) asinh(y), (2) proxy_asinh, (3) log_revenue.
+#   Positive beta means larger values of Z have noisier predictions,
+#   implying differential Jensen bias within sector-year cells.
 #
 # INPUT
 #   {PROC_DATA}/b2b_selected_sample.RData
@@ -22,7 +26,7 @@
 #
 # OUTPUT
 #   {PROC_DATA}/jensen_residual_diagnostics.RData
-#     Contains: bp_regression, binned_variance, binned_variance_all
+#     Contains: het_regressions (3 rows: asinh_y, proxy_asinh, log_revenue)
 #
 # RUNS ON: RMD
 ###############################################################################
@@ -380,84 +384,78 @@ cat("Mean residual:", round(mean(residual_panel$resid_asinh), 4), "\n")
 cat("SD residual:  ", round(sd(residual_panel$resid_asinh), 4), "\n\n")
 
 
-# --- Test 1: Regress squared residuals on proxy and log_revenue, with SY FE ---
-cat("=== Test 1: resid^2 ~ proxy + log_revenue + sector-year FE ===\n")
+# --- Test 1: asinh(resid^2) ~ asinh(y) + SY FE (emission size) ---
+# Positive beta means larger emitters have noisier predictions, implying
+# differential Jensen bias within sector-year cells.
+cat("=== Test 1: asinh(resid^2) ~ asinh(y) + sector-year FE ===\n")
 
-bp_fit <- lm(resid_sq ~ proxy_asinh + log_revenue + factor(sy),
-             data = residual_panel)
-bp_summary <- summary(bp_fit)
+residual_panel$asinh_resid_sq <- asinh(residual_panel$resid_sq)
+residual_panel$asinh_y <- asinh(residual_panel$y)
 
-cat("  Coef on proxy:       ", signif(coef(bp_fit)["proxy_asinh"], 4),
-    " (p =", signif(bp_summary$coefficients["proxy_asinh", 4], 3), ")\n")
-cat("  Coef on log_revenue: ", signif(coef(bp_fit)["log_revenue"], 4),
-    " (p =", signif(bp_summary$coefficients["log_revenue", 4], 3), ")\n")
-cat("  R-squared:", round(bp_summary$r.squared, 4), "\n\n")
+het_emissions_fit <- lm(asinh_resid_sq ~ asinh_y + factor(sy), data = residual_panel)
+het_emissions_summary <- summary(het_emissions_fit)
 
-bp_regression <- data.frame(
-  variable  = c("proxy_asinh", "log_revenue"),
-  coef      = coef(bp_fit)[c("proxy_asinh", "log_revenue")],
-  se        = bp_summary$coefficients[c("proxy_asinh", "log_revenue"), 2],
-  t_stat    = bp_summary$coefficients[c("proxy_asinh", "log_revenue"), 3],
-  p_value   = bp_summary$coefficients[c("proxy_asinh", "log_revenue"), 4],
-  r_squared = bp_summary$r.squared
+cat("  Coef on asinh(y): ", signif(coef(het_emissions_fit)["asinh_y"], 4),
+    " (p =", signif(het_emissions_summary$coefficients["asinh_y", 4], 3), ")\n")
+cat("  R-squared:", round(het_emissions_summary$r.squared, 4), "\n\n")
+
+het_emissions <- data.frame(
+  variable  = "asinh_y",
+  coef      = coef(het_emissions_fit)["asinh_y"],
+  se        = het_emissions_summary$coefficients["asinh_y", 2],
+  t_stat    = het_emissions_summary$coefficients["asinh_y", 3],
+  p_value   = het_emissions_summary$coefficients["asinh_y", 4],
+  r_squared = het_emissions_summary$r.squared
 )
-rm(bp_fit, bp_summary)
+rm(het_emissions_fit, het_emissions_summary)
 
 
-# --- Test 2: Binned variance by proxy quartile within SY (emitters only) ---
-cat("=== Test 2: Binned variance — emitters with proxy > 0 ===\n")
+# --- Test 2: asinh(resid^2) ~ proxy + SY FE (proxy value) ---
+cat("=== Test 2: asinh(resid^2) ~ proxy + sector-year FE ===\n")
 
-emitters <- residual_panel %>% filter(emit == 1, proxy_asinh > 0)
+het_proxy_fit <- lm(asinh_resid_sq ~ proxy_asinh + factor(sy), data = residual_panel)
+het_proxy_summary <- summary(het_proxy_fit)
 
-binned_variance <- emitters %>%
-  group_by(sy) %>%
-  filter(n() >= 8) %>%
-  mutate(proxy_quartile = ntile(proxy_asinh, 4)) %>%
-  ungroup() %>%
-  group_by(proxy_quartile) %>%
-  summarise(
-    n              = n(),
-    mean_proxy     = mean(proxy_asinh),
-    mean_resid_sq  = mean(resid_sq),
-    sd_resid       = sd(resid_asinh),
-    median_resid_sq = median(resid_sq),
-    .groups = "drop"
-  )
+cat("  Coef on proxy:  ", signif(coef(het_proxy_fit)["proxy_asinh"], 4),
+    " (p =", signif(het_proxy_summary$coefficients["proxy_asinh", 4], 3), ")\n")
+cat("  R-squared:", round(het_proxy_summary$r.squared, 4), "\n\n")
 
-print(as.data.frame(binned_variance))
-
-if (nrow(binned_variance) == 4) {
-  var_ratio <- binned_variance$mean_resid_sq[4] / binned_variance$mean_resid_sq[1]
-  cat(sprintf("\nVariance ratio Q4/Q1: %.2f\n", var_ratio))
-  cat("(>1 means high-proxy firms have larger residual variance -> larger Jensen bias)\n\n")
-}
+het_proxy <- data.frame(
+  variable  = "proxy_asinh",
+  coef      = coef(het_proxy_fit)["proxy_asinh"],
+  se        = het_proxy_summary$coefficients["proxy_asinh", 2],
+  t_stat    = het_proxy_summary$coefficients["proxy_asinh", 3],
+  p_value   = het_proxy_summary$coefficients["proxy_asinh", 4],
+  r_squared = het_proxy_summary$r.squared
+)
+rm(het_proxy_fit, het_proxy_summary)
 
 
-# --- Test 3: Binned variance — all firms with proxy > 0 ---
-cat("=== Test 3: Binned variance — all firms with proxy > 0 ===\n")
+# --- Test 3: asinh(resid^2) ~ log_revenue + SY FE (firm size) ---
+cat("=== Test 3: asinh(resid^2) ~ log_revenue + sector-year FE ===\n")
 
-all_with_proxy <- residual_panel %>% filter(proxy_asinh > 0)
+het_revenue_fit <- lm(asinh_resid_sq ~ log_revenue + factor(sy), data = residual_panel)
+het_revenue_summary <- summary(het_revenue_fit)
 
-binned_variance_all <- all_with_proxy %>%
-  group_by(sy) %>%
-  filter(n() >= 8) %>%
-  mutate(proxy_quartile = ntile(proxy_asinh, 4)) %>%
-  ungroup() %>%
-  group_by(proxy_quartile) %>%
-  summarise(
-    n              = n(),
-    mean_proxy     = mean(proxy_asinh),
-    mean_resid_sq  = mean(resid_sq),
-    sd_resid       = sd(resid_asinh),
-    .groups = "drop"
-  )
+cat("  Coef on log_revenue: ", signif(coef(het_revenue_fit)["log_revenue"], 4),
+    " (p =", signif(het_revenue_summary$coefficients["log_revenue", 4], 3), ")\n")
+cat("  R-squared:", round(het_revenue_summary$r.squared, 4), "\n\n")
 
-print(as.data.frame(binned_variance_all))
+het_revenue <- data.frame(
+  variable  = "log_revenue",
+  coef      = coef(het_revenue_fit)["log_revenue"],
+  se        = het_revenue_summary$coefficients["log_revenue", 2],
+  t_stat    = het_revenue_summary$coefficients["log_revenue", 3],
+  p_value   = het_revenue_summary$coefficients["log_revenue", 4],
+  r_squared = het_revenue_summary$r.squared
+)
+rm(het_revenue_fit, het_revenue_summary)
 
-if (nrow(binned_variance_all) == 4) {
-  var_ratio_all <- binned_variance_all$mean_resid_sq[4] / binned_variance_all$mean_resid_sq[1]
-  cat(sprintf("\nVariance ratio Q4/Q1 (all firms): %.2f\n", var_ratio_all))
-}
+# Combine all heteroskedasticity regressions
+het_regressions <- rbind(het_emissions, het_proxy, het_revenue)
+cat("=== Summary of heteroskedasticity regressions ===\n")
+print(het_regressions)
+cat("\n")
 
 
 # =============================================================================
@@ -465,7 +463,7 @@ if (nrow(binned_variance_all) == 4) {
 # =============================================================================
 OUT_PATH <- file.path(PROC_DATA, "jensen_residual_diagnostics.RData")
 
-save(bp_regression, binned_variance, binned_variance_all,
+save(het_regressions,
      file = OUT_PATH)
 
 cat("\n================================================================\n")
