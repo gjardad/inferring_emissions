@@ -259,15 +259,23 @@ run_one_cv_with_residuals <- function(lhs_with_folds, b2b_lhs, K, alpha,
     rm(b2b_agg_test_k, b2b_test_k)
 
     # Test controls — must match training column structure
-    year_dummies_test_k <- model.matrix(
-      ~ factor(year, levels = sort(unique(train_lhs$year))),
-      data = test_lhs)[, -1, drop = FALSE]
-    colnames(year_dummies_test_k) <- paste0("yr_", sort(unique(train_lhs$year))[-1])
+    # In sector CV, held-out sectors are NOT in train_sectors, so model.matrix
+    # would drop rows (na.omit). Build dummies manually instead: held-out
+    # sectors get all-zero sector dummies (absorbed into intercept).
+    train_years <- sort(unique(train_lhs$year))
+    year_dummies_test_k <- matrix(0, nrow = nrow(test_lhs),
+                                   ncol = length(train_years) - 1)
+    colnames(year_dummies_test_k) <- paste0("yr_", train_years[-1])
+    for (i in seq_along(train_years[-1])) {
+      year_dummies_test_k[test_lhs$year == train_years[-1][i], i] <- 1
+    }
 
-    sector_dummies_test_k <- model.matrix(
-      ~ factor(nace2d, levels = train_sectors),
-      data = test_lhs)[, -1, drop = FALSE]
+    sector_dummies_test_k <- matrix(0, nrow = nrow(test_lhs),
+                                     ncol = length(train_sectors) - 1)
     colnames(sector_dummies_test_k) <- paste0("sec_", train_sectors[-1])
+    for (i in seq_along(train_sectors[-1])) {
+      sector_dummies_test_k[test_lhs$nace2d == train_sectors[-1][i], i] <- 1
+    }
 
     X_controls_test_k <- cbind(log_revenue = test_lhs$log_revenue,
                                 year_dummies_test_k, sector_dummies_test_k)
