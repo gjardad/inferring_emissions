@@ -265,6 +265,32 @@ With multi-hop B2B links (supplier's suppliers), ask: how many steps upstream do
 
 ---
 
+## Jensen's inequality in the sinh back-transformation (2026-03-26)
+
+### Context
+
+The EN is estimated on the asinh scale: `asinh(y) = sector FE + year FE + log_revenue + Σ_j β_j · asinh(purchases_j)`. The fuel-supply proxy is `proxy_asinh = Σ_j β̂_j · asinh(purchases_j)` (positive coefficients only). Before proportional allocation within sector-year cells, we back-transform via `sinh(proxy_asinh)`.
+
+Since `sinh` is convex on R⁺, Jensen's inequality implies `sinh(E[asinh(y)|X]) ≤ E[y|X]` — the back-transformation systematically understates predicted emissions. This bias is harmless if it is constant within sector-year cells (it cancels in the share computation). It distorts allocation shares only if the residual variance differs systematically across firms within the same cell.
+
+### Empirical test
+
+Script: `analysis/active/jensen_residual_diagnostics.R`. Re-fits the EN under the sector-level CV design (M=20 repeats, K=5 folds) and retains fitted values to compute the full asinh-scale residual `ε̂ = asinh(y) − fitted`. Then estimates:
+
+`asinh(ε̂²) = α + β · asinh(y) + sector-year FE + u`
+
+### Result
+
+**β = −0.1216, p ≈ 0.** Larger emitters have *less* noisy predictions on the asinh scale, not more.
+
+### Interpretation
+
+The EN has more signal to work with for large emitters — they purchase more from more suppliers, so the B2B variables are more informative. Small emitters are harder to distinguish from non-emitters. This means the Jensen bias from sinh back-transformation is actually *smaller* for large emitters within a cell. If anything, this works in the right direction: large emitters' shares are more precise, and the model's uncertainty concentrates on smaller emitters where the allocation is inherently noisier anyway.
+
+**Bottom line:** The sinh back-transformation does not systematically inflate large emitters' shares at the expense of small ones. The Jensen inequality concern is empirically a non-issue for the proportional allocation.
+
+---
+
 ## Related paper
 
 Fava (2025), "Training and Testing with Multiple Splits: A Central Limit Theorem for Split-Sample Estimators" (arXiv:2511.04957). Provides a CLT for split-sample estimators under weak conditions. Most relevant for formally testing whether the B2B proxy significantly improves predictions (model comparison). Reading notes in `articles/split_fava_2025_multiple_splits/notes.md`.
