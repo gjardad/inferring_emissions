@@ -2,9 +2,10 @@
 # analysis/active/diagnostic_redistribution_comparison.R
 #
 # PURPOSE
-#   Compare three redistribution methods for assigning firm-level emissions
+#   Compare six redistribution methods for assigning firm-level emissions
 #   within sectors: (A) sinh-calibrated (status quo), (B) quantile mapping
-#   with pooled reference distribution, (C) Pareto/GPA quantile function.
+#   with pooled reference distribution, (C) GPA, (D) GEV, (E) GLO,
+#   (F) Log-normal — all using parametric quantile functions.
 #
 #   All three methods preserve sector-year totals and the ranking implied by
 #   the EN proxy. They differ in the within-sector distributional shape they
@@ -45,7 +46,7 @@ library(lmom)
 
 # ── Parameters ───────────────────────────────────────────────────────────────
 CV_TYPE   <- "sector"
-M         <- 20L
+M         <- 200L
 K         <- 5L
 BASE_SEED <- 2026L
 MIN_CELL  <- 10L   # minimum emitters with proxy > 0 for distributional stats
@@ -106,11 +107,11 @@ build_reference_dist <- function(panel, fold_k, k) {
   sort(df$d)
 }
 
-# ── Fit GPA to reference distribution ────────────────────────────────────────
-fit_gpa <- function(ref_dist) {
+# ── Fit distribution to reference distribution ──────────────────────────────
+fit_dist <- function(ref_dist, pel_fn) {
   if (is.null(ref_dist) || length(ref_dist) < 20) return(NULL)
   lmoms <- samlmu(ref_dist, nmom = 3)
-  tryCatch(pelgpa(lmoms), error = function(e) NULL)
+  tryCatch(pel_fn(lmoms), error = function(e) NULL)
 }
 
 # ── Compute E_target for a (sector, year) cell ──────────────────────────────
@@ -216,8 +217,8 @@ calibrate_qmap <- function(panel, proxy_raw, fold_k, ref_dist_sorted) {
   result
 }
 
-# ── Pareto/GPA calibration ──────────────────────────────────────────────────
-calibrate_pareto <- function(panel, proxy_raw, fold_k) {
+# ── Parametric calibration (generic) ────────────────────────────────────────
+calibrate_parametric <- function(panel, proxy_raw, fold_k, pel_fn, qua_fn) {
   result <- rep(NA_real_, nrow(panel))
   folds <- sort(unique(fold_k))
 
@@ -225,9 +226,9 @@ calibrate_pareto <- function(panel, proxy_raw, fold_k) {
     held_out <- which(fold_k == k)
     etgt <- compute_e_target(panel, fold_k, k)
 
-    # Build fold-specific reference and fit GPA
+    # Build fold-specific reference and fit distribution
     ref_k <- build_reference_dist(panel, fold_k, k)
-    gpa_params <- fit_gpa(ref_k)
+    dist_params <- fit_dist(ref_k, pel_fn)
 
     ho_sy <- paste(panel$nace2d[held_out], panel$year[held_out])
 
@@ -247,7 +248,7 @@ calibrate_pareto <- function(panel, proxy_raw, fold_k) {
       emitter_mask <- proxy_raw[idx] > 0
       n_emit <- sum(emitter_mask)
 
-      if (n_emit < 2 || is.null(gpa_params)) {
+      if (n_emit < 2 || is.null(dist_params)) {
         # Fallback: proportional allocation
         raw <- proxy_raw[idx]
         denom <- sum(raw, na.rm = TRUE)
@@ -266,9 +267,9 @@ calibrate_pareto <- function(panel, proxy_raw, fold_k) {
       ranks <- rank(emit_proxy, ties.method = "average")
       p_i <- (ranks - 0.5) / n_emit
 
-      # GPA quantile function for deviations
+      # Parametric quantile function for deviations
       w_i <- tryCatch(
-        quagpa(p_i, gpa_params),
+        qua_fn(p_i, dist_params),
         error = function(e) rep(NA, length(p_i))
       )
 
@@ -346,7 +347,8 @@ cell_dist_stats <- function(x) {
 # =============================================================================
 # SECTION 3: Main loop
 # =============================================================================
-METHOD_NAMES <- c("Sinh-calibrated", "Quantile mapping", "Pareto (GPA)")
+METHOD_NAMES <- c("Sinh-calibrated", "Quantile mapping",
+                   "GPA", "GEV", "GLO", "Log-normal")
 N_METHODS <- length(METHOD_NAMES)
 STAT_NAMES <- c("p90p10", "log_gap", "gini", "tau3", "tau4")
 N_STATS <- length(STAT_NAMES)
@@ -381,9 +383,12 @@ for (r in seq_len(M)) {
   # Step 3: Compute predictions under each method
   yhat_A <- calibrate_sector(panel, proxy_raw_r, fold_k_r)
   yhat_B <- calibrate_qmap(panel, proxy_raw_r, fold_k_r, NULL)
-  yhat_C <- calibrate_pareto(panel, proxy_raw_r, fold_k_r)
+  yhat_C <- calibrate_parametric(panel, proxy_raw_r, fold_k_r, pelgpa, quagpa)
+  yhat_D <- calibrate_parametric(panel, proxy_raw_r, fold_k_r, pelgev, quagev)
+  yhat_E <- calibrate_parametric(panel, proxy_raw_r, fold_k_r, pelglo, quaglo)
+  yhat_F <- calibrate_parametric(panel, proxy_raw_r, fold_k_r, pelln3, qualn3)
 
-  yhats <- list(yhat_A, yhat_B, yhat_C)
+  yhats <- list(yhat_A, yhat_B, yhat_C, yhat_D, yhat_E, yhat_F)
 
   # Step 4: Cell-level distributional stats
   sy_key <- paste(panel$nace2d, panel$year)
@@ -518,19 +523,23 @@ proxy_raw_1 <- proxy_to_levels(proxy_matrix[, 1])
 
 yhat_A1 <- calibrate_sector(panel, proxy_raw_1, fold_k_1)
 yhat_B1 <- calibrate_qmap(panel, proxy_raw_1, fold_k_1, NULL)
-yhat_C1 <- calibrate_pareto(panel, proxy_raw_1, fold_k_1)
+yhat_C1 <- calibrate_parametric(panel, proxy_raw_1, fold_k_1, pelgpa, quagpa)
+yhat_D1 <- calibrate_parametric(panel, proxy_raw_1, fold_k_1, pelgev, quagev)
+yhat_E1 <- calibrate_parametric(panel, proxy_raw_1, fold_k_1, pelglo, quaglo)
+yhat_F1 <- calibrate_parametric(panel, proxy_raw_1, fold_k_1, pelln3, qualn3)
 
 # Check cell totals
 sy_key <- paste(panel$nace2d, panel$year)
+verif_yhats <- list(A = yhat_A1, B = yhat_B1, C = yhat_C1,
+                    D = yhat_D1, E = yhat_E1, F = yhat_F1)
 for (k in 1:K) {
   held_out <- which(fold_k_1 == k)
   ho_sy <- unique(sy_key[held_out])
   for (sy in ho_sy) {
     idx <- held_out[sy_key[held_out] == sy]
     actual_total <- sum(panel$y[idx])
-    for (nm in c("A", "B", "C")) {
-      yh <- switch(nm, A = yhat_A1, B = yhat_B1, C = yhat_C1)
-      pred_total <- sum(yh[idx], na.rm = TRUE)
+    for (nm in names(verif_yhats)) {
+      pred_total <- sum(verif_yhats[[nm]][idx], na.rm = TRUE)
       if (abs(pred_total - actual_total) > 0.01 * actual_total & actual_total > 0) {
         cat(sprintf("  WARNING: Method %s, cell %s: predicted %.0f vs actual %.0f\n",
                     nm, sy, pred_total, actual_total))
@@ -540,7 +549,7 @@ for (k in 1:K) {
 }
 cat("  Cell total verification complete.\n")
 
-# Check ranking preservation (Methods B, C)
+# Check ranking preservation (Methods B-F)
 n_rank_violations <- 0L
 for (k in 1:K) {
   held_out <- which(fold_k_1 == k)
@@ -551,12 +560,12 @@ for (k in 1:K) {
     if (sum(emit_mask) < 2) next
     emit_idx <- idx[emit_mask]
     proxy_rank <- rank(proxy_raw_1[emit_idx])
-    for (yh in list(yhat_B1, yhat_C1)) {
+    for (yh in verif_yhats[c("B", "C", "D", "E", "F")]) {
       pred_rank <- rank(yh[emit_idx])
       if (!all(proxy_rank == pred_rank)) n_rank_violations <- n_rank_violations + 1L
     }
   }
 }
-cat(sprintf("  Ranking violations (B+C): %d cells\n", n_rank_violations))
+cat(sprintf("  Ranking violations (B-F): %d cells\n", n_rank_violations))
 
 cat("\nDone.\n")
