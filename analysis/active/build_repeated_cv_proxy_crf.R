@@ -78,7 +78,7 @@ crf_group_map <- data.frame(
     "19",
     "24", "25",
     "20", "21",
-    "17", "18",
+    "17", "18", "17/18",
     "10", "11", "12",
     "23",
     "05", "06", "07", "08", "09",
@@ -103,7 +103,7 @@ crf_group_map <- data.frame(
     "refining",
     "metals", "metals",
     "chemicals", "chemicals",
-    "paper", "paper",
+    "paper", "paper", "paper",
     "food", "food", "food",
     "minerals",
     rep("mfg_other", 5),   # 05-09
