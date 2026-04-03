@@ -173,13 +173,14 @@ lhs <- lhs %>%
   left_join(crf_group_map, by = c("primary_nace2d" = "nace2d")) %>%
   rename(primary_crf_group = crf_group)
 
-# Check for unmapped sectors
+# Check for unmapped sectors and drop them
 n_unmapped <- sum(is.na(lhs$primary_crf_group))
 if (n_unmapped > 0) {
   unmapped_sectors <- unique(lhs$primary_nace2d[is.na(lhs$primary_crf_group)])
   cat("WARNING:", n_unmapped, "firm-years with unmapped NACE 2d sectors:",
       paste(unmapped_sectors, collapse = ", "), "\n")
-  cat("  These firms will be excluded from CV.\n\n")
+  cat("  Dropping these firm-years from the panel.\n\n")
+  lhs <- lhs %>% filter(!is.na(primary_crf_group))
 }
 
 all_crf_groups <- sort(unique(lhs$primary_crf_group[!is.na(lhs$primary_crf_group)]))
