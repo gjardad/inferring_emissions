@@ -3,27 +3,28 @@
 #
 # PURPOSE
 #   Evaluate prediction performance with CRF-group-level folds and
-#   CRF-group-level calibration. Produces two tables:
-#     1. Main results pooled across all CRF groups (Panel A)
-#     2. Zero-emitter CRF groups: paper (17/18), metals (24/25),
-#        refining (19) — the groups with structural non-emitters
+#   CRF-group-level calibration. For each of three ranking signals
+#   (Revenue, EN, NACE), compares proportional (sinh) vs Pareto (GPA)
+#   redistribution.
 #
-#   Uses Pareto (GPA) redistribution for all models.
+#   Produces two tables:
+#     1. Main results pooled across all CRF groups
+#     2. Zero-emitter CRF groups: paper (17/18), metals (24/25),
+#        refining (19)
 #
 #   Key differences from table_pareto_all_models.R:
 #     - Folds are defined over CRF groups, not NACE 2d sectors
 #     - Calibration distributes within CRF-group x year cells
 #     - EN proxy comes from repeated_cv_proxy_crf_asinh.RData
 #       (estimated with CRF-level holdouts on RMD)
-#     - Metrics are computed within CRF groups
 #
 # INPUT
 #   {PROC_DATA}/repeated_cv_proxy_crf_asinh.RData
 #   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
 # OUTPUT
-#   {OUTPUT_DIR}/table_main_results_crf_cv_pareto.tex
-#   {OUTPUT_DIR}/table_zero_emitters_crf_cv_pareto.tex
+#   {OUTPUT_DIR}/table_main_results_crf_cv.tex
+#   {OUTPUT_DIR}/table_zero_emitters_crf_cv.tex
 #   {OUTPUT_DIR}/table_pareto_all_models_crf.rds
 #   Console output
 #
@@ -56,7 +57,7 @@ ZERO_EMITTER_GROUPS <- list(
 )
 
 cat("================================================================\n")
-cat("  PARETO REDISTRIBUTION — ALL MODELS (CRF-group CV)\n")
+cat("  CRF-GROUP CV — PROPORTIONAL vs GPA REDISTRIBUTION\n")
 cat("  M =", M, "repeats, K =", K_crf, "folds\n")
 cat("================================================================\n\n")
 
@@ -131,8 +132,7 @@ rm(e_crf)
 panel$primary_nace2d[panel$primary_nace2d %in% c("17", "18")] <- "17/18"
 panel$nace2d[panel$nace2d %in% c("17", "18")] <- "17/18"
 
-# Assign CRF group (use the column from the proxy panel if available,
-# otherwise derive from nace2d)
+# Assign CRF group if not already present
 if (!"primary_crf_group" %in% names(panel)) {
   panel <- panel %>%
     left_join(crf_group_map %>% distinct(nace2d, .keep_all = TRUE),
@@ -166,28 +166,65 @@ cat(sprintf("  CRF groups with >= %d firms: %d of %d\n",
             length(unique(panel$primary_crf_group))))
 
 # =============================================================================
-# BACK-TRANSFORM HELPER
+# HELPERS
 # =============================================================================
 proxy_to_levels <- function(proxy) pmax(sinh(proxy), 0)
 
-# =============================================================================
-# CRF-GROUP-LEVEL FOLD ASSIGNMENT
-# Must match the logic in build_repeated_cv_proxy_crf.R
-# =============================================================================
 assign_folds_crf <- function(panel, K, seed) {
   set.seed(seed)
   crf_groups <- sort(unique(panel$primary_crf_group[!is.na(panel$primary_crf_group)]))
   group_folds <- sample(rep(1:K, length.out = length(crf_groups)))
   gfm <- data.frame(primary_crf_group = crf_groups, fold_k = group_folds,
                      stringsAsFactors = FALSE)
-  fold_k <- gfm$fold_k[match(panel$primary_crf_group, gfm$primary_crf_group)]
-  fold_k
+  gfm$fold_k[match(panel$primary_crf_group, gfm$primary_crf_group)]
 }
 
 # =============================================================================
-# PARETO CALIBRATION (CRF-group x year cells)
+# PROPORTIONAL CALIBRATION (CRF-group x year cells)
 # =============================================================================
+calibrate_proportional_crf <- function(panel, ranking_signal, fold_k) {
+  result <- rep(NA_real_, nrow(panel))
+  sy_key <- paste(panel$primary_crf_group, panel$year)
+  E_sy <- tapply(panel$y, sy_key, sum, na.rm = TRUE)
+  folds <- sort(unique(fold_k))
 
+  for (k in folds) {
+    held_out <- which(fold_k == k)
+    train_idx <- which(fold_k != k)
+
+    sy_train <- paste(panel$primary_crf_group[train_idx], panel$year[train_idx])
+    E_train_sy <- tapply(panel$y[train_idx], sy_train, sum, na.rm = TRUE)
+
+    ho_sy <- sy_key[held_out]
+
+    for (sy in unique(ho_sy)) {
+      idx_in_ho <- which(ho_sy == sy)
+      idx <- held_out[idx_in_ho]
+
+      E_total <- E_sy[sy]
+      E_train <- ifelse(is.na(E_train_sy[sy]), 0, E_train_sy[sy])
+      E_target <- E_total - E_train
+
+      if (is.na(E_target) || E_target <= 0) {
+        result[idx] <- 0
+        next
+      }
+
+      raw <- ranking_signal[idx]
+      denom <- sum(raw, na.rm = TRUE)
+      if (denom > 0) {
+        result[idx] <- E_target * (raw / denom)
+      } else {
+        result[idx] <- E_target / length(idx)
+      }
+    }
+  }
+  result
+}
+
+# =============================================================================
+# PARETO/GPA CALIBRATION (CRF-group x year cells)
+# =============================================================================
 build_reference_dist <- function(panel, fold_k, k) {
   train_idx <- which(fold_k != k & panel$y > 0)
   if (length(train_idx) < 20) return(NULL)
@@ -206,7 +243,6 @@ build_reference_dist <- function(panel, fold_k, k) {
 
 calibrate_pareto_crf <- function(panel, ranking_signal, fold_k) {
   result <- rep(NA_real_, nrow(panel))
-  # Calibration cells: CRF group x year
   sy_key <- paste(panel$primary_crf_group, panel$year)
   E_sy <- tapply(panel$y, sy_key, sum, na.rm = TRUE)
   folds <- sort(unique(fold_k))
@@ -272,11 +308,8 @@ calibrate_pareto_crf <- function(panel, ranking_signal, fold_k) {
 }
 
 # =============================================================================
-# METRICS HELPERS (for CRF-group-level Table 2)
+# METRICS HELPERS
 # =============================================================================
-# These compute metrics within a CRF group, identified by the NACE 2d codes
-# that belong to it.
-
 mapd_emitters <- function(y, yhat, nace2d, codes) {
   idx <- which(nace2d %in% codes & y > 0)
   if (length(idx) < 1) return(NA_real_)
@@ -328,8 +361,7 @@ fp_severity_rank <- function(y, yhat, nace2d, year, codes, stat = "max") {
 }
 
 # =============================================================================
-# POOLED METRICS (calc_metrics uses nace2d for FP severity; here we pass
-# nace2d as-is since the FP severity sectors 19, 24, 17/18 are unchanged)
+# POOLED METRICS
 # =============================================================================
 metric_names <- c("rmse", "median_apd", "pearson", "spearman",
                   "fpr_nonemitters", "tpr_emitters",
@@ -337,44 +369,47 @@ metric_names <- c("rmse", "median_apd", "pearson", "spearman",
 extract_metrics <- function(m) sapply(metric_names, function(nm) m[[nm]])
 
 # =============================================================================
-# TABLE 1: Main results — all models with CRF-group CV and Pareto
+# MODEL DEFINITIONS: 3 ranking signals x 2 redistribution methods = 6 models
 # =============================================================================
-cat("\n-- TABLE 1: Main results (all models, CRF-group CV, Pareto) --\n")
+models <- c("Rev (prop)", "Rev (GPA)",
+            "EN (prop)",  "EN (GPA)",
+            "NACE (prop)", "NACE (GPA)")
 
-models <- c("Revenue", "Elastic Net", "NACE", "Gated Rev")
+# =============================================================================
+# TABLE 1: Main results pooled
+# =============================================================================
+cat("\n-- TABLE 1: Main results (3 rankings x 2 redistributions, CRF-group CV) --\n")
+
 metrics_A <- array(NA_real_,
                    dim = c(M, length(metric_names), length(models)),
                    dimnames = list(NULL, metric_names, models))
 
-cat(sprintf("  All models (%d repeats, CRF-group Pareto calibration)...\n", M))
+cat(sprintf("  %d repeats...\n", M))
 for (r in seq_len(M)) {
   fold_k <- assign_folds_crf(panel, K_crf, BASE_SEED + r)
   en_levels <- proxy_to_levels(proxy_matrix_crf[, r])
 
-  # Revenue
-  yhat_rev <- calibrate_pareto_crf(panel, panel$revenue, fold_k)
-  m_rev <- calc_metrics(panel$y[idx_A], yhat_rev[idx_A], fp_threshold = 0,
-                        nace2d = panel$nace2d[idx_A], year = panel$year[idx_A])
-  metrics_A[r, , "Revenue"] <- extract_metrics(m_rev)
+  signals <- list(
+    Rev  = panel$revenue,
+    EN   = en_levels,
+    NACE = panel$proxy_tabachova
+  )
 
-  # Elastic Net
-  yhat_en <- calibrate_pareto_crf(panel, en_levels, fold_k)
-  m_en <- calc_metrics(panel$y[idx_A], yhat_en[idx_A], fp_threshold = 0,
-                       nace2d = panel$nace2d[idx_A], year = panel$year[idx_A])
-  metrics_A[r, , "Elastic Net"] <- extract_metrics(m_en)
+  for (sig_name in names(signals)) {
+    sig <- signals[[sig_name]]
 
-  # NACE
-  yhat_nace <- calibrate_pareto_crf(panel, panel$proxy_tabachova, fold_k)
-  m_nace <- calc_metrics(panel$y[idx_A], yhat_nace[idx_A], fp_threshold = 0,
-                         nace2d = panel$nace2d[idx_A], year = panel$year[idx_A])
-  metrics_A[r, , "NACE"] <- extract_metrics(m_nace)
+    # Proportional
+    yhat_prop <- calibrate_proportional_crf(panel, sig, fold_k)
+    m_prop <- calc_metrics(panel$y[idx_A], yhat_prop[idx_A], fp_threshold = 0,
+                           nace2d = panel$nace2d[idx_A], year = panel$year[idx_A])
+    metrics_A[r, , paste0(sig_name, " (prop)")] <- extract_metrics(m_prop)
 
-  # Gated Revenue
-  gated_score <- as.numeric(en_levels > 0) * panel$revenue
-  yhat_gated <- calibrate_pareto_crf(panel, gated_score, fold_k)
-  m_gated <- calc_metrics(panel$y[idx_A], yhat_gated[idx_A], fp_threshold = 0,
+    # GPA
+    yhat_gpa <- calibrate_pareto_crf(panel, sig, fold_k)
+    m_gpa <- calc_metrics(panel$y[idx_A], yhat_gpa[idx_A], fp_threshold = 0,
                           nace2d = panel$nace2d[idx_A], year = panel$year[idx_A])
-  metrics_A[r, , "Gated Rev"] <- extract_metrics(m_gated)
+    metrics_A[r, , paste0(sig_name, " (GPA)")] <- extract_metrics(m_gpa)
+  }
 
   if (r %% 5 == 0) cat(sprintf("    %d/%d\n", r, M))
 }
@@ -382,10 +417,10 @@ cat("  Done.\n")
 
 mean_A <- apply(metrics_A, c(2, 3), mean, na.rm = TRUE)
 sd_A   <- apply(metrics_A, c(2, 3), sd,   na.rm = TRUE)
-rmse_baseline <- mean_A["rmse", "Revenue"]
+rmse_baseline <- mean_A["rmse", "Rev (prop)"]
 
 # Console output
-cat("\nPanel A: CRF-group-level CV, Pareto redistribution\n")
+cat("\nPanel A: CRF-group-level CV\n")
 cat(sprintf("%-20s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
             "", "RMSE(kt)", "nRMSE", "MAPD", "Pearson", "Spearman",
             "FPR", "TPR", "p50", "p99"))
@@ -411,9 +446,9 @@ for (mod in models) {
 }
 
 # =============================================================================
-# TABLE 2: Zero-emitter CRF groups — all models with Pareto
+# TABLE 2: Zero-emitter CRF groups
 # =============================================================================
-cat("\n-- TABLE 2: Zero-emitter CRF groups (all models, Pareto) --\n")
+cat("\n-- TABLE 2: Zero-emitter CRF groups --\n")
 
 grp_names <- names(ZERO_EMITTER_GROUPS)
 t2_metric_names <- c("nrmse", "mapd", "pear", "spear", "fpr", "tpr", "fpp50", "fpmax")
@@ -424,44 +459,49 @@ t2_results <- array(NA_real_,
   dim = c(M, length(t2_metric_names), 3, length(models)),
   dimnames = list(NULL, t2_metric_names, grp_names, models))
 
-cat(sprintf("  All models (%d repeats)...\n", M))
+cat(sprintf("  %d repeats...\n", M))
 for (r in seq_len(M)) {
   fold_k <- assign_folds_crf(panel, K_crf, BASE_SEED + r)
   en_levels <- proxy_to_levels(proxy_matrix_crf[, r])
-  gated_score <- as.numeric(en_levels > 0) * panel$revenue
 
-  signals <- list(
-    "Revenue"     = panel$revenue,
-    "Elastic Net" = en_levels,
-    "NACE"        = panel$proxy_tabachova,
-    "Gated Rev"   = gated_score
-  )
+  signals <- list(Rev = panel$revenue, EN = en_levels, NACE = panel$proxy_tabachova)
 
-  for (mod in models) {
-    yhat <- calibrate_pareto_crf(panel, signals[[mod]], fold_k)
+  for (sig_name in names(signals)) {
+    sig <- signals[[sig_name]]
+
+    yhat_prop <- calibrate_proportional_crf(panel, sig, fold_k)
+    yhat_gpa  <- calibrate_pareto_crf(panel, sig, fold_k)
+
+    mod_prop <- paste0(sig_name, " (prop)")
+    mod_gpa  <- paste0(sig_name, " (GPA)")
 
     for (g in grp_names) {
       codes <- ZERO_EMITTER_GROUPS[[g]]
-      t2_results[r, "nrmse", g, mod] <- rmse_grp(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "mapd",  g, mod] <- mapd_emitters(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "pear",  g, mod] <- pearson_grp(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "spear", g, mod] <- spearman_grp(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "fpr",   g, mod] <- fpr_grp(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "tpr",   g, mod] <- tpr_grp(panel$y, yhat, panel$nace2d, codes)
-      t2_results[r, "fpp50", g, mod] <- fp_severity_rank(panel$y, yhat, panel$nace2d,
-                                                          panel$year, codes, "median")
-      t2_results[r, "fpmax", g, mod] <- fp_severity_rank(panel$y, yhat, panel$nace2d,
-                                                          panel$year, codes, "max")
+
+      for (mod_label in c(mod_prop, mod_gpa)) {
+        yhat <- if (mod_label == mod_prop) yhat_prop else yhat_gpa
+        t2_results[r, "nrmse", g, mod_label] <- rmse_grp(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "mapd",  g, mod_label] <- mapd_emitters(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "pear",  g, mod_label] <- pearson_grp(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "spear", g, mod_label] <- spearman_grp(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "fpr",   g, mod_label] <- fpr_grp(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "tpr",   g, mod_label] <- tpr_grp(panel$y, yhat, panel$nace2d, codes)
+        t2_results[r, "fpp50", g, mod_label] <- fp_severity_rank(panel$y, yhat, panel$nace2d,
+                                                                  panel$year, codes, "median")
+        t2_results[r, "fpmax", g, mod_label] <- fp_severity_rank(panel$y, yhat, panel$nace2d,
+                                                                  panel$year, codes, "max")
+      }
     }
   }
 
-  for (g in grp_names) rev_rmse_by_grp[r, g] <- t2_results[r, "nrmse", g, "Revenue"]
+  # Revenue proportional RMSE for normalization
+  for (g in grp_names) rev_rmse_by_grp[r, g] <- t2_results[r, "nrmse", g, "Rev (prop)"]
 
   if (r %% 5 == 0) cat(sprintf("    %d/%d\n", r, M))
 }
 cat("  Done.\n")
 
-# Normalize nrmse by revenue RMSE
+# Normalize nrmse
 for (mod in models) {
   for (g in grp_names) {
     t2_results[, "nrmse", g, mod] <- t2_results[, "nrmse", g, mod] / rev_rmse_by_grp[, g]
@@ -469,7 +509,7 @@ for (mod in models) {
 }
 
 # Console output
-cat("\n=== Zero-emitter CRF groups: all models with CRF-group CV Pareto ===\n")
+cat("\n=== Zero-emitter CRF groups ===\n")
 row_labels <- c("nRMSE", "MAPD", "Levels corr", "Rank corr", "FPR", "TPR",
                 "Med FP rank", "Max FP rank")
 for (i in seq_along(t2_metric_names)) {
@@ -479,7 +519,7 @@ for (i in seq_along(t2_metric_names)) {
     for (mod in models) {
       mn <- mean(t2_results[, t2_metric_names[i], g, mod], na.rm = TRUE)
       s  <- sd(t2_results[, t2_metric_names[i], g, mod], na.rm = TRUE)
-      cat(sprintf("  %s %.3f(%.3f)", substr(mod, 1, 3), mn, s))
+      cat(sprintf("  %s %.3f(%.3f)", substr(mod, 1, 8), mn, s))
     }
   }
 }
@@ -527,14 +567,19 @@ tex_t1 <- c(
   "\\cmidrule(lr){2-4} \\cmidrule(lr){5-6} \\cmidrule(lr){7-10}",
   " & RMSE & nRMSE & MAPD & Levels & Rank & FPR & TPR & p50 & p99 \\\\",
   "\\midrule",
-  tex_row("Revenue",     mean_A[, "Revenue"],     sd_A[, "Revenue"],     rmse_baseline),
-  tex_row("Elastic Net", mean_A[, "Elastic Net"], sd_A[, "Elastic Net"], rmse_baseline),
-  tex_row("NACE",        mean_A[, "NACE"],        sd_A[, "NACE"],        rmse_baseline),
-  tex_row("Gated Rev.",  mean_A[, "Gated Rev"],   sd_A[, "Gated Rev"],   rmse_baseline),
+  "\\multicolumn{10}{l}{\\textit{Proportional redistribution}} \\\\",
+  tex_row("Revenue",     mean_A[, "Rev (prop)"],  sd_A[, "Rev (prop)"],  rmse_baseline),
+  tex_row("Elastic Net", mean_A[, "EN (prop)"],   sd_A[, "EN (prop)"],   rmse_baseline),
+  tex_row("NACE",        mean_A[, "NACE (prop)"], sd_A[, "NACE (prop)"], rmse_baseline),
+  "\\midrule",
+  "\\multicolumn{10}{l}{\\textit{GPA redistribution}} \\\\",
+  tex_row("Revenue",     mean_A[, "Rev (GPA)"],  sd_A[, "Rev (GPA)"],  rmse_baseline),
+  tex_row("Elastic Net", mean_A[, "EN (GPA)"],   sd_A[, "EN (GPA)"],   rmse_baseline),
+  tex_row("NACE",        mean_A[, "NACE (GPA)"], sd_A[, "NACE (GPA)"], rmse_baseline),
   "\\bottomrule",
   "\\end{tabular}"
 )
-tex_path_t1 <- file.path(OUTPUT_DIR, "table_main_results_crf_cv_pareto.tex")
+tex_path_t1 <- file.path(OUTPUT_DIR, "table_main_results_crf_cv.tex")
 writeLines(tex_t1, tex_path_t1)
 cat("LaTeX Table 1 written to:", tex_path_t1, "\n")
 
@@ -543,17 +588,21 @@ GROUP_LABELS <- c("Paper \\& printing", "Metals", "Petroleum refining")
 row_names_t2 <- c("nRMSE", "MAPD", "Levels corr.", "Rank corr.",
                    "FPR", "TPR", "Med.\\ FP rank", "Max FP rank")
 
+# 6 models per group: Rev(prop), Rev(GPA), EN(prop), EN(GPA), NACE(prop), NACE(GPA)
+model_order <- c("Rev (prop)", "Rev (GPA)", "EN (prop)", "EN (GPA)",
+                 "NACE (prop)", "NACE (GPA)")
+model_col_labels <- "R.p & R.G & E.p & E.G & N.p & N.G"
+
 tex_t2 <- c(
-  "\\begin{tabular}{l cccc cccc cccc}",
+  "\\begin{tabular}{l cccccc cccccc cccccc}",
   "\\toprule",
-  sprintf(" & \\multicolumn{4}{c}{%s} & \\multicolumn{4}{c}{%s} & \\multicolumn{4}{c}{%s} \\\\",
+  sprintf(" & \\multicolumn{6}{c}{%s} & \\multicolumn{6}{c}{%s} & \\multicolumn{6}{c}{%s} \\\\",
           GROUP_LABELS[1], GROUP_LABELS[2], GROUP_LABELS[3]),
-  "\\cmidrule(lr){2-5} \\cmidrule(lr){6-9} \\cmidrule(lr){10-13}",
-  paste0(" & ", paste(rep("Rev. & EN & NACE & Gat.", 3), collapse = " & "), " \\\\"),
+  "\\cmidrule(lr){2-7} \\cmidrule(lr){8-13} \\cmidrule(lr){14-19}",
+  paste0(" & ", paste(rep(model_col_labels, 3), collapse = " & "), " \\\\"),
   "\\midrule"
 )
 
-model_order <- c("Revenue", "Elastic Net", "NACE", "Gated Rev")
 for (i in seq_along(t2_metric_names)) {
   parts <- character(0)
   sd_parts <- character(0)
@@ -571,7 +620,7 @@ for (i in seq_along(t2_metric_names)) {
 }
 tex_t2 <- c(tex_t2, "\\bottomrule", "\\end{tabular}")
 
-tex_path_t2 <- file.path(OUTPUT_DIR, "table_zero_emitters_crf_cv_pareto.tex")
+tex_path_t2 <- file.path(OUTPUT_DIR, "table_zero_emitters_crf_cv.tex")
 writeLines(tex_t2, tex_path_t2)
 cat("LaTeX Table 2 written to:", tex_path_t2, "\n")
 
