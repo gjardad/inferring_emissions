@@ -91,6 +91,21 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## TO-DO List
 
+1. **Main results tables.** Generate the main tables reporting GLO results:
+   - GLO with LOSO-CVed threshold using the pooled sample of the *other two* mixed-sectors (for each mixed-sector).
+   - GLO with CVed threshold using the pooled sample of the three mixed-sectors (applied to non-mixed sectors).
+   - Produce both an "everyone" version and a "mixed-sectors only" version of each table.
+
+2. **Auxiliary tables.**
+   - Compare GLO against other distributional assumptions (GPA, etc.).
+   - Split of emitters/non-emitters by CRF mixed-sector (currently reported by NACE 2-digit).
+   - Share of emissions regulated by EU ETS by CRF category (currently table 12, reported by NACE 2-digit).
+   - L-moments table making the case that GLO is the best distributional choice.
+
+3. **Logistic-regression threshold for emitter classification.** Replace the threshold on p_i alone with a logistic regression of the emitter dummy on p_i + log(1 + proxy_mean), following the approach used in the facts-for-deployment pipeline. This logistic-based threshold should be incorporated into the CV and main results pipelines (items 1–2 above).
+
+4. **Re-write section 4.**
+
 ## Writing Notes
 
 - **EN supplier selection introduces noise.** The EN selects suppliers from 53 NACE 2-digit sectors, many of which are clearly not fuel suppliers (e.g., management consultancy, NACE 70). The likely mechanism is that within a sector-year, larger emitters are also larger firms that purchase more services generally — so purchases from consultancies correlate with emissions not because they supply fuel but because they correlate with firm size. The paper should acknowledge this: the EN identifies a mix of genuine fuel supply relationships and spurious size-correlated purchasing patterns. This is a limitation of the data-driven approach relative to NACE-based classification, which at least selects on economic substance — though at the cost of missing intermediaries and multi-activity firms.
