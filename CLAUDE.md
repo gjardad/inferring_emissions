@@ -91,10 +91,7 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## TO-DO List
 
-1. **Main results tables.** Generate the main tables reporting GLO results:
-   - GLO with LOSO-CVed threshold using the pooled sample of the *other two* mixed-sectors (for each mixed-sector).
-   - GLO with CVed threshold using the pooled sample of the three mixed-sectors (applied to non-mixed sectors).
-   - Produce both an "everyone" version and a "mixed-sectors only" version of each table.
+1. **Main results tables.** Classify as emitters the top X% of firms within each sector-year (for a grid of X values) and redistribute the (CRF group, year) emission total among classified emitters using the CVed GLO. Report OOS performance (levels APD, rank correlation, extensive-margin metrics) for three ranking predictors side by side: (i) B2B proxy (proxy_mean), (ii) revenue, (iii) NACE-based fuel-supply proxy. This is the core comparison showing whether B2B data adds value over simpler benchmarks.
 
 2. **Auxiliary tables.**
    - Compare GLO against other distributional assumptions (GPA, etc.).
@@ -102,17 +99,13 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
    - Share of emissions regulated by EU ETS by CRF category (currently table 12, reported by NACE 2-digit).
    - L-moments table making the case that GLO is the best distributional choice.
 
-3. **Logistic-regression threshold for emitter classification.** Replace the threshold on p_i alone with a logistic regression of the emitter dummy on p_i + log(1 + proxy_mean), following the approach used in the facts-for-deployment pipeline. This logistic-based threshold should be incorporated into the CV and main results pipelines (items 1–2 above).
+3. **Logistic-regression threshold.** Report the logistic regression of the emitter dummy on p_i + log(1 + proxy_mean) as a descriptive result, but do not use it as the classification threshold. Classification uses the top-X% rule from item 1 instead.
 
 4. **Re-write section 4.**
 
-5. **Revisit q_i threshold (Youden's J vs PPV).** The current `q_star` is chosen by maximizing Youden's J = TPR − FPR. Because the sample is heavily imbalanced (~1.9% emitters at baseline), this produces a very low threshold (`q_star ≈ 0.061`) that achieves high TPR but low PPV — the vast majority of firms classified as emitters are false positives. Compute and plot PPV, TPR, and FPR as functions of the `q_i` threshold to make this explicit. Consider whether a threshold that targets a minimum PPV (or maximizes F1, or another criterion that accounts for class imbalance) would be more appropriate for the redistribution step, where false positives dilute the emission budget across too many firms. The IMJV validation shows this concretely: 36% of the 56 TP firm-years have `q_i < 0.15`, barely above the threshold.
+5. **Report IMJV validation results.** Present the IMJV external validation in the paper: 97% detection rate conditional on B2B presence but median APD of 0.97 at the intensive margin; revenue dominates the proxy at the extensive margin (top-X% cutoff comparison); IMJV-vs-EUTL baseline APD of 0.04 confirms the imputation error is real, not measurement noise. Discuss the coverage gap (14 of 31 non-ETS firms absent from B2B) and the distribution shift concern (proxy trained on heavy industry, validated on plastics/food/waste). Frame honestly as a negative result for the B2B proxy's external validity.
 
-6. **OOS comparison: proxy vs revenue vs NACE-based proxy at the extensive margin.** Using the CV framework on the training sample (mixed sectors), evaluate a "top X% within sector-year" classification rule for three predictors: (a) the B2B proxy (q_i or proxy_mean), (b) revenue, and (c) the NACE-based fuel-supply proxy. For a grid of X (e.g., 5%, 10%, 15%, 20%, 30%, 50%), report held-out TPR, FPR, PPV, and detection count. This directly tests whether the B2B proxy adds value over firm size at the extensive margin — the IMJV validation (n=56) suggests revenue dominates, but the CV sample is much larger and internally valid.
-
-7. **Report IMJV validation results.** Present the IMJV external validation in the paper: 97% detection rate conditional on B2B presence but median APD of 0.97 at the intensive margin; revenue dominates the proxy at the extensive margin (top-X% cutoff comparison); IMJV-vs-EUTL baseline APD of 0.04 confirms the imputation error is real, not measurement noise. Discuss the coverage gap (14 of 31 non-ETS firms absent from B2B) and the distribution shift concern (proxy trained on heavy industry, validated on plastics/food/waste). Frame honestly as a negative result for the B2B proxy's external validity.
-
-8. **Sanity check: ETS firms with zero B2B purchases.** On RMD, check whether any EU ETS firm-years in the training sample have zero B2B purchases (i.e., the firm's anonymized VAT from `EUTL_Belgium.dta` does not appear as a buyer in `b2b_selected_sample.RData` for that year). This would indicate that M&A-driven VAT reassignments could cause a firm's EUTL emissions to be recorded under one VAT while its B2B transactions are under another, which would introduce noise in the EN training. If prevalent, assess the magnitude (share of ETS firm-years affected, share of total ETS emissions they represent).
+6. **Sanity check: ETS firms with zero B2B purchases.** On RMD, check whether any EU ETS firm-years in the training sample have zero B2B purchases (i.e., the firm's anonymized VAT from `EUTL_Belgium.dta` does not appear as a buyer in `b2b_selected_sample.RData` for that year). This would indicate that M&A-driven VAT reassignments could cause a firm's EUTL emissions to be recorded under one VAT while its B2B transactions are under another, which would introduce noise in the EN training. If prevalent, assess the magnitude (share of ETS firm-years affected, share of total ETS emissions they represent).
 
 ## Writing Notes
 
