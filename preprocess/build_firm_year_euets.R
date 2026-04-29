@@ -125,7 +125,14 @@ firm_year_belgian_euets <- firm_year_emissions %>%
   firm_year_belgian_euets <- firm_year_belgian_euets %>%
     left_join(emissions_belgian, by = c("vat" = "vat_ano", "year")) %>%
     mutate(
-      emissions_belgian = coalesce(emissions_belgian, 0),
+      # If the firm has no installation reporting verified emissions in
+      # year t (emissions is NA), keep emissions_belgian as NA too -- the
+      # Belgian-installation emissions are genuinely unobserved, not zero.
+      # Otherwise, coalesce to 0 (firm has reports but none from Belgian
+      # installations).
+      emissions_belgian = ifelse(is.na(emissions),
+                                 NA_real_,
+                                 coalesce(emissions_belgian, 0)),
       emissions_foreign = pmax(emissions - emissions_belgian, 0)
     )
 
@@ -134,5 +141,42 @@ firm_year_belgian_euets <- firm_year_emissions %>%
   cat("Total foreign emissions:",
       sum(firm_year_belgian_euets$emissions_foreign, na.rm = TRUE) / 1e3, "kt\n")
 
+# ── Add ETS coverage flags ─────────────────────────────────────────────────
+#
+# is_ever_euets: firm-level flag (== 1 for every row of every firm in this
+#               panel). All firms appearing here are ETS-regulated at some
+#               point in time (they appear in EUTL_Belgium and have at
+#               least one installation in compliance.csv). Named "ever"
+#               to make explicit that it encodes "this firm was/will be
+#               regulated by ETS at some point", NOT "this firm is
+#               currently under ETS in year t". The flag is added so
+#               downstream joins against broader firm samples (e.g., the
+#               full Annual-Accounts universe) can distinguish firms that
+#               ever appeared under ETS from firms that never did.
+#
+# is_regulated: firm-year level. == 1 iff the firm has at least one
+#               installation with non-NA verified emissions in year t.
+#               Equivalent to !is.na(emissions) given the upstream
+#               aggregation in build_firm_year_emissions.R, which sets
+#               emissions = NA iff ALL the firm's installations have NA
+#               verified emissions for that year.
+#
+# When is_regulated == 0, emissions is left as NA (NOT coalesced to 0):
+# the firm has no ETS compliance report for that year and the emissions
+# are genuinely unobserved. Downstream consumers that want a balanced
+# treatment can filter on is_regulated == 1 (active years only).
+firm_year_belgian_euets <- firm_year_belgian_euets %>%
+  mutate(
+    is_ever_euets = 1L,
+    is_regulated  = as.integer(!is.na(emissions))
+  )
+
+cat(sprintf("\nis_ever_euets == 1 for all %d firms in panel.\n",
+            n_distinct(firm_year_belgian_euets$vat)))
+cat("is_regulated counts:\n")
+print(table(firm_year_belgian_euets$is_regulated, useNA = "ifany"))
+cat(sprintf("Firm-years with emissions == NA: %d (= is_regulated == 0)\n",
+            sum(is.na(firm_year_belgian_euets$emissions))))
+
 # Save it -------
-save(firm_year_belgian_euets, file = paste0(PROC_DATA,"/firm_year_belgian_euets.RData"))  
+save(firm_year_belgian_euets, file = paste0(PROC_DATA,"/firm_year_belgian_euets.RData"))
