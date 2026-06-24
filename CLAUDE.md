@@ -91,21 +91,8 @@ See `DROPPED_ANALYSES.md` for the full catalog of explored-and-dropped approache
 
 ## TO-DO List
 
-1. **Main results tables.** Classify as emitters the top X% of firms within each sector-year (for a grid of X values) and redistribute the (CRF group, year) emission total among classified emitters using the CVed GLO. Report OOS performance (levels APD, rank correlation, extensive-margin metrics) for three ranking predictors side by side: (i) B2B proxy (proxy_mean), (ii) revenue, (iii) NACE-based fuel-supply proxy. This is the core comparison showing whether B2B data adds value over simpler benchmarks.
-
-2. **Auxiliary tables.**
-   - Compare GLO against other distributional assumptions (GPA, etc.).
-   - Split of emitters/non-emitters by CRF mixed-sector (currently reported by NACE 2-digit).
-   - Share of emissions regulated by EU ETS by CRF category (currently table 12, reported by NACE 2-digit).
-   - L-moments table making the case that GLO is the best distributional choice.
-
-3. **Logistic-regression threshold.** Report the logistic regression of the emitter dummy on p_i + log(1 + proxy_mean) as a descriptive result, but do not use it as the classification threshold. Classification uses the top-X% rule from item 1 instead.
-
-4. **Re-write section 4.**
-
-5. **Report IMJV validation results.** Present the IMJV external validation in the paper: 97% detection rate conditional on B2B presence but median APD of 0.97 at the intensive margin; revenue dominates the proxy at the extensive margin (top-X% cutoff comparison); IMJV-vs-EUTL baseline APD of 0.04 confirms the imputation error is real, not measurement noise. Discuss the coverage gap (14 of 31 non-ETS firms absent from B2B) and the distribution shift concern (proxy trained on heavy industry, validated on plastics/food/waste). Frame honestly as a negative result for the B2B proxy's external validity.
-
-6. **Sanity check: ETS firms with zero B2B purchases.** On RMD, check whether any EU ETS firm-years in the training sample have zero B2B purchases (i.e., the firm's anonymized VAT from `EUTL_Belgium.dta` does not appear as a buyer in `b2b_selected_sample.RData` for that year). This would indicate that M&A-driven VAT reassignments could cause a firm's EUTL emissions to be recorded under one VAT while its B2B transactions are under another, which would introduce noise in the EN training. If prevalent, assess the magnitude (share of ETS firm-years affected, share of total ETS emissions they represent).
+See `TODO.md` for the task list. (Moved out of CLAUDE.md on 2026-06-24; prior
+items are recoverable from git history.)
 
 ## Writing Notes
 
