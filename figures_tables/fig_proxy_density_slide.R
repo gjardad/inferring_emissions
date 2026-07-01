@@ -16,10 +16,10 @@
 # INPUTS
 #   {PROC_DATA}/firm_year_panel_with_proxies.RData
 #
-# OUTPUTS  (written to OUTPUT_DIR, like the parent figure script; then copy
+# OUTPUTS  (written to {REPO_DIR}/output_rmd, created if missing; then copy
 #           both PDFs into the defense-slides repo under figures/)
-#   {OUTPUT_DIR}/proxy_density_slide.pdf
-#   {OUTPUT_DIR}/proxy_density_appendix.pdf
+#   {REPO_DIR}/output_rmd/proxy_density_slide.pdf
+#   {REPO_DIR}/output_rmd/proxy_density_appendix.pdf
 #
 # HOW TO RUN
 #   Rscript figures_tables/fig_proxy_density_slide.R
@@ -41,9 +41,9 @@ if (tolower(Sys.info()[["user"]]) == "jardang") {
 }
 source(file.path(REPO_DIR, "paths.R"))
 
-# Write to the standard output dir (works on RMD too); copy the two PDFs into
-# the defense-slides repo (figures/) afterwards.
-SLIDES_FIG_DIR <- OUTPUT_DIR
+# Write to a dedicated folder inside the repo (created if missing); copy the
+# two PDFs into the defense-slides repo (figures/) afterwards.
+SLIDES_FIG_DIR <- file.path(REPO_DIR, "output_rmd")
 
 library(dplyr)
 library(tidyr)
